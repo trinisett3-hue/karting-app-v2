@@ -224,7 +224,10 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   position: relative;
   background: rgba(0,0,0,.55);
   backdrop-filter: blur(6px);
-  border: 1px solid var(--c-accent-glow);
+  /* box-shadow inset au lieu de border : Safari ne dessine pas correctement une
+     bordure classique le long d'un clip-path aux coins coupes (le trait "manque"
+     sur les cotes decoupes). Le box-shadow inset suit le clip-path proprement. */
+  box-shadow: inset 0 0 0 1px var(--c-accent-glow);
   clip-path: var(--clip-wrap);
   border-radius: var(--corner-radius);
   padding: var(--space-4) var(--space-6);
@@ -346,7 +349,14 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   flex-direction: column;
   min-height: 22rem;
   min-width: 0;
-  border: 1px solid var(--c-border);
+  /* box-shadow inset au lieu de border : Safari ne dessine pas correctement une
+     bordure classique le long d'un clip-path aux coins coupes (le trait "manque"
+     sur les cotes decoupes). Le box-shadow inset suit le clip-path proprement.
+     --card-border est repris par p1/p2/p3 ci-dessous, qui n'ont plus qu'a changer
+     la variable au lieu de re-declarer tout le box-shadow (sauf p1, qui combine
+     aussi la lueur exterieure). */
+  --card-border: var(--c-border);
+  box-shadow: inset 0 0 0 1px var(--card-border);
   transition: transform var(--transition);
 }
 
@@ -354,20 +364,20 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .podium-card.p1 {
   min-height: 31rem;
   order: 2;
-  border-color: var(--c-p1-border);
-  box-shadow: var(--c-p1-glow);
+  --card-border: var(--c-p1-border);
+  box-shadow: inset 0 0 0 1px var(--card-border), var(--c-p1-glow);
 }
 /* P2 */
 .podium-card.p2 {
   order: 1;
   transform: translateY(1rem);
-  border-color: var(--c-p2-border);
+  --card-border: var(--c-p2-border);
 }
 /* P3 */
 .podium-card.p3 {
   order: 3;
   transform: translateY(1rem);
-  border-color: var(--c-p3-border);
+  --card-border: var(--c-p3-border);
 }
 
 /* Badge position */
@@ -487,7 +497,9 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   padding: .15rem .55rem;
   clip-path: var(--clip-badge);
   border-radius: var(--corner-radius);
-  border: 1px solid var(--c-accent);
+  /* box-shadow inset au lieu de border : cf. .podium-card, meme souci Safari
+     avec clip-path aux coins coupes. */
+  box-shadow: inset 0 0 0 1px var(--c-accent);
   text-transform: uppercase;
   margin-left: auto;
   white-space: nowrap;
@@ -495,7 +507,6 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   text-align: center;
 }
 [data-theme="carbon"] .pilot-gap {
-  border-color: var(--c-accent);
   background: transparent;
 }
 .podium-card.p1 .pilot-gap {
@@ -514,7 +525,9 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   background: var(--c-surface);
   clip-path: var(--clip-wrap);
   border-radius: var(--corner-radius);
-  border: 1px solid var(--c-border);
+  /* box-shadow inset au lieu de border : cf. .podium-card, meme souci Safari
+     avec clip-path aux coins coupes. */
+  box-shadow: inset 0 0 0 1px var(--c-border);
   overflow: hidden;
 }
 
@@ -614,7 +627,10 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   padding: .2rem .5rem;
   clip-path: var(--clip-badge);
   border-radius: var(--corner-radius);
-  border: 1px solid var(--c-accent);
+  /* box-shadow inset au lieu de border : cf. .podium-card, meme souci Safari
+     avec clip-path aux coins coupes. */
+  --gap-border: var(--c-accent);
+  box-shadow: inset 0 0 0 1px var(--gap-border);
   min-width: 4.6rem;
   text-align: center;
   white-space: nowrap;
@@ -622,12 +638,12 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 }
 [data-theme="carbon"] .rank-gap {
   background: transparent;
-  border-color: rgba(201,168,76,.35);
+  --gap-border: rgba(201,168,76,.35);
 }
 .rank-gap.leader {
   background: var(--c-accent);
   color: #fff;
-  border-color: var(--c-accent);
+  --gap-border: var(--c-accent);
 }
 [data-theme="carbon"] .rank-gap.leader {
   color: #111214;
