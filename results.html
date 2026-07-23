@@ -972,6 +972,13 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   }
   .acc-head .rank-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .acc-head .rank-kartline { font-size: .65rem; }
+  /* Meme souci que .rank-gap ci-dessous : l'avatar garde sa taille desktop (3.2rem)
+     alors que sa colonne mobile ne fait que 2.15rem, il debordait sur le nom. */
+  .acc-head .rank-avatar { width: 2.15rem; height: 2.15rem; }
+  /* Le badge d'ecart garde sa taille desktop (min-width 4.6rem) par defaut, trop
+     large pour sa colonne mobile (3.45rem) : il debordait sur le bouton PDF a cote.
+     Meme correctif que pour #page-screen-1/#page2-ranking .rank-gap. */
+  .acc-head .rank-gap { min-width: 0; padding: .1rem .3rem; font-size: .62rem; }
   .acc-icon-btn { width: 1.9rem; height: 1.9rem; }
   .acc-icon-btn svg { width: 14px; height: 14px; }
 
