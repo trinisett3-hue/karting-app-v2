@@ -26,6 +26,7 @@ export const state = {
     helmet_choice: 1,
     helmet_colors: null,
     logo_url: null, // logo du circuit (bucket Storage "org-logos"), affiché sur results.html
+    track_map_url: null, // plan/tracé du circuit (option, bucket Storage "org-logos"), affiché sur results.html
   },
 };
 

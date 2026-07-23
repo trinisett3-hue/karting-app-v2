@@ -383,6 +383,21 @@ input[readonly]{opacity:.6;cursor:not-allowed}
      <div style="font-size:11px;color:var(--mut);margin-top:6px">PNG avec fond transparent recommandé. Affiché sur la page de résultats publics.</div>
      <div class="msg" id="msg-logo"></div>
     </div>
+    <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
+     <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Plan du circuit <span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.7">(optionnel · Pro)</span></div>
+     <div id="pref-trackmap-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
+      <div style="width:96px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
+       <img id="pref-trackmap-preview" src="" alt="Plan actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
+      </div>
+      <button id="pref-trackmap-remove-btn" class="btn btn-ghost btn-sm" style="display:none" onclick="removeTrackMap()">Retirer le plan</button>
+     </div>
+     <label class="btn btn-ghost btn-sm" style="display:inline-flex;cursor:pointer">
+      Choisir un fichier
+      <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadTrackMap(this)"/>
+     </label>
+     <div style="font-size:11px;color:var(--mut);margin-top:6px">Affiche le tracé du circuit juste au-dessus du podium sur la page de résultats publics.</div>
+     <div class="msg" id="msg-trackmap"></div>
+    </div>
     <div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div>
     <div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div>
     <div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div>

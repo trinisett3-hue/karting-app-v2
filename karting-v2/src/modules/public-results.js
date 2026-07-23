@@ -22,16 +22,42 @@ export function initTheme() {
   db.from('app_settings').select('value').eq('key', 'global').maybeSingle().then(({ data }) => {
     const theme = data && data.value && data.value.results_theme;
     if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
+
     const logoUrl = data && data.value && data.value.logo_url;
     if (logoUrl) {
       const nameEl = document.getElementById('circuit-name');
       if (nameEl && nameEl.parentElement && !document.getElementById('circuit-logo')) {
+        // Le logo doit apparaître à DROITE du nom du circuit : on enveloppe le nom dans une
+        // rangée flex (nom à gauche, logo à droite) plutôt que de l'insérer au-dessus.
+        const row = document.createElement('div');
+        row.id = 'circuit-name-row';
+        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap';
+        nameEl.parentElement.insertBefore(row, nameEl);
+        row.appendChild(nameEl);
         const img = document.createElement('img');
         img.id = 'circuit-logo';
         img.src = logoUrl;
         img.alt = 'Logo du circuit';
-        img.style.cssText = 'max-height:52px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block';
-        nameEl.parentElement.insertBefore(img, nameEl);
+        img.style.cssText = 'max-height:52px;max-width:200px;object-fit:contain;display:block;flex-shrink:0';
+        row.appendChild(img);
+      }
+    }
+
+    // Plan du circuit (optionnel) — affiché juste avant le podium, uniquement si configuré.
+    // À gater sur le plan Pro une fois la facturation en place (Phase 3 roadmap).
+    const trackMapUrl = data && data.value && data.value.track_map_url;
+    if (trackMapUrl) {
+      const podiumWrap = document.getElementById('podium-wrap');
+      if (podiumWrap && podiumWrap.parentElement && !document.getElementById('circuit-track-map')) {
+        const section = document.createElement('div');
+        section.id = 'circuit-track-map';
+        section.style.cssText = 'margin-bottom:16px;text-align:center';
+        const img = document.createElement('img');
+        img.src = trackMapUrl;
+        img.alt = 'Plan du circuit';
+        img.style.cssText = 'max-width:100%;max-height:280px;object-fit:contain;border-radius:10px';
+        section.appendChild(img);
+        podiumWrap.parentElement.insertBefore(section, podiumWrap);
       }
     }
   }).catch(() => {});

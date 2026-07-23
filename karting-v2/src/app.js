@@ -187,5 +187,7 @@ Object.assign(window, {
   selectResultsTheme: settings.selectResultsTheme,
   uploadLogo: settings.uploadLogo,
   removeLogo: settings.removeLogo,
+  uploadTrackMap: settings.uploadTrackMap,
+  removeTrackMap: settings.removeTrackMap,
   savePrefs: settings.savePrefs,
 });

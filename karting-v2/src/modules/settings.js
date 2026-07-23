@@ -51,6 +51,7 @@ export async function loadPrefs() {
   state.prefs.results_theme = state.prefs.results_theme || 'classic';
 
   renderLogoPreview();
+  renderTrackMapPreview();
 
   document.getElementById('pref-karts').value = state.prefs.default_karts;
   document.getElementById('pref-laps').value = state.prefs.default_laps;
@@ -133,12 +134,12 @@ export function toggleLapsField() {
 // bucket Storage "org-logos", upload réservé à l'admin connecté). Affiché sur
 // results.html (voir public-results.js > initTheme). Redimensionné côté client en PNG
 // (garde la transparence) avant upload, comme les photos pilotes sur register.html.
-function compressLogo(file) {
+function compressLogo(file, maxDim) {
   return new Promise((resolve) => {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
-      const MAX = 400;
+      const MAX = maxDim || 400;
       let w = img.width, h = img.height;
       if (w > MAX || h > MAX) {
         if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
@@ -203,6 +204,62 @@ export function removeLogo() {
   renderLogoPreview();
   markPrefsDirty();
   showMsg('msg-logo', 'Logo retiré. Clique Enregistrer pour confirmer.', 'ok');
+}
+
+// --- Plan du circuit (optionnel) -------------------------------------------------------------
+// Fonctionnalité "premium" : affiche en option le tracé/plan du circuit sur results.html.
+// Fonctionnellement disponible pour tous les comptes pour l'instant (pas de facturation en
+// place) — À GATER SUR LE PLAN "PRO" une fois le système de facturation (Phase 3 de la
+// roadmap) implémenté. Stocké dans app_settings.value.track_map_url, bucket Storage
+// "org-logos" (même bucket que le logo, dossier "tracks/").
+export function renderTrackMapPreview() {
+  const wrap = document.getElementById('pref-trackmap-preview-wrap');
+  const img = document.getElementById('pref-trackmap-preview');
+  const removeBtn = document.getElementById('pref-trackmap-remove-btn');
+  if (!wrap || !img) return;
+  if (state.prefs.track_map_url) {
+    img.src = state.prefs.track_map_url;
+    wrap.style.display = 'flex';
+    if (removeBtn) removeBtn.style.display = 'inline-flex';
+  } else {
+    wrap.style.display = 'none';
+    if (removeBtn) removeBtn.style.display = 'none';
+  }
+}
+
+export async function uploadTrackMap(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const msgId = 'msg-trackmap';
+  try {
+    showMsg(msgId, 'Upload du plan du circuit…', 'ok');
+    const compressed = await compressLogo(file, 1200);
+    const path = 'tracks/' + Date.now() + '.png';
+    const { error: upErr } = await db.storage.from('org-logos').upload(path, compressed, {
+      upsert: true,
+      contentType: 'image/png',
+    });
+    if (upErr) {
+      showMsg(msgId, 'Upload échoué (' + upErr.message + ').', 'err');
+      return;
+    }
+    const { data: urlData } = db.storage.from('org-logos').getPublicUrl(path);
+    state.prefs.track_map_url = urlData.publicUrl;
+    renderTrackMapPreview();
+    markPrefsDirty();
+    showMsg(msgId, 'Plan uploadé. Clique Enregistrer pour le publier.', 'ok');
+  } catch (e) {
+    showMsg(msgId, 'Erreur: ' + e.message, 'err');
+  } finally {
+    input.value = '';
+  }
+}
+
+export function removeTrackMap() {
+  state.prefs.track_map_url = null;
+  renderTrackMapPreview();
+  markPrefsDirty();
+  showMsg('msg-trackmap', 'Plan retiré. Clique Enregistrer pour confirmer.', 'ok');
 }
 
 export function switchAppearanceSubtab(tab) {
@@ -310,6 +367,7 @@ export async function savePrefs() {
     sector_count: Number(document.getElementById('pref-sector-count')?.value || 3),
     results_theme: document.getElementById('pref-results-theme')?.value || 'classic',
     logo_url: state.prefs.logo_url || null,
+    track_map_url: state.prefs.track_map_url || null,
   });
   // Nettoyage de l'ancien système d'avatars (casques) s'il traîne encore dans les prefs.
   delete state.prefs.helmet_choice;
