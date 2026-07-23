@@ -425,6 +425,17 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   width: 56px; height: 56px;
   opacity: .18;
 }
+/* Avatar kart (dessin coloré selon le numéro de kart) — remplace le pictogramme
+   générique quand le pilote n'a pas de photo. */
+.pilot-avatar-placeholder.kart {
+  min-height: 0;
+  background: radial-gradient(ellipse at center, rgba(255,255,255,.05), transparent 70%);
+}
+.pilot-avatar-placeholder.kart svg {
+  width: 82%; height: 82%;
+  opacity: 1;
+  filter: drop-shadow(0 4px 12px rgba(0,0,0,.5));
+}
 
 /* Bande nom bas */
 .pilot-name-band {
@@ -578,6 +589,8 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   justify-content: center;
 }
 .rank-avatar-placeholder svg { width: 20px; height: 20px; opacity: .3; }
+.rank-avatar-placeholder.kart { background: transparent; }
+.rank-avatar-placeholder.kart svg { width: 96%; height: 96%; opacity: 1; }
 
 /* Nom + kart */
 .rank-main {

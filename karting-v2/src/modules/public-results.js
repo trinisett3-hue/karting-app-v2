@@ -3,6 +3,7 @@
 // résolution de session par public_results_token, classement (temps total), podium,
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
+import { kartAvatarSVG, kartAvatarDataURL } from './kart-avatar.js';
 
 const FLAGS = { FR: '🇫🇷', BE: '🇧🇪', LU: '🇱🇺', DE: '🇩🇪', CH: '🇨🇭', NL: '🇳🇱', IT: '🇮🇹', ES: '🇪🇸', GB: '🇬🇧', US: '🇺🇸', OTHER: '🏁' };
 const PAGE1MAX = 10;
@@ -29,19 +30,17 @@ export function initTheme() {
    ------------------------------------------------------------------ */
 function flagOf(nat) { return FLAGS[nat] || FLAGS.OTHER; }
 
-function avatarHTML(src, alt, cls = '') {
+// Avatar du podium : la photo du pilote si elle existe, sinon l'avatar kart (dessin
+// coloré selon le numéro de kart, avec ce numéro affiché dessus).
+function avatarHTML(src, kart, alt, cls = '') {
   if (src) {
     return `<img class="pilot-avatar ${cls}" src="${src}" alt="${alt}" loading="lazy" crossorigin="anonymous" width="200" height="280">`;
   }
-  return `<div class="pilot-avatar-placeholder ${cls}" role="img" aria-label="${alt}">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-      <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
-    </svg>
-  </div>`;
+  return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${kartAvatarSVG(kart, { title: alt })}</div>`;
 }
-function rankAvatarHTML(src) {
+function rankAvatarHTML(src, kart) {
   if (src) return `<img src="${src}" alt="" loading="lazy" crossorigin="anonymous" width="57" height="57">`;
-  return `<div class="rank-avatar-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+  return `<div class="rank-avatar-placeholder kart">${kartAvatarSVG(kart)}</div>`;
 }
 
 /* Temps stockés en SECONDES dans Supabase (colonne laps.lap_time_seconds) */
@@ -82,7 +81,7 @@ function renderPodium(items) {
     const gapTxt = gapBadge(d);
     return `<article class="podium-card ${cls}" aria-label="P${d.pos} — ${d.name}">
       <div class="pos-badge" aria-hidden="true">${d.pos}</div>
-      <div class="pilot-photo-wrap">${avatarHTML(d.photo, `Photo de ${d.name}`)}</div>
+      <div class="pilot-photo-wrap">${avatarHTML(d.photo, d.kart, `Photo de ${d.name}`)}</div>
       <div class="pilot-name-band">
         <div class="pilot-name ${d.isUnknown ? 'unknown' : ''}"><span class="pilot-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
         <div class="pilot-info-bar">
@@ -103,7 +102,7 @@ function rankRowHTML(d, extraLine) {
   const isLdr = d.hasTime && d.gap === 0;
   return `<article class="top10-row" role="listitem" aria-label="P${d.pos} — ${d.name}">
     <span class="rank-pos" aria-hidden="true">${d.pos}</span>
-    <div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo)}</div>
+    <div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart)}</div>
     <div class="rank-main">
       <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
       <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${extraLine ? ' · ' + extraLine : ''}</div>
@@ -154,7 +153,7 @@ function renderAccordion(items) {
     return `<article class="acc-item">
       <div class="acc-head">
         <span class="rank-pos acc-toggle" aria-hidden="true">${d.pos}</span>
-        <div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo)}</div>
+        <div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart)}</div>
         <div class="rank-main acc-toggle">
           <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
           <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span></div>
@@ -311,28 +310,31 @@ function escapeHTML(value) {
   return node.innerHTML;
 }
 
-function pdfBgRGB() {
-  const bg = getComputedStyle(document.body).backgroundColor;
-  const rgb = (bg.match(/\d+/g) || [5, 6, 8]).map(Number);
-  return rgb;
-}
-
 async function sectionToCanvas(node, width) {
   const holder = document.getElementById('pdf-render-root');
   holder.innerHTML = '';
   holder.style.width = width + 'px';
   const wrap = document.createElement('div');
   wrap.style.width = width + 'px';
-  wrap.style.background = 'var(--c-bg)';
-  wrap.style.padding = '16px';
+  wrap.style.background = '#ffffff';
   wrap.appendChild(node);
   holder.appendChild(wrap);
-  await new Promise(r => setTimeout(r, 60));
-  const canvas = await html2canvas(wrap, { backgroundColor: getComputedStyle(wrap).backgroundColor, scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
+  // laisser le temps aux <img> (avatars data-URI) de se décoder avant la capture
+  await Promise.all(Array.from(wrap.querySelectorAll('img')).map(img =>
+    (img.complete && img.naturalWidth) ? Promise.resolve() : new Promise(res => { img.onload = img.onerror = res; })
+  ));
+  await new Promise(r => setTimeout(r, 80));
+  const canvas = await html2canvas(wrap, { backgroundColor: '#ffffff', scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
   holder.innerHTML = '';
   return canvas;
 }
 function canvasHeightMm(canvas, usableWmm) { return canvas.height * usableWmm / canvas.width; }
+
+// Couleur d'accent du thème courant (pour teinter les en-têtes des PDF).
+function themeAccent() {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--c-accent');
+  return (v && v.trim()) || '#ff2a2a';
+}
 
 export async function downloadFullPDF(btn) {
   const original = btn.innerHTML;
@@ -341,15 +343,15 @@ export async function downloadFullPDF(btn) {
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const composite = buildResultsPDFNode();
+    const composite = buildResultsPDFNode(allResults, sessionInfo, themeAccent());
 
     const pageW = 210, pageH = 297, margin = 8;
     const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
     const canvas = await sectionToCanvas(composite, 760);
     const imgH = canvasHeightMm(canvas, usableW);
-    const [r, g, b] = pdfBgRGB();
-    pdf.setFillColor(r, g, b);
+    pdf.setFillColor(255, 255, 255);
     pdf.rect(0, 0, pageW, pageH, 'F');
+    // toujours ramené à UNE page : on réduit si le contenu dépasse la hauteur utile
     const scale = imgH > usableH ? usableH / imgH : 1;
     const dw = usableW * scale, dh = imgH * scale;
     pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (usableW - dw) / 2, margin, dw, dh);
@@ -361,56 +363,97 @@ export async function downloadFullPDF(btn) {
   btn.innerHTML = original;
 }
 
-/* Une mise en page dédiée, compacte et stable : les exports ne dépendent plus
-   de la hauteur des écrans web et sont toujours ramenés à une seule feuille. */
-function buildResultsPDFNode() {
+/* PDF CLASSEMENT COMPLET — une seule page A4 portrait, fond clair type feuille
+   officielle : bandeau titre teinté (couleur du thème), podium (top 3 avec avatars
+   kart), puis classement complet avec mini-avatars, kart, tours et temps/écart. */
+export function buildResultsPDFNode(results, session, accent) {
   const node = document.createElement('div');
-  node.style.cssText = 'font-family:Arial,sans-serif;color:var(--c-text);padding:8px;';
-  const title = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
-  const label = escapeHTML((sessionInfo && sessionInfo.title) || 'Classement final');
-  const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
-  const rows = allResults.map(d => `
-    <div style="display:grid;grid-template-columns:34px 1fr 62px 88px;gap:10px;align-items:center;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.12);font-size:14px;">
-      <strong style="color:var(--c-accent);font-size:18px;">${d.pos}</strong>
-      <span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${flagOf(d.nat)} ${escapeHTML(d.name)}</span>
-      <span>Kart ${d.kart ?? '-'}</span>
-      <strong style="text-align:right;">${d.hasTime ? escapeHTML(gapBadge(d)) : '--'}</strong>
+  node.style.cssText = 'width:760px;background:#ffffff;color:#17191f;font-family:Arial,Helvetica,sans-serif;';
+  const title = escapeHTML((session && session.circuit_name) || 'Circuit de Trinisette');
+  const label = escapeHTML((session && session.title) || 'Classement');
+  const date = escapeHTML(fmtSessionDate(session && session.session_date));
+  const podium = results.slice(0, 3);
+  const podOrder = [podium[1], podium[0], podium[2]].filter(Boolean); // 2 - 1 - 3
+  const cols = '30px 34px 1fr 46px 54px 96px';
+  const podHTML = podOrder.map(d => {
+    const first = d.pos === 1;
+    return `<div style="flex:1;background:${first ? accent + '18' : '#f2f3f6'};border:2px solid ${first ? accent : '#e0e2e7'};border-radius:10px;padding:9px 6px;text-align:center;${first ? '' : 'margin-top:16px;'}">
+      <div style="font-size:${first ? 30 : 23}px;font-weight:900;font-style:italic;line-height:1;color:${first ? accent : '#9096a1'}">${d.pos}</div>
+      <img src="${kartAvatarDataURL(d.kart)}" width="${first ? 82 : 62}" height="${first ? 82 : 62}" style="display:block;margin:1px auto"/>
+      <div style="font-weight:800;font-style:italic;font-size:${first ? 14 : 12}px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${flagOf(d.nat)} ${escapeHTML(d.name)}</div>
+      <div style="font-size:10px;color:#606672;margin-top:1px">KART <b style="color:${accent}">${d.kart ?? '-'}</b></div>
+      <div style="margin-top:4px;display:inline-block;background:${accent};color:#fff;font-weight:800;font-size:11px;padding:2px 8px;border-radius:5px">${escapeHTML(gapBadge(d))}</div>
+    </div>`;
+  }).join('');
+  const rows = results.map((d, i) => `
+    <div style="display:grid;grid-template-columns:${cols};gap:8px;align-items:center;padding:4px 10px;background:${i % 2 ? '#f6f7f9' : '#fff'};border-bottom:1px solid #edeef1;font-size:13px">
+      <b style="color:${accent};font-size:15px;font-style:italic">${d.pos}</b>
+      <img src="${kartAvatarDataURL(d.kart)}" width="30" height="30" style="display:block"/>
+      <span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${flagOf(d.nat)} ${escapeHTML(d.name)}</span>
+      <span style="text-align:center">${d.kart ?? '-'}</span>
+      <span style="text-align:center;color:#606672">${d.hasTime ? d.lapsCount : '--'}</span>
+      <b style="text-align:right">${d.hasTime ? escapeHTML(gapBadge(d)) : '--'}</b>
     </div>`).join('');
   node.innerHTML = `
-    <div style="border-bottom:3px solid var(--c-accent);padding:10px 12px 14px;margin-bottom:12px;">
-      <div style="font-size:28px;font-weight:800;text-transform:uppercase;">${title}</div>
-      <div style="display:flex;justify-content:space-between;gap:12px;color:var(--c-muted);font-size:14px;margin-top:4px;"><span>${label}</span><span>${date}</span></div>
+    <div style="background:${accent};padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-end">
+      <div style="font-size:25px;font-weight:900;font-style:italic;text-transform:uppercase;color:#fff;line-height:1">${title}</div>
+      <div style="text-align:right;color:#fff"><div style="font-weight:700;font-size:14px">${label}</div><div style="font-size:12px;opacity:.88">${date}</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:34px 1fr 62px 88px;gap:10px;padding:0 10px 6px;color:var(--c-muted);font-size:11px;font-weight:700;text-transform:uppercase;"><span>Pos.</span><span>Pilote</span><span>Kart</span><span style="text-align:right;">Temps / écart</span></div>
-    <div style="border:1px solid var(--c-border);background:var(--c-surface);">${rows || '<div style="padding:20px;">Aucun résultat disponible.</div>'}</div>`;
+    <div style="padding:14px 16px 8px"><div style="display:flex;gap:10px;align-items:stretch">${podHTML || ''}</div></div>
+    <div style="padding:0 16px 14px">
+      <div style="display:grid;grid-template-columns:${cols};gap:8px;padding:2px 10px 4px;font-size:10px;font-weight:800;color:#8a8f9a;text-transform:uppercase;letter-spacing:.04em"><span>Pos</span><span></span><span>Pilote</span><span style="text-align:center">Kart</span><span style="text-align:center">Tours</span><span style="text-align:right">Temps/écart</span></div>
+      <div style="border:1px solid #e4e6ea;border-radius:8px;overflow:hidden">${rows || '<div style="padding:16px;text-align:center;color:#888">Aucun résultat.</div>'}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:10px;color:#8a8f9a;text-transform:uppercase;letter-spacing:.06em"><span>Trinisette Karting</span><span>Classement complet</span></div>
+    </div>`;
   return node;
 }
 
-function buildPilotDetailNode(pilot) {
+/* PDF FICHE PILOTE — une page A4 portrait : bandeau avec l'avatar kart du pilote,
+   5 statistiques clés, puis le tableau tour par tour (secteurs si disponibles). */
+export function buildPilotDetailNode(pilot, session, accent) {
   const node = document.createElement('div');
-  node.style.cssText = 'width:720px;background:#f5f6f8;color:#17191f;font-family:Arial,sans-serif;padding:20px;border-top:5px solid var(--c-accent);';
-  const sectorCount = [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))).length;
-  const visibleLaps = pilot.lapsArr.slice(0, 10);
-  const sectorHeaders = sectorCount ? [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))).map((i, n) => `<th style="padding:8px 6px;text-align:center;">SECTEUR ${n + 1}</th>`).join('') : '';
-  const photo = pilot.photo
-    ? `<img src="${escapeHTML(pilot.photo)}" crossorigin="anonymous" style="width:74px;height:74px;object-fit:cover;border-radius:8px;border:2px solid #17191f;">`
-    : `<div style="width:74px;height:74px;border-radius:8px;background:#20232b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;">${flagOf(pilot.nat)}</div>`;
-  const rows = visibleLaps.map(l => {
+  node.style.cssText = 'width:760px;background:#ffffff;color:#17191f;font-family:Arial,Helvetica,sans-serif;';
+  const sectorsPresent = [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i])));
+  const laps = pilot.lapsArr.slice(0, 16);
+  const avg = pilot.hasTime && pilot.lapsCount ? pilot.total / pilot.lapsCount : null;
+  const gapTxt = pilot.pos === 1 ? 'Leader' : (Number.isFinite(pilot.gap) ? '+' + fmtPdfTime(pilot.gap) : '--');
+  const stat = (lbl, val, hl) => `<div style="flex:1;background:#f4f5f7;border-radius:8px;padding:9px 10px"><div style="font-size:9px;font-weight:800;color:#8a8f9a;text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div style="font-size:16px;font-weight:900;margin-top:3px;color:${hl ? accent : '#17191f'}">${val}</div></div>`;
+  const secHead = sectorsPresent.map((_, n) => `<th style="padding:8px 6px">S${n + 1}</th>`).join('');
+  const rows = laps.map(l => {
     const isBest = pilot.bestLap != null && l.time === pilot.bestLap;
     const delta = pilot.bestLap != null ? l.time - pilot.bestLap : null;
-    const sectors = sectorCount ? [0, 1, 2].filter(i => pilot.lapsArr.some(x => x.sectors && Number.isFinite(x.sectors[i]))).map(i => `<td style="padding:7px 6px;text-align:center;">${Number.isFinite(l.sectors?.[i]) ? fmtPdfTime(l.sectors[i]) : '--'}</td>`).join('') : '';
-    return `<tr style="background:${isBest ? 'var(--c-accent)' : (l.idx % 2 ? '#ffffff' : '#e9ebef')};color:${isBest ? '#fff' : '#20232b'};font-weight:${isBest ? '700' : '500'};">
-      <td style="padding:7px 8px;text-align:center;">${l.idx}</td><td style="padding:7px 8px;text-align:center;">${fmtPdfTime(l.time)}</td><td style="padding:7px 8px;text-align:center;">${delta == null ? '--' : (delta === 0 ? 'MEILLEUR' : '+' + fmtPdfTime(delta))}</td>${sectors}
+    const secCells = sectorsPresent.map(i => `<td style="padding:6px 6px;text-align:center">${Number.isFinite(l.sectors?.[i]) ? fmtPdfTime(l.sectors[i]) : '--'}</td>`).join('');
+    return `<tr style="background:${isBest ? accent : (l.idx % 2 ? '#fff' : '#f4f5f7')};color:${isBest ? '#fff' : '#20232b'};font-weight:${isBest ? '800' : '500'}">
+      <td style="padding:6px 10px;text-align:center">${l.idx}</td>
+      <td style="padding:6px 8px;text-align:center;font-weight:700">${fmtPdfTime(l.time)}</td>
+      <td style="padding:6px 8px;text-align:center">${delta == null ? '--' : (delta === 0 ? 'MEILLEUR' : '+' + fmtPdfTime(delta))}</td>
+      ${secCells}
     </tr>`;
-  }).join('') || '<tr><td colspan="6" style="padding:18px;text-align:center;">Aucun tour enregistré.</td></tr>';
-  const more = pilot.lapsArr.length > visibleLaps.length ? `<div style="margin-top:10px;text-align:center;font-size:11px;color:#656a75;">Les ${pilot.lapsArr.length - visibleLaps.length} tours supplémentaires sont disponibles dans l'application.</div>` : '';
+  }).join('') || `<tr><td colspan="${3 + sectorsPresent.length}" style="padding:16px;text-align:center;color:#888">Aucun tour enregistré.</td></tr>`;
+  const more = pilot.lapsArr.length > laps.length ? `<div style="margin-top:8px;text-align:center;font-size:10px;color:#8a8f9a">+ ${pilot.lapsArr.length - laps.length} tours supplémentaires dans l'application.</div>` : '';
   node.innerHTML = `
-    <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:18px;align-items:center;padding:2px 0 16px;">
-      <div style="display:flex;align-items:center;gap:14px;min-width:0;">${photo}<div style="min-width:0;"><div style="font-size:24px;font-weight:900;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(pilot.name)}</div><div style="margin-top:5px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#555b67;">POSITION <strong style="color:var(--c-accent);">${pilot.pos}</strong>&nbsp;&nbsp; KART <strong style="color:var(--c-accent);">${pilot.kart ?? '-'}</strong></div></div></div>
-      <div style="border-radius:10px;background:#e6e8ec;padding:12px 14px;"><div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#606672;">RÉSUMÉ SESSION</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;font-size:12px;"><div>MEILLEUR TOUR<br><strong style="font-size:16px;color:var(--c-accent);">${pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--'}</strong></div><div>NOMBRE DE TOURS<br><strong style="font-size:16px;">${pilot.lapsCount}</strong></div><div>TEMPS TOTAL<br><strong>${pilot.hasTime ? fmtPdfTime(pilot.total) : '--'}</strong></div><div>SESSION<br><strong>${escapeHTML((sessionInfo && sessionInfo.title) || 'Course')}</strong></div></div></div>
+    <div style="background:${accent};padding:14px 18px;display:flex;align-items:center;gap:14px">
+      <div style="background:rgba(255,255,255,.16);border-radius:10px;padding:4px;flex-shrink:0"><img src="${kartAvatarDataURL(pilot.kart)}" width="70" height="70" style="display:block"/></div>
+      <div style="min-width:0;flex:1;color:#fff">
+        <div style="font-size:23px;font-weight:900;font-style:italic;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${flagOf(pilot.nat)} ${escapeHTML(pilot.name)}</div>
+        <div style="font-size:12px;font-weight:700;opacity:.92;margin-top:3px">POSITION ${pilot.pos} &nbsp;·&nbsp; KART ${pilot.kart ?? '-'}</div>
+      </div>
     </div>
-    <div style="display:flex;justify-content:space-between;align-items:end;border-top:1px solid #d2d5da;padding:12px 2px 10px;"><div><div style="font-size:22px;font-weight:900;font-style:italic;text-transform:uppercase;">${escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette')}</div><div style="margin-top:4px;font-size:12px;color:#656a75;">${escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date))} · Résultats individuels</div></div><div style="font-size:11px;font-weight:800;color:var(--c-accent);letter-spacing:.08em;">TRINISETTE KARTING</div></div>
-    <table style="width:100%;border-collapse:collapse;border:1px solid #d2d5da;font-size:12px;"><thead><tr style="background:#dfe1e5;color:#383d47;font-size:10px;letter-spacing:.04em;"><th style="padding:8px 6px;">TOUR</th><th style="padding:8px 6px;">TEMPS</th><th style="padding:8px 6px;">ÉCART</th>${sectorHeaders}</tr></thead><tbody>${rows}</tbody></table>${more}`;
+    <div style="padding:16px 18px 8px;display:flex;gap:9px">
+      ${stat('Meilleur tour', pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--', true)}
+      ${stat('Temps total', pilot.hasTime ? fmtPdfTime(pilot.total) : '--')}
+      ${stat('Tours', pilot.lapsCount)}
+      ${stat('Moyenne', avg != null ? fmtPdfTime(avg) : '--')}
+      ${stat('Écart 1er', gapTxt)}
+    </div>
+    <div style="padding:6px 18px 18px">
+      <table style="width:100%;border-collapse:collapse;font-size:13px">
+        <thead><tr style="background:#eceef1;color:#4a4f5a;font-size:10px;letter-spacing:.04em;text-transform:uppercase"><th style="padding:8px 10px">Tour</th><th style="padding:8px 6px">Temps</th><th style="padding:8px 6px">Écart</th>${secHead}</tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      ${more}
+      <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:10px;color:#8a8f9a;text-transform:uppercase;letter-spacing:.06em"><span>${escapeHTML((session && session.circuit_name) || 'Circuit de Trinisette')} · ${escapeHTML(fmtSessionDate(session && session.session_date))}</span><span>Trinisette Karting</span></div>
+    </div>`;
   return node;
 }
 
@@ -429,16 +472,12 @@ export async function downloadPilotPDF(pilot, btn) {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
 
-    const container = document.createElement('div');
-    container.style.cssText = 'display:flex;flex-direction:column;gap:16px;';
-
-    container.appendChild(buildPilotDetailNode(pilot));
+    const node = buildPilotDetailNode(pilot, sessionInfo, themeAccent());
 
     const pageW = 210, pageH = 297, margin = 10;
     const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
-    const canvas = await sectionToCanvas(container, 760);
-    const [r, g, b] = pdfBgRGB();
-    pdf.setFillColor(r, g, b);
+    const canvas = await sectionToCanvas(node, 760);
+    pdf.setFillColor(255, 255, 255);
     pdf.rect(0, 0, pageW, pageH, 'F');
     const imgH = canvasHeightMm(canvas, usableW);
     const scale = imgH > usableH ? usableH / imgH : 1;

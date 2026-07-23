@@ -1,18 +1,25 @@
 // Module Paramètres — préférences globales (karts par défaut, tours, unité de temps),
-// numéros de karts personnalisés, apparence des résultats publics (thème + casque), et
-// activation des secteurs. Repris depuis index.html (lignes 462-624 + le correctif
-// "Trinisette" des lignes 1305-1320 qui ajoutait secteurs/thème à loadPrefs).
+// numéros de karts (flotte), apparence des résultats publics (thème + avatars kart), et
+// activation des secteurs.
 //
-// Contrairement à l'original qui faisait un monkey-patch (`const __x = loadPrefs;
-// loadPrefs = async function(){...}`), la logique secteurs/thème est ici fusionnée
-// directement dans loadPrefs() — même résultat, plus lisible et sans piège d'ordre de
-// chargement des scripts.
+// L'ancien système de "casques" à couleurs aléatoires a été remplacé par les avatars kart
+// (module kart-avatar.js) : chaque pilote reçoit automatiquement l'avatar de son kart, le
+// numéro affiché est celui du kart et la couleur est propre à chaque numéro — rien à
+// configurer manuellement. Cet onglet montre la flotte et un aperçu en direct de la page
+// de résultats (thème + avatars).
 import { db } from '../lib/supabase.js';
 import { state, setPrefs, markPrefsDirty } from '../state.js';
 import { showMsg } from './ui.js';
 import { toggleSectorsField } from './results.js';
+import { kartAvatarSVG } from './kart-avatar.js';
 
-let helmetColors = null;
+// Couleurs des 3 thèmes (identiques à results.html) — pour l'aperçu en direct, l'admin
+// n'étant pas lui-même thémé.
+const THEME_COLORS = {
+  classic: { bg: '#050608', surf: '#0d0f14', mut: '#7a7d8a', acc: '#ff2a2a', text: '#f4f5f8', p2: 'rgba(255,255,255,.28)', p3: 'rgba(184,134,90,.6)' },
+  neon:    { bg: '#060810', surf: '#0b0e18', mut: '#6a7a9a', acc: '#00d4ff', text: '#f0f4ff', p2: 'rgba(255,0,128,.5)',  p3: 'rgba(255,0,128,.3)' },
+  carbon:  { bg: '#111214', surf: '#181a1e', mut: '#8a8880', acc: '#c9a84c', text: '#f5f0e8', p2: 'rgba(180,180,180,.35)', p3: 'rgba(150,110,70,.5)' },
+};
 
 export function updateDefaultsInfo() {
   const el = document.getElementById('s-defaults-info');
@@ -39,7 +46,6 @@ export async function loadPrefs() {
     // pas de préférences enregistrées pour l'instant — on garde les valeurs par défaut
   }
   if (!Array.isArray(state.prefs.kart_numbers)) state.prefs.kart_numbers = [];
-  // Normalisation secteurs/thème (anciennement le patch "Trinisette" par-dessus loadPrefs).
   state.prefs.sectors_enabled = !!state.prefs.sectors_enabled;
   state.prefs.sector_count = Number(state.prefs.sector_count || 3);
   state.prefs.results_theme = state.prefs.results_theme || 'classic';
@@ -53,21 +59,17 @@ export async function loadPrefs() {
   renderKartNumbersList();
 
   const sel = document.getElementById('pref-results-theme');
-  if (sel) {
-    sel.value = state.prefs.results_theme;
-    applyThemePreview(sel.value);
-  }
-  if (state.prefs.helmet_colors && Array.isArray(state.prefs.helmet_colors)) helmetColors = state.prefs.helmet_colors;
-  const hc = document.getElementById('pref-helmet-choice');
-  if (hc) hc.value = state.prefs.helmet_choice || 1;
-  renderHelmetChoices();
+  if (sel) sel.value = state.prefs.results_theme;
+  document.querySelectorAll('.theme-option-row').forEach((r) => {
+    r.style.borderColor = r.dataset.themeVal === state.prefs.results_theme ? 'var(--acc)' : 'var(--bord)';
+  });
+  renderResultsPreview();
+  renderKartAvatarGallery();
 
   const on = document.getElementById('pref-sectors-enabled');
   const n = document.getElementById('pref-sector-count');
-  const theme = document.getElementById('pref-results-theme');
   if (on) on.checked = state.prefs.sectors_enabled;
   if (n) n.value = String(state.prefs.sector_count);
-  if (theme) theme.value = state.prefs.results_theme;
   toggleSectorsField();
 }
 
@@ -97,6 +99,7 @@ export function addKartNumber() {
   state.prefs.kart_numbers.push(v);
   inp.value = '';
   renderKartNumbersList();
+  renderKartAvatarGallery();
   markPrefsDirty();
   showMsg('msg-kart-numbers', 'Numero ' + v + ' ajoute. Clique Enregistrer pour sauvegarder.', 'ok');
 }
@@ -104,6 +107,7 @@ export function addKartNumber() {
 export function removeKartNumber(n) {
   state.prefs.kart_numbers = (state.prefs.kart_numbers || []).filter((x) => x !== n);
   renderKartNumbersList();
+  renderKartAvatarGallery();
   markPrefsDirty();
   showMsg('msg-kart-numbers', 'Numero ' + n + ' retire. Clique Enregistrer pour sauvegarder.', 'ok');
 }
@@ -112,6 +116,7 @@ export function autoFillKartNumbers() {
   const max = parseInt(document.getElementById('pref-karts').value) || state.prefs.default_karts || 12;
   state.prefs.kart_numbers = Array.from({ length: max }, (_, i) => i + 1);
   renderKartNumbersList();
+  renderKartAvatarGallery();
   markPrefsDirty();
   showMsg('msg-kart-numbers', 'Numeros 1 a ' + max + ' generes. Clique Enregistrer pour sauvegarder.', 'ok');
 }
@@ -129,10 +134,10 @@ export function switchAppearanceSubtab(tab) {
     b.style.borderBottomColor = on ? 'var(--acc)' : 'transparent';
   });
   const t = document.getElementById('appearance-subtab-theme');
-  const c = document.getElementById('appearance-subtab-casque');
-  if (t) t.style.display = tab === 'theme' ? 'flex' : 'none';
-  if (c) c.style.display = tab === 'casque' ? 'flex' : 'none';
-  if (tab === 'casque' && !helmetColors) regenerateHelmetColors();
+  const a = document.getElementById('appearance-subtab-avatars');
+  if (t) t.style.display = tab === 'theme' ? 'block' : 'none';
+  if (a) a.style.display = tab === 'avatars' ? 'block' : 'none';
+  if (tab === 'avatars') renderKartAvatarGallery();
 }
 
 export function selectResultsTheme(val) {
@@ -141,68 +146,72 @@ export function selectResultsTheme(val) {
   document.querySelectorAll('.theme-option-row').forEach((r) => {
     r.style.borderColor = r.dataset.themeVal === val ? 'var(--acc)' : 'var(--bord)';
   });
-  applyThemePreview(val);
+  renderResultsPreview(val);
   markPrefsDirty();
 }
 
-export function applyThemePreview(val) {
-  const box = document.getElementById('theme-preview-box');
+// Aperçu en direct de la PAGE 1 des résultats (podium + top) avec le thème choisi et les
+// vrais avatars kart — rendu dans la zone de droite des Paramètres.
+export function renderResultsPreview(theme) {
+  const box = document.getElementById('results-live-preview');
   if (!box) return;
-  const map = {
-    classic: { bg: '#050608', surface: '#0d0f14', mut: '#7a7d8a', acc: '#ff2a2a', text: '#f4f5f8' },
-    neon: { bg: '#060810', surface: '#0b0e18', mut: '#6a7a9a', acc: '#00d4ff', text: '#f0f4ff' },
-    carbon: { bg: '#111214', surface: '#181a1e', mut: '#8a8880', acc: '#c9a84c', text: '#f5f0e8' },
-  };
-  const t = map[val] || map.classic;
-  box.style.cssText = `flex:1;min-width:320px;min-height:310px;border-radius:12px;padding:14px;background:${t.bg};border:1px solid ${t.acc}55;position:relative;overflow:hidden;box-shadow:inset 0 0 32px ${t.acc}18;`;
-  const inner = document.getElementById('theme-preview-inner');
-  if (!inner) return;
-  inner.innerHTML = `<div style="font-family:'Segoe UI',sans-serif;color:${t.text};height:100%;display:flex;flex-direction:column;gap:10px"><div style="display:flex;justify-content:space-between;align-items:center;border:1px solid ${t.acc}66;padding:9px 10px;background:${t.surface}"><div><div style="font-weight:900;font-size:15px;text-transform:uppercase">Circuit de Trinisette</div><div style="font-size:9px;color:${t.mut};margin-top:2px">21 JUILLET 2026 · SESSION DU JOUR</div></div><div style="color:${t.acc};font-size:20px;font-weight:900;font-style:italic">PODIUM</div></div><div style="display:grid;grid-template-columns:1fr 1.16fr 1fr;gap:7px;height:126px;align-items:end"><div style="height:84%;background:${t.surface};border:1px solid ${t.text}44;padding:8px;display:flex;flex-direction:column;justify-content:flex-end"><strong style="font-size:24px;color:${t.text}bb">2</strong><strong style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">PILOTE 2</strong><span style="font-size:9px;color:${t.mut}">KART 04</span></div><div style="height:100%;background:${t.surface};border:1px solid ${t.acc};box-shadow:0 0 18px ${t.acc}44;padding:8px;display:flex;flex-direction:column;justify-content:flex-end"><strong style="font-size:32px;color:${t.acc}">1</strong><strong style="font-size:14px">PILOTE 1</strong><span style="font-size:9px;color:${t.mut}">KART 12 · <b style="color:${t.acc}">1:02.345</b></span></div><div style="height:84%;background:${t.surface};border:1px solid ${t.acc}77;padding:8px;display:flex;flex-direction:column;justify-content:flex-end"><strong style="font-size:24px;color:#b8865a">3</strong><strong style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">PILOTE 3</strong><span style="font-size:9px;color:${t.mut}">KART 07</span></div></div><div style="background:${t.surface};border:1px solid ${t.text}22;overflow:hidden"><div style="display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:5px 8px;border-bottom:1px solid ${t.text}18;font-size:10px"><b style="color:${t.acc}">4</b><span>PILOTE 4 · KART 09</span><b style="color:${t.acc}">+0.842</b></div><div style="display:grid;grid-template-columns:28px 1fr auto;gap:8px;align-items:center;padding:5px 8px;font-size:10px"><b>5</b><span>PILOTE 5 · KART 02</span><b style="color:${t.mut}">+1.203</b></div></div><div style="margin-top:auto;font-size:9px;color:${t.mut};letter-spacing:.08em;text-transform:uppercase">Aperçu fidèle - podium et classement mobile</div></div>`;
-}
-
-function randColor() {
-  const h = Math.floor(Math.random() * 360);
-  const s = 60 + Math.floor(Math.random() * 30);
-  const l = 45 + Math.floor(Math.random() * 15);
-  return `hsl(${h} ${s}% ${l}%)`;
-}
-
-export function regenerateHelmetColors() {
-  helmetColors = [
-    [randColor(), randColor(), randColor()],
-    [randColor(), randColor(), randColor()],
-    [randColor(), randColor(), randColor()],
+  const t = THEME_COLORS[theme || document.getElementById('pref-results-theme')?.value || state.prefs.results_theme || 'classic'] || THEME_COLORS.classic;
+  const podium = [
+    { pos: 2, kart: 4, name: 'PILOTE 2', gap: '+2.197', border: t.p2 },
+    { pos: 1, kart: 1, name: 'PILOTE 1', gap: '1:02.345', border: t.acc, first: true },
+    { pos: 3, kart: 7, name: 'PILOTE 3', gap: '+7.131', border: t.p3 },
   ];
-  renderHelmetChoices();
-  markPrefsDirty();
+  const rows = [
+    { pos: 4, kart: 9, name: 'PILOTE 4', gap: '+9.4' },
+    { pos: 5, kart: 2, name: 'PILOTE 5', gap: '+12.1' },
+  ];
+  const av = (k) => `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${kartAvatarSVG(k)}</div>`;
+  const podHTML = podium.map((d) => `
+    <div style="display:flex;flex-direction:column;background:${t.surf};border:1px solid ${d.border};border-radius:8px;overflow:hidden;${d.first ? 'box-shadow:0 0 16px ' + t.acc + '55;' : 'margin-top:14px;'}">
+      <div style="position:relative;flex:1;min-height:${d.first ? '92' : '74'}px;display:flex;align-items:center;justify-content:center;padding:6px">
+        <span style="position:absolute;top:2px;left:5px;font-weight:900;font-style:italic;font-size:${d.first ? 26 : 20}px;color:${d.first ? t.acc : t.mut}">${d.pos}</span>
+        ${av(d.kart)}
+      </div>
+      <div style="background:linear-gradient(to top,rgba(0,0,0,.85),transparent);padding:5px 6px">
+        <div style="font-weight:900;font-style:italic;font-size:11px;color:${t.text}">${d.name}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
+          <span style="font-size:8px;color:${t.mut}">KART ${d.kart}</span>
+          <span style="font-size:8px;font-weight:800;color:#fff;background:${t.acc};padding:1px 5px;border-radius:4px">${d.gap}</span>
+        </div>
+      </div>
+    </div>`).join('');
+  const rowsHTML = rows.map((d) => `
+    <div style="display:grid;grid-template-columns:20px 26px 1fr auto;gap:7px;align-items:center;padding:5px 8px;border-top:1px solid rgba(255,255,255,.06)">
+      <span style="font-weight:900;font-style:italic;font-size:13px;color:${t.mut}">${d.pos}</span>
+      <div style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:${t.bg};display:flex;align-items:center;justify-content:center">${kartAvatarSVG(d.kart)}</div>
+      <div><div style="font-weight:800;font-style:italic;font-size:11px;color:${t.text}">${d.name}</div><div style="font-size:8px;color:${t.mut}">KART ${d.kart}</div></div>
+      <span style="font-size:9px;font-weight:800;color:${t.text};background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px">${d.gap}</span>
+    </div>`).join('');
+  box.style.cssText = `background:${t.bg};border:1px solid ${t.acc}44;border-radius:12px;padding:12px;box-shadow:inset 0 0 40px ${t.acc}14`;
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;border:1px solid ${t.acc}66;background:${t.surf};padding:8px 10px;border-radius:6px;margin-bottom:10px">
+      <div><div style="font-weight:900;font-size:14px;text-transform:uppercase;color:${t.text}">Circuit de Trinisette</div><div style="font-size:8px;color:${t.mut};margin-top:1px">SESSION DU JOUR · APERÇU</div></div>
+      <div style="color:${t.acc};font-size:18px;font-weight:900;font-style:italic">PODIUM</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:6px;align-items:end;margin-bottom:10px">${podHTML}</div>
+    <div style="background:${t.surf};border:1px solid rgba(255,255,255,.08);border-radius:6px;overflow:hidden">${rowsHTML}</div>
+    <div style="margin-top:8px;font-size:8px;color:${t.mut};text-transform:uppercase;letter-spacing:.08em">Aperçu fidèle — chaque pilote affiche l'avatar de son kart</div>`;
 }
 
-export function renderHelmetChoices() {
-  const wrap = document.getElementById('helmet-choices');
+// Galerie des avatars de la flotte (numéros de karts configurés, sinon 1→défaut).
+export function renderKartAvatarGallery() {
+  const wrap = document.getElementById('kart-avatars-gallery');
   if (!wrap) return;
-  if (!helmetColors)
-    helmetColors = [
-      [randColor(), randColor(), randColor()],
-      [randColor(), randColor(), randColor()],
-      [randColor(), randColor(), randColor()],
-    ];
-  const selected = parseInt(document.getElementById('pref-helmet-choice')?.value || '1');
-  wrap.innerHTML = helmetColors
-    .map((cols, i) => {
-      const n = i + 1;
-      const sel = n === selected;
-      return `<div onclick="chooseHelmet(${n})" style="cursor:pointer;padding:10px;border-radius:10px;border:2px solid ${sel ? 'var(--acc)' : 'var(--bord)'};text-align:center;width:100px">
-      <svg viewBox="0 0 64 64" width="56" height="56"><path d="M32 4C16 4 8 20 8 34c0 14 8 22 24 22s24-8 24-22C56 20 48 4 32 4z" fill="${cols[0]}"/><path d="M8 34h48v8H8z" fill="${cols[1]}"/><circle cx="32" cy="36" r="12" fill="${cols[2]}"/></svg>
-      <div style="font-size:11px;font-weight:700;margin-top:6px">Casque ${n}</div>
-    </div>`;
-    })
-    .join('');
-}
-
-export function chooseHelmet(n) {
-  document.getElementById('pref-helmet-choice').value = n;
-  renderHelmetChoices();
-  markPrefsDirty();
+  let nums = (state.prefs.kart_numbers || []).slice().sort((a, b) => a - b);
+  if (!nums.length) {
+    const max = Math.min(24, Number(state.prefs.default_karts) || 12);
+    nums = Array.from({ length: max }, (_, i) => i + 1);
+  }
+  wrap.innerHTML = nums.map((n) => `
+    <div style="background:var(--surf2);border:1px solid var(--bord);border-radius:10px;padding:8px 4px;text-align:center">
+      <div style="width:52px;height:54px;margin:0 auto">${kartAvatarSVG(n)}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--mut);margin-top:4px">KART ${n}</div>
+    </div>`).join('');
 }
 
 export async function savePrefs() {
@@ -221,9 +230,10 @@ export async function savePrefs() {
     sectors_enabled: !!document.getElementById('pref-sectors-enabled')?.checked,
     sector_count: Number(document.getElementById('pref-sector-count')?.value || 3),
     results_theme: document.getElementById('pref-results-theme')?.value || 'classic',
-    helmet_choice: parseInt(document.getElementById('pref-helmet-choice')?.value || '1'),
-    helmet_colors: helmetColors || state.prefs.helmet_colors || null,
   });
+  // Nettoyage de l'ancien système d'avatars (casques) s'il traîne encore dans les prefs.
+  delete state.prefs.helmet_choice;
+  delete state.prefs.helmet_colors;
   try {
     await db.from('app_settings').upsert({ key: 'global', value: state.prefs });
     showMsg('msg-prefs', 'Parametres enregistres !', 'ok');

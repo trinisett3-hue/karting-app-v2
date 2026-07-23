@@ -115,6 +115,12 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .kart-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 8px;border-radius:7px;font-weight:800;font-size:13px;background:var(--surf2);border:1px solid var(--bord)}
 .kart-badge.assigned{background:rgba(108,99,255,.15);color:var(--acc);border-color:rgba(108,99,255,.35)}
 .kart-badge.empty{color:var(--mut);font-weight:600;font-size:11px}
+/* Paramètres : deux colonnes (réglages à gauche, aperçu en direct à droite) */
+.params-layout{display:flex;gap:20px;align-items:flex-start}
+.params-col-left{flex:0 0 clamp(360px,42vw,540px);min-width:0}
+.params-col-right{flex:1 1 380px;min-width:300px;position:sticky;top:0}
+.params-col-left .card{max-width:none}
+@media(max-width:1050px){.params-layout{flex-direction:column}.params-col-right{position:static;width:100%;max-width:540px}}
 </style>
 </head>
 <body>
@@ -318,7 +324,9 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 <!-- PANEL: PARAMETRES -->
 <div class="panel" id="panel-parametres">
  <div class="pg-title">Parametres</div>
- <div class="card" style="max-width:520px">
+ <div class="params-layout">
+ <div class="params-col-left">
+ <div class="card">
   <div class="ctitle">Valeurs par defaut des sessions</div>
   <div class="field"><label>Nombre de karts par defaut</label><input type="number" id="pref-karts" min="1" max="30" oninput="markPrefsDirty()"/></div>
   <div class="field">
@@ -354,12 +362,28 @@ input[readonly]{opacity:.6;cursor:not-allowed}
   <div class="field" id="pref-sectors-wrap"><label>Nombre de secteurs</label>
    <select id="pref-sector-count" onchange="updateChronoFormat();markPrefsDirty()"><option value="2">2 secteurs</option><option value="3">3 secteurs</option></select>
   </div>
-  <div class="field"><label>Apparence &amp; personnalisation</label><div style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--bord);padding-bottom:8px"><button type="button" class="subtab-btn active" data-subtab="theme" onclick="switchAppearanceSubtab('theme')" style="background:none;border:none;color:var(--txt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid var(--acc)">Apparence</button><button type="button" class="subtab-btn" data-subtab="casque" onclick="switchAppearanceSubtab('casque')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Choix casque</button></div><div id="appearance-subtab-theme" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:180px"><div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div><div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div><div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div><select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Premium Carbon</option></select></div><div id="theme-preview-box" style="flex:1;min-width:180px;border-radius:10px;padding:14px;background:#050608;border:1px solid rgba(255,255,255,.1);position:relative;overflow:hidden;min-height:150px"><div id="theme-preview-inner" style="font-family:'Segoe UI',sans-serif"><div id="tp-name" style="font-weight:800;font-size:18px;color:#fff;margin-bottom:6px">P1 - PILOTE</div><div id="tp-badge" style="display:inline-block;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;background:#ff2a2a;color:#fff">1:02.345</div><div style="margin-top:10px;font-size:10px;color:#8a8a8a;text-transform:uppercase;letter-spacing:1px">Previsualisation en direct</div></div></div></div><div id="appearance-subtab-casque" style="display:none;gap:14px;flex-wrap:wrap"><div id="helmet-choices" style="display:flex;gap:14px;flex-wrap:wrap"></div><button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="regenerateHelmetColors()">Regenerer les couleurs</button><input type="hidden" id="pref-helmet-choice" value="1"></div><div style="font-size:11px;color:var(--mut);margin-top:4px">Le choix s'applique aux pages publiques et aux exports PDF.</div></div>
+  <div class="field"><label>Apparence &amp; personnalisation</label>
+   <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--bord);padding-bottom:8px">
+    <button type="button" class="subtab-btn active" data-subtab="theme" onclick="switchAppearanceSubtab('theme')" style="background:none;border:none;color:var(--txt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid var(--acc)">Thème</button>
+    <button type="button" class="subtab-btn" data-subtab="avatars" onclick="switchAppearanceSubtab('avatars')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Avatars karts</button>
+   </div>
+   <div id="appearance-subtab-theme">
+    <div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div>
+    <div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div>
+    <div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div>
+    <select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Premium Carbon</option></select>
+    <div style="font-size:11px;color:var(--mut);margin-top:10px">Le thème s'applique à la page publique de résultats et aux exports PDF. Aperçu en direct à droite &rarr;</div>
+   </div>
+   <div id="appearance-subtab-avatars" style="display:none">
+    <div style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px">Chaque pilote reçoit automatiquement l'avatar de son kart : le <b style="color:var(--txt)">numéro affiché est celui du kart</b>, et la couleur est propre à chaque numéro (identique d'une session à l'autre). Voici les avatars de ta flotte :</div>
+    <div id="kart-avatars-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:10px"></div>
+   </div>
+  </div>
   <button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer</button>
   <div class="msg" id="msg-prefs"></div>
  </div>
 
- <div class="card" style="max-width:520px">
+ <div class="card">
   <div class="ctitle">Numeros de karts existants</div>
   <div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
   <div class="field">
@@ -372,6 +396,14 @@ input[readonly]{opacity:.6;cursor:not-allowed}
   </div>
   <div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
   <div class="msg" id="msg-kart-numbers"></div>
+ </div>
+ </div>
+ <div class="params-col-right">
+  <div class="card">
+   <div class="ctitle">Aperçu en direct — page résultats</div>
+   <div id="results-live-preview"></div>
+  </div>
+ </div>
  </div>
 </div>
 

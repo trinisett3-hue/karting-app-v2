@@ -185,7 +185,5 @@ Object.assign(window, {
   toggleLapsField: settings.toggleLapsField,
   switchAppearanceSubtab: settings.switchAppearanceSubtab,
   selectResultsTheme: settings.selectResultsTheme,
-  regenerateHelmetColors: settings.regenerateHelmetColors,
-  chooseHelmet: settings.chooseHelmet,
   savePrefs: settings.savePrefs,
 });
