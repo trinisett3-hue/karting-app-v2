@@ -14,13 +14,10 @@ import { state } from './state.js';
 import * as sessions from './modules/sessions.js';
 import * as results from './modules/results.js';
 import * as settings from './modules/settings.js';
-// Note : un module auth.js existe déjà (src/modules/auth.js, Supabase Auth email+mot de
-// passe) mais n'est PAS branché ici pour l'instant — l'admin reste accessible sans login
-// pendant la phase de test sur le nouveau Supabase. À câbler plus tard (voir README,
-// section Roadmap) : tant qu'il n'est pas branché, les écritures sur sessions/
-// session_registrations/laps/drivers/app_settings resteront bloquées par les policies RLS
-// tenant-scoped une fois qu'elles seront activées strictement — pour l'instant elles
-// n'empêchent rien tant qu'aucun tenant_id n'est requis en pratique côté test.
+import * as auth from './modules/auth.js';
+// Auth admin branchée (voir #login-overlay dans admin.html) : tant qu'aucune session
+// Supabase Auth valide n'existe, l'admin reste bloqué derrière l'écran de connexion et
+// aucun module métier n'est initialisé (voir bootOnce() plus bas).
 
 // --- Navigation entre onglets (Créer / Actives / Archives / Paramètres) ------------------
 // Reprend exactement la logique originale : avertit avant de quitter Paramètres si des
@@ -116,13 +113,78 @@ async function loadArchives() {
   await renderArchivesList();
 }
 
-// --- Initialisation ------------------------------------------------------------------------
+// --- Authentification ------------------------------------------------------------------------
+// L'admin lui-même (compte staff/organisateur) se crée via le tableau de bord Supabase
+// (Authentication > Add user) — pas de formulaire d'inscription ici volontairement, pour
+// éviter que n'importe qui crée un compte admin depuis la page publique. Ce module gère
+// uniquement la connexion / déconnexion d'un compte déjà créé.
 
-window.addEventListener('DOMContentLoaded', async () => {
+let booted = false;
+
+async function bootOnce() {
+  if (booted) return;
+  booted = true;
   await settings.loadPrefs();
   settings.populateTimeSelect();
   settings.updateDefaultsInfo();
   await sessions.loadActiveSessions();
+}
+
+function showLogin(message) {
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'flex';
+  const err = document.getElementById('login-error');
+  if (err) err.textContent = message || '';
+}
+
+function hideLogin() {
+  const overlay = document.getElementById('login-overlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function adminSignIn() {
+  const emailEl = document.getElementById('login-email');
+  const passwordEl = document.getElementById('login-password');
+  const btn = document.getElementById('login-btn');
+  const email = emailEl ? emailEl.value.trim() : '';
+  const password = passwordEl ? passwordEl.value : '';
+  if (!email || !password) {
+    showLogin('Renseigne ton email et ton mot de passe.');
+    return;
+  }
+  if (btn) btn.disabled = true;
+  try {
+    await auth.signIn(email, password);
+    // onAuthStateChange (abonné plus bas) prend le relais : masque l'écran de
+    // connexion et démarre bootOnce() dès que la session est confirmée.
+  } catch (e) {
+    showLogin(
+      e && e.message === 'Invalid login credentials'
+        ? 'Email ou mot de passe incorrect.'
+        : (e && e.message) || 'Connexion impossible.'
+    );
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function adminSignOut() {
+  await auth.signOut();
+  booted = false;
+  window.location.reload();
+}
+
+// --- Initialisation ------------------------------------------------------------------------
+
+window.addEventListener('DOMContentLoaded', () => {
+  auth.onAuthStateChange((session) => {
+    if (session) {
+      hideLogin();
+      bootOnce();
+    } else {
+      showLogin();
+    }
+  });
 });
 
 window.addEventListener('beforeunload', (e) => {
@@ -138,6 +200,9 @@ window.addEventListener('beforeunload', (e) => {
 // utilisée par le HTML.
 
 Object.assign(window, {
+  // Authentification
+  adminSignIn,
+  adminSignOut,
   // Navigation
   switchTab,
   // Sessions

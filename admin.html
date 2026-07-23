@@ -125,6 +125,27 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 </head>
 <body>
 
+<!-- ÉCRAN DE CONNEXION — affiché par défaut, masqué par app.js une fois une session
+     Supabase Auth valide confirmée. Bloque toute interaction avec l'admin tant que
+     personne n'est connecté (l'admin lui-même s'inscrit via Supabase Dashboard, ce
+     login sert ensuite à se connecter). -->
+<div id="login-overlay" style="position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:32px;width:100%;max-width:360px">
+    <div style="font-size:20px;font-weight:800;margin-bottom:4px">Karting <span style="color:var(--acc)">Admin</span></div>
+    <div style="font-size:13px;color:var(--mut);margin-bottom:20px">Connexion requise</div>
+    <div style="margin-bottom:12px">
+      <label style="display:block;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Email</label>
+      <input type="email" id="login-email" autocomplete="username" style="background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;padding:12px 14px;font-size:15px;width:100%;outline:none;box-sizing:border-box" />
+    </div>
+    <div style="margin-bottom:16px">
+      <label style="display:block;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Mot de passe</label>
+      <input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();adminSignIn();}" style="background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;padding:12px 14px;font-size:15px;width:100%;outline:none;box-sizing:border-box" />
+    </div>
+    <button id="login-btn" class="btn btn-primary" style="width:100%" onclick="adminSignIn()">Se connecter</button>
+    <div id="login-error" style="color:var(--red);font-size:13px;margin-top:12px;min-height:1em"></div>
+  </div>
+</div>
+
 <div class="sidebar">
  <div class="sb-logo">Karting <span>Admin</span></div>
  <div class="sb-status"><div class="dot" id="status-dot"></div><span id="status-txt">Aucune session</span></div>
@@ -132,6 +153,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
  <div class="sb-tab" onclick="switchTab('actives')"><span class="lbl">Sessions actives</span></div>
  <div class="sb-tab" onclick="switchTab('archives')"><span class="lbl">Archives</span></div>
  <div class="sb-tab" onclick="switchTab('parametres')"><span class="lbl">Parametres</span></div>
+ <div class="sb-tab" onclick="adminSignOut()" style="margin-top:auto;color:var(--red)"><span class="lbl">Deconnexion</span></div>
 </div>
 
 <div class="main">
