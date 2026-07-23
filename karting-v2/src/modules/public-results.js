@@ -310,13 +310,13 @@ function escapeHTML(value) {
   return node.innerHTML;
 }
 
-async function sectionToCanvas(node, width) {
+async function sectionToCanvas(node, width, bg) {
   const holder = document.getElementById('pdf-render-root');
   holder.innerHTML = '';
   holder.style.width = width + 'px';
   const wrap = document.createElement('div');
   wrap.style.width = width + 'px';
-  wrap.style.background = '#ffffff';
+  wrap.style.background = bg || '#ffffff';
   wrap.appendChild(node);
   holder.appendChild(wrap);
   // laisser le temps aux <img> (avatars data-URI) de se décoder avant la capture
@@ -324,16 +324,41 @@ async function sectionToCanvas(node, width) {
     (img.complete && img.naturalWidth) ? Promise.resolve() : new Promise(res => { img.onload = img.onerror = res; })
   ));
   await new Promise(r => setTimeout(r, 80));
-  const canvas = await html2canvas(wrap, { backgroundColor: '#ffffff', scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
+  const canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
   holder.innerHTML = '';
   return canvas;
 }
 function canvasHeightMm(canvas, usableWmm) { return canvas.height * usableWmm / canvas.width; }
 
-// Couleur d'accent du thème courant (pour teinter les en-têtes des PDF).
-function themeAccent() {
-  const v = getComputedStyle(document.documentElement).getPropertyValue('--c-accent');
-  return (v && v.trim()) || '#ff2a2a';
+// Couleurs du thème actif (pour que les PDF reprennent la même identité visuelle
+// que la page résultats, au lieu d'un fond blanc générique).
+function themeColors() {
+  const cs = getComputedStyle(document.documentElement);
+  const g = (name, fallback) => { const v = cs.getPropertyValue(name); return (v && v.trim()) || fallback; };
+  return {
+    bg: g('--c-bg', '#050608'),
+    surface: g('--c-surface', '#0d0f14'),
+    surface2: g('--c-surface-2', '#12151c'),
+    border: g('--c-border', 'rgba(255,255,255,.12)'),
+    text: g('--c-text', '#f4f5f8'),
+    muted: g('--c-muted', '#7a7d8a'),
+    accent: g('--c-accent', '#ff2a2a'),
+    p1: g('--c-p1-border', '#ff2a2a'),
+    p2: g('--c-p2-border', 'rgba(255,255,255,.4)'),
+    p3: g('--c-p3-border', 'rgba(180,120,50,.75)'),
+  };
+}
+function themeAccent() { return themeColors().accent; }
+
+// Convertit un fond CSS (hex ou rgb/rgba) en RGB entier pour pdf.setFillColor.
+function pdfRGB(pdf, cssColor, method) {
+  const el = document.createElement('div');
+  el.style.color = cssColor;
+  document.body.appendChild(el);
+  const rgb = getComputedStyle(el).color;
+  document.body.removeChild(el);
+  const m = rgb.match(/[\d.]+/g) || [5, 6, 8];
+  pdf[method](Number(m[0]), Number(m[1]), Number(m[2]));
 }
 
 export async function downloadFullPDF(btn) {
@@ -343,15 +368,16 @@ export async function downloadFullPDF(btn) {
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
-    const composite = buildResultsPDFNode(allResults, sessionInfo, themeAccent());
+    const t = themeColors();
+    const composite = buildResultsPDFNode(allResults, sessionInfo, t);
 
     const pageW = 210, pageH = 297, margin = 8;
     const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
-    const canvas = await sectionToCanvas(composite, 760);
+    const canvas = await sectionToCanvas(composite, 760, t.bg);
     const imgH = canvasHeightMm(canvas, usableW);
-    pdf.setFillColor(255, 255, 255);
-    pdf.rect(0, 0, pageW, pageH, 'F');
-    // toujours ramené à UNE page : on réduit si le contenu dépasse la hauteur utile
+    pdfRGB(pdf, t.bg, 'setFillColor');
+    pdf.rect(0, 0, pageW, pageH, 'F'); // le fond couvre toute la page, même si le contenu est plus court
+    // toujours ramené à UNE page : on réduit si le contenu dépasse la hauteur utile (jamais agrandi)
     const scale = imgH > usableH ? usableH / imgH : 1;
     const dw = usableW * scale, dh = imgH * scale;
     pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (usableW - dw) / 2, margin, dw, dh);
@@ -363,83 +389,88 @@ export async function downloadFullPDF(btn) {
   btn.innerHTML = original;
 }
 
-/* PDF CLASSEMENT COMPLET — une seule page A4 portrait, fond clair type feuille
-   officielle : bandeau titre teinté (couleur du thème), podium (top 3 avec avatars
-   kart), puis classement complet avec mini-avatars, kart, tours et temps/écart. */
-export function buildResultsPDFNode(results, session, accent) {
+/* PDF CLASSEMENT COMPLET — les 3 pages de results.html réunies sur UNE page A4
+   portrait, avec l'identité graphique du thème actif (fond, accent, couleurs
+   podium) : bandeau titre, podium (comme la page 1), puis un tableau combinant
+   les colonnes des pages 1 (kart/écart), 2 (tours) et 3 (meilleur tour). */
+export function buildResultsPDFNode(results, session, t) {
   const node = document.createElement('div');
-  node.style.cssText = 'width:760px;background:#ffffff;color:#17191f;font-family:Arial,Helvetica,sans-serif;';
+  node.style.cssText = `width:760px;background:${t.bg};color:${t.text};font-family:Arial,Helvetica,sans-serif;`;
   const title = escapeHTML((session && session.circuit_name) || 'Circuit de Trinisette');
   const label = escapeHTML((session && session.title) || 'Classement');
   const date = escapeHTML(fmtSessionDate(session && session.session_date));
   const podium = results.slice(0, 3);
   const podOrder = [podium[1], podium[0], podium[2]].filter(Boolean); // 2 - 1 - 3
-  const cols = '30px 34px 1fr 46px 54px 96px';
+  const podBorder = { 1: t.p1, 2: t.p2, 3: t.p3 };
+  const cols = '28px 32px 1fr 42px 42px 64px 78px';
   const podHTML = podOrder.map(d => {
     const first = d.pos === 1;
-    return `<div style="flex:1;background:${first ? accent + '18' : '#f2f3f6'};border:2px solid ${first ? accent : '#e0e2e7'};border-radius:10px;padding:9px 6px;text-align:center;${first ? '' : 'margin-top:16px;'}">
-      <div style="font-size:${first ? 30 : 23}px;font-weight:900;font-style:italic;line-height:1;color:${first ? accent : '#9096a1'}">${d.pos}</div>
-      <img src="${kartAvatarDataURL(d.kart)}" width="${first ? 82 : 62}" height="${first ? 82 : 62}" style="display:block;margin:1px auto"/>
-      <div style="font-weight:800;font-style:italic;font-size:${first ? 14 : 12}px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${flagOf(d.nat)} ${escapeHTML(d.name)}</div>
-      <div style="font-size:10px;color:#606672;margin-top:1px">KART <b style="color:${accent}">${d.kart ?? '-'}</b></div>
-      <div style="margin-top:4px;display:inline-block;background:${accent};color:#fff;font-weight:800;font-size:11px;padding:2px 8px;border-radius:5px">${escapeHTML(gapBadge(d))}</div>
+    const bc = podBorder[d.pos] || t.border;
+    return `<div style="flex:1;background:${first ? t.surface2 : t.surface};border:2px solid ${bc};border-radius:10px;padding:9px 6px;text-align:center;${first ? '' : 'margin-top:14px;'}">
+      <div style="font-size:${first ? 27 : 21}px;font-weight:900;font-style:italic;line-height:1;color:${first ? t.accent : t.muted}">${d.pos}</div>
+      <img src="${kartAvatarDataURL(d.kart)}" width="${first ? 68 : 54}" height="${first ? 68 : 54}" style="display:block;margin:2px auto"/>
+      <div style="font-weight:800;font-style:italic;font-size:${first ? 13 : 11}px;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${t.text}">${flagOf(d.nat)} ${escapeHTML(d.name)}</div>
+      <div style="font-size:9px;color:${t.muted};margin-top:1px">KART <b style="color:${t.accent}">${d.kart ?? '-'}</b></div>
+      <div style="margin-top:4px;display:inline-block;background:${t.accent};color:#fff;font-weight:800;font-size:10px;padding:2px 8px;border-radius:5px">${escapeHTML(gapBadge(d))}</div>
     </div>`;
   }).join('');
   const rows = results.map((d, i) => `
-    <div style="display:grid;grid-template-columns:${cols};gap:8px;align-items:center;padding:4px 10px;background:${i % 2 ? '#f6f7f9' : '#fff'};border-bottom:1px solid #edeef1;font-size:13px">
-      <b style="color:${accent};font-size:15px;font-style:italic">${d.pos}</b>
-      <img src="${kartAvatarDataURL(d.kart)}" width="30" height="30" style="display:block"/>
-      <span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${flagOf(d.nat)} ${escapeHTML(d.name)}</span>
-      <span style="text-align:center">${d.kart ?? '-'}</span>
-      <span style="text-align:center;color:#606672">${d.hasTime ? d.lapsCount : '--'}</span>
-      <b style="text-align:right">${d.hasTime ? escapeHTML(gapBadge(d)) : '--'}</b>
+    <div style="display:grid;grid-template-columns:${cols};gap:6px;align-items:center;padding:4px 8px;background:${i % 2 ? t.surface : 'transparent'};border-bottom:1px solid ${t.border};font-size:11px">
+      <b style="color:${t.accent};font-size:13px;font-style:italic">${d.pos}</b>
+      <img src="${kartAvatarDataURL(d.kart)}" width="26" height="26" style="display:block"/>
+      <span style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:${t.text}">${flagOf(d.nat)} ${escapeHTML(d.name)}</span>
+      <span style="text-align:center;color:${t.muted}">${d.kart ?? '-'}</span>
+      <span style="text-align:center;color:${t.muted}">${d.hasTime ? d.lapsCount : '--'}</span>
+      <span style="text-align:center;color:${t.text}">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span>
+      <b style="text-align:right;color:${t.text}">${d.hasTime ? escapeHTML(gapBadge(d)) : '--'}</b>
     </div>`).join('');
   node.innerHTML = `
-    <div style="background:${accent};padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-end">
-      <div style="font-size:25px;font-weight:900;font-style:italic;text-transform:uppercase;color:#fff;line-height:1">${title}</div>
-      <div style="text-align:right;color:#fff"><div style="font-weight:700;font-size:14px">${label}</div><div style="font-size:12px;opacity:.88">${date}</div></div>
+    <div style="background:${t.accent};padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-end">
+      <div style="font-size:24px;font-weight:900;font-style:italic;text-transform:uppercase;color:#fff;line-height:1">${title}</div>
+      <div style="text-align:right;color:#fff"><div style="font-weight:700;font-size:13px">${label}</div><div style="font-size:11px;opacity:.9">${date}</div></div>
     </div>
-    <div style="padding:14px 16px 8px"><div style="display:flex;gap:10px;align-items:stretch">${podHTML || ''}</div></div>
-    <div style="padding:0 16px 14px">
-      <div style="display:grid;grid-template-columns:${cols};gap:8px;padding:2px 10px 4px;font-size:10px;font-weight:800;color:#8a8f9a;text-transform:uppercase;letter-spacing:.04em"><span>Pos</span><span></span><span>Pilote</span><span style="text-align:center">Kart</span><span style="text-align:center">Tours</span><span style="text-align:right">Temps/écart</span></div>
-      <div style="border:1px solid #e4e6ea;border-radius:8px;overflow:hidden">${rows || '<div style="padding:16px;text-align:center;color:#888">Aucun résultat.</div>'}</div>
-      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:10px;color:#8a8f9a;text-transform:uppercase;letter-spacing:.06em"><span>Trinisette Karting</span><span>Classement complet</span></div>
+    <div style="padding:14px 16px 6px"><div style="display:flex;gap:9px;align-items:stretch">${podHTML || ''}</div></div>
+    <div style="padding:6px 16px 14px">
+      <div style="display:grid;grid-template-columns:${cols};gap:6px;padding:2px 8px 4px;font-size:9px;font-weight:800;color:${t.muted};text-transform:uppercase;letter-spacing:.04em"><span>Pos</span><span></span><span>Pilote</span><span style="text-align:center">Kart</span><span style="text-align:center">Tours</span><span style="text-align:center">Meill. tour</span><span style="text-align:right">Temps/écart</span></div>
+      <div style="border:1px solid ${t.border};border-radius:8px;overflow:hidden">${rows || `<div style="padding:16px;text-align:center;color:${t.muted}">Aucun résultat.</div>`}</div>
+      <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:9px;color:${t.muted};text-transform:uppercase;letter-spacing:.06em"><span>Trinisette Karting</span><span>Classement complet — podium, classement &amp; détail réunis</span></div>
     </div>`;
   return node;
 }
 
-/* PDF FICHE PILOTE — une page A4 portrait : bandeau avec l'avatar kart du pilote,
-   5 statistiques clés, puis le tableau tour par tour (secteurs si disponibles). */
-export function buildPilotDetailNode(pilot, session, accent) {
+/* PDF FICHE PILOTE — une page A4 portrait, identité du thème actif : bandeau avec
+   l'avatar kart du pilote, 5 statistiques clés, puis le tableau tour par tour
+   (secteurs si disponibles). */
+export function buildPilotDetailNode(pilot, session, t) {
   const node = document.createElement('div');
-  node.style.cssText = 'width:760px;background:#ffffff;color:#17191f;font-family:Arial,Helvetica,sans-serif;';
+  node.style.cssText = `width:760px;background:${t.bg};color:${t.text};font-family:Arial,Helvetica,sans-serif;`;
   const sectorsPresent = [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i])));
-  const laps = pilot.lapsArr.slice(0, 16);
+  const laps = pilot.lapsArr.slice(0, 20);
   const avg = pilot.hasTime && pilot.lapsCount ? pilot.total / pilot.lapsCount : null;
   const gapTxt = pilot.pos === 1 ? 'Leader' : (Number.isFinite(pilot.gap) ? '+' + fmtPdfTime(pilot.gap) : '--');
-  const stat = (lbl, val, hl) => `<div style="flex:1;background:#f4f5f7;border-radius:8px;padding:9px 10px"><div style="font-size:9px;font-weight:800;color:#8a8f9a;text-transform:uppercase;letter-spacing:.05em">${lbl}</div><div style="font-size:16px;font-weight:900;margin-top:3px;color:${hl ? accent : '#17191f'}">${val}</div></div>`;
+  const stat = (lbl, val, hl) => `<div style="flex:1;min-width:0;background:${t.surface};border:1px solid ${t.border};border-radius:8px;padding:9px 8px"><div style="font-size:9px;font-weight:800;color:${t.muted};text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${lbl}</div><div style="font-size:15px;font-weight:900;margin-top:3px;color:${hl ? t.accent : t.text};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${val}</div></div>`;
   const secHead = sectorsPresent.map((_, n) => `<th style="padding:8px 6px">S${n + 1}</th>`).join('');
   const rows = laps.map(l => {
     const isBest = pilot.bestLap != null && l.time === pilot.bestLap;
     const delta = pilot.bestLap != null ? l.time - pilot.bestLap : null;
     const secCells = sectorsPresent.map(i => `<td style="padding:6px 6px;text-align:center">${Number.isFinite(l.sectors?.[i]) ? fmtPdfTime(l.sectors[i]) : '--'}</td>`).join('');
-    return `<tr style="background:${isBest ? accent : (l.idx % 2 ? '#fff' : '#f4f5f7')};color:${isBest ? '#fff' : '#20232b'};font-weight:${isBest ? '800' : '500'}">
+    return `<tr style="background:${isBest ? t.accent : (l.idx % 2 ? 'transparent' : t.surface)};color:${isBest ? '#fff' : t.text};font-weight:${isBest ? '800' : '500'}">
       <td style="padding:6px 10px;text-align:center">${l.idx}</td>
       <td style="padding:6px 8px;text-align:center;font-weight:700">${fmtPdfTime(l.time)}</td>
       <td style="padding:6px 8px;text-align:center">${delta == null ? '--' : (delta === 0 ? 'MEILLEUR' : '+' + fmtPdfTime(delta))}</td>
       ${secCells}
     </tr>`;
-  }).join('') || `<tr><td colspan="${3 + sectorsPresent.length}" style="padding:16px;text-align:center;color:#888">Aucun tour enregistré.</td></tr>`;
-  const more = pilot.lapsArr.length > laps.length ? `<div style="margin-top:8px;text-align:center;font-size:10px;color:#8a8f9a">+ ${pilot.lapsArr.length - laps.length} tours supplémentaires dans l'application.</div>` : '';
+  }).join('') || `<tr><td colspan="${3 + sectorsPresent.length}" style="padding:16px;text-align:center;color:${t.muted}">Aucun tour enregistré.</td></tr>`;
+  const more = pilot.lapsArr.length > laps.length ? `<div style="margin-top:8px;text-align:center;font-size:10px;color:${t.muted}">+ ${pilot.lapsArr.length - laps.length} tours supplémentaires dans l'application.</div>` : '';
   node.innerHTML = `
-    <div style="background:${accent};padding:14px 18px;display:flex;align-items:center;gap:14px">
-      <div style="background:rgba(255,255,255,.16);border-radius:10px;padding:4px;flex-shrink:0"><img src="${kartAvatarDataURL(pilot.kart)}" width="70" height="70" style="display:block"/></div>
+    <div style="background:${t.accent};padding:14px 18px;display:flex;align-items:center;gap:14px">
+      <div style="background:rgba(255,255,255,.16);border-radius:10px;padding:4px;flex-shrink:0"><img src="${kartAvatarDataURL(pilot.kart)}" width="66" height="66" style="display:block"/></div>
       <div style="min-width:0;flex:1;color:#fff">
-        <div style="font-size:23px;font-weight:900;font-style:italic;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${flagOf(pilot.nat)} ${escapeHTML(pilot.name)}</div>
+        <div style="font-size:22px;font-weight:900;font-style:italic;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${flagOf(pilot.nat)} ${escapeHTML(pilot.name)}</div>
         <div style="font-size:12px;font-weight:700;opacity:.92;margin-top:3px">POSITION ${pilot.pos} &nbsp;·&nbsp; KART ${pilot.kart ?? '-'}</div>
       </div>
     </div>
-    <div style="padding:16px 18px 8px;display:flex;gap:9px">
+    <div style="padding:16px 18px 8px;display:flex;gap:8px">
       ${stat('Meilleur tour', pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--', true)}
       ${stat('Temps total', pilot.hasTime ? fmtPdfTime(pilot.total) : '--')}
       ${stat('Tours', pilot.lapsCount)}
@@ -448,11 +479,11 @@ export function buildPilotDetailNode(pilot, session, accent) {
     </div>
     <div style="padding:6px 18px 18px">
       <table style="width:100%;border-collapse:collapse;font-size:13px">
-        <thead><tr style="background:#eceef1;color:#4a4f5a;font-size:10px;letter-spacing:.04em;text-transform:uppercase"><th style="padding:8px 10px">Tour</th><th style="padding:8px 6px">Temps</th><th style="padding:8px 6px">Écart</th>${secHead}</tr></thead>
+        <thead><tr style="background:${t.surface2};color:${t.muted};font-size:10px;letter-spacing:.04em;text-transform:uppercase"><th style="padding:8px 10px">Tour</th><th style="padding:8px 6px">Temps</th><th style="padding:8px 6px">Écart</th>${secHead}</tr></thead>
         <tbody>${rows}</tbody>
       </table>
       ${more}
-      <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:10px;color:#8a8f9a;text-transform:uppercase;letter-spacing:.06em"><span>${escapeHTML((session && session.circuit_name) || 'Circuit de Trinisette')} · ${escapeHTML(fmtSessionDate(session && session.session_date))}</span><span>Trinisette Karting</span></div>
+      <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:10px;color:${t.muted};text-transform:uppercase;letter-spacing:.06em"><span>${escapeHTML((session && session.circuit_name) || 'Circuit de Trinisette')} · ${escapeHTML(fmtSessionDate(session && session.session_date))}</span><span>Trinisette Karting</span></div>
     </div>`;
   return node;
 }
@@ -471,13 +502,14 @@ export async function downloadPilotPDF(pilot, btn) {
   try {
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
+    const t = themeColors();
 
-    const node = buildPilotDetailNode(pilot, sessionInfo, themeAccent());
+    const node = buildPilotDetailNode(pilot, sessionInfo, t);
 
     const pageW = 210, pageH = 297, margin = 10;
     const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
-    const canvas = await sectionToCanvas(node, 760);
-    pdf.setFillColor(255, 255, 255);
+    const canvas = await sectionToCanvas(node, 760, t.bg);
+    pdfRGB(pdf, t.bg, 'setFillColor');
     pdf.rect(0, 0, pageW, pageH, 'F');
     const imgH = canvasHeightMm(canvas, usableW);
     const scale = imgH > usableH ? usableH / imgH : 1;

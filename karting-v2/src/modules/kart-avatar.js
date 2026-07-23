@@ -55,8 +55,9 @@ export function kartAvatarSVG(kartNumber, opts = {}) {
   const num = (kartNumber == null || kartNumber === '') ? '' : String(kartNumber);
   const dims = opts.size ? `width="${opts.size}" height="${opts.size}"` : 'width="100%" height="100%"';
   const title = opts.title ? `<title>${opts.title}</title>` : '';
-  // taille de police de la plaque selon le nombre de chiffres
-  const fs = num.length >= 3 ? 15 : num.length === 2 ? 19 : 24;
+  // taille de police de la plaque selon le nombre de chiffres — calibrée pour
+  // rester DANS la plaque (rect 38,82 24x17) sans jamais déborder au-dessus/en dessous.
+  const fs = num.length >= 3 ? 11 : num.length === 2 ? 14 : 17;
 
   return `<svg viewBox="0 0 100 104" ${dims} xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Kart ${num}">${title}
     <!-- roues arrière (derrière le pilote) -->
@@ -94,8 +95,8 @@ export function kartAvatarSVG(kartNumber, opts = {}) {
 
     <!-- carrosserie / nez avec plaque numéro -->
     <path d="M35 79 Q50 73 65 79 L69 99 L31 99 Z" fill="${body}"/>
-    <rect x="38" y="82" width="24" height="17" rx="3.5" fill="#f4f5f8"/>
-    ${num ? `<text x="50" y="96" text-anchor="middle" font-family="'Arial Narrow',Arial,sans-serif" font-weight="900" font-size="${fs}" fill="#15171d">${num}</text>` : ''}
+    <rect x="37" y="81" width="26" height="18" rx="3.5" fill="#f4f5f8"/>
+    ${num ? `<text x="50" y="94.5" text-anchor="middle" dominant-baseline="middle" font-family="'Arial Narrow',Arial,sans-serif" font-weight="900" font-size="${fs}" fill="#15171d">${num}</text>` : ''}
 
     <!-- roues avant (grosses, au premier plan) -->
     <rect x="3"  y="70" width="20" height="32" rx="8" fill="${tire}"/>

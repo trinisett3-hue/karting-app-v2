@@ -433,6 +433,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 }
 .pilot-avatar-placeholder.kart svg {
   width: 82%; height: 82%;
+  max-width: 190px; max-height: 190px;
   opacity: 1;
   filter: drop-shadow(0 4px 12px rgba(0,0,0,.5));
 }
@@ -847,6 +848,28 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 /* ============================================================
    MOBILE — 375px
    ============================================================ */
+/* ============================================================
+   PAGE 1 — AGRANDISSEMENT DESKTOP/TABLETTE (lisibilité). La page mobile
+   (<=600px) a ses propres tailles fixes ci-dessous et n'est pas affectée.
+   ============================================================ */
+@media (min-width: 601px) {
+  #page-screen-1 .podium-wrap { gap: var(--space-4); margin-bottom: var(--space-8); }
+  #page-screen-1 .podium-card { min-height: 25rem; }
+  #page-screen-1 .podium-card.p1 { min-height: 34rem; }
+  #page-screen-1 .pos-badge { font-size: clamp(4.4rem, 6.6vw, 7.2rem); }
+  #page-screen-1 .pilot-name { font-size: clamp(1.55rem, 2.8vw, 2.15rem); }
+  #page-screen-1 .pilot-kart { font-size: clamp(.9rem, 1.5vw, 1.05rem); }
+  #page-screen-1 .pilot-gap { font-size: clamp(.9rem, 1.4vw, 1.1rem); }
+  #page-screen-1 .rank-avatar { width: 3.6rem; height: 3.6rem; }
+  #page-screen-1 .top10-row { padding: .55rem var(--space-4); gap: var(--space-3); }
+  #page-screen-1 .rank-pos { font-size: 1.9rem; }
+  #page-screen-1 .rank-name { font-size: 1.05rem; }
+  #page-screen-1 .rank-kartline { font-size: .8rem; }
+  #page-screen-1 .rank-gap { font-size: .9rem; min-width: 4.4rem; padding: .2rem .55rem; }
+  #page-screen-1 .section-title { font-size: 1.3rem; }
+  #page-screen-1 .circuit-name { font-size: clamp(2.1rem, 3.4vw, 2.9rem); }
+}
+
 @media (max-width: 600px) {
   /* L'écran d'accueil reste une vue "podium" complète : le classement
      détaillé est disponible sur la page 2, sans faire défiler cet écran. */
