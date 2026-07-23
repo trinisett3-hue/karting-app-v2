@@ -25,6 +25,7 @@ export const state = {
     results_theme: 'classic',
     helmet_choice: 1,
     helmet_colors: null,
+    logo_url: null, // logo du circuit (bucket Storage "org-logos"), affiché sur results.html
   },
 };
 

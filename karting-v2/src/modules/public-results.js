@@ -22,6 +22,18 @@ export function initTheme() {
   db.from('app_settings').select('value').eq('key', 'global').maybeSingle().then(({ data }) => {
     const theme = data && data.value && data.value.results_theme;
     if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
+    const logoUrl = data && data.value && data.value.logo_url;
+    if (logoUrl) {
+      const nameEl = document.getElementById('circuit-name');
+      if (nameEl && nameEl.parentElement && !document.getElementById('circuit-logo')) {
+        const img = document.createElement('img');
+        img.id = 'circuit-logo';
+        img.src = logoUrl;
+        img.alt = 'Logo du circuit';
+        img.style.cssText = 'max-height:52px;max-width:200px;object-fit:contain;margin-bottom:8px;display:block';
+        nameEl.parentElement.insertBefore(img, nameEl);
+      }
+    }
   }).catch(() => {});
 }
 

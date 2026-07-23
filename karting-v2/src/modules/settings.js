@@ -50,6 +50,8 @@ export async function loadPrefs() {
   state.prefs.sector_count = Number(state.prefs.sector_count || 3);
   state.prefs.results_theme = state.prefs.results_theme || 'classic';
 
+  renderLogoPreview();
+
   document.getElementById('pref-karts').value = state.prefs.default_karts;
   document.getElementById('pref-laps').value = state.prefs.default_laps;
   document.getElementById('pref-time-unit').value = state.prefs.time_unit;
@@ -124,6 +126,83 @@ export function autoFillKartNumbers() {
 export function toggleLapsField() {
   const enabled = document.getElementById('pref-laps-enabled').checked;
   document.getElementById('pref-laps-wrap').style.display = enabled ? 'block' : 'none';
+}
+
+// --- Logo du circuit ------------------------------------------------------------------------
+// Un seul logo par organisation pour l'instant (colonne app_settings.value.logo_url,
+// bucket Storage "org-logos", upload réservé à l'admin connecté). Affiché sur
+// results.html (voir public-results.js > initTheme). Redimensionné côté client en PNG
+// (garde la transparence) avant upload, comme les photos pilotes sur register.html.
+function compressLogo(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const MAX = 400;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
+        else { w = Math.round((w * MAX) / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => resolve(blob || file), 'image/png');
+    };
+    img.onerror = () => resolve(file);
+    img.src = url;
+  });
+}
+
+export function renderLogoPreview() {
+  const wrap = document.getElementById('pref-logo-preview-wrap');
+  const img = document.getElementById('pref-logo-preview');
+  const removeBtn = document.getElementById('pref-logo-remove-btn');
+  if (!wrap || !img) return;
+  if (state.prefs.logo_url) {
+    img.src = state.prefs.logo_url;
+    wrap.style.display = 'flex';
+    if (removeBtn) removeBtn.style.display = 'inline-flex';
+  } else {
+    wrap.style.display = 'none';
+    if (removeBtn) removeBtn.style.display = 'none';
+  }
+}
+
+export async function uploadLogo(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const msgId = 'msg-logo';
+  try {
+    showMsg(msgId, 'Upload du logo…', 'ok');
+    const compressed = await compressLogo(file);
+    const path = 'logos/' + Date.now() + '.png';
+    const { error: upErr } = await db.storage.from('org-logos').upload(path, compressed, {
+      upsert: true,
+      contentType: 'image/png',
+    });
+    if (upErr) {
+      showMsg(msgId, 'Upload échoué (' + upErr.message + ').', 'err');
+      return;
+    }
+    const { data: urlData } = db.storage.from('org-logos').getPublicUrl(path);
+    state.prefs.logo_url = urlData.publicUrl;
+    renderLogoPreview();
+    markPrefsDirty();
+    showMsg(msgId, 'Logo uploadé. Clique Enregistrer pour le publier.', 'ok');
+  } catch (e) {
+    showMsg(msgId, 'Erreur: ' + e.message, 'err');
+  } finally {
+    input.value = '';
+  }
+}
+
+export function removeLogo() {
+  state.prefs.logo_url = null;
+  renderLogoPreview();
+  markPrefsDirty();
+  showMsg('msg-logo', 'Logo retiré. Clique Enregistrer pour confirmer.', 'ok');
 }
 
 export function switchAppearanceSubtab(tab) {
@@ -230,6 +309,7 @@ export async function savePrefs() {
     sectors_enabled: !!document.getElementById('pref-sectors-enabled')?.checked,
     sector_count: Number(document.getElementById('pref-sector-count')?.value || 3),
     results_theme: document.getElementById('pref-results-theme')?.value || 'classic',
+    logo_url: state.prefs.logo_url || null,
   });
   // Nettoyage de l'ancien système d'avatars (casques) s'il traîne encore dans les prefs.
   delete state.prefs.helmet_choice;

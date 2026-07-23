@@ -125,27 +125,6 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 </head>
 <body>
 
-<!-- ÉCRAN DE CONNEXION — affiché par défaut, masqué par app.js une fois une session
-     Supabase Auth valide confirmée. Bloque toute interaction avec l'admin tant que
-     personne n'est connecté (l'admin lui-même s'inscrit via Supabase Dashboard, ce
-     login sert ensuite à se connecter). -->
-<div id="login-overlay" style="position:fixed;inset:0;z-index:999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:32px;width:100%;max-width:360px">
-    <div style="font-size:20px;font-weight:800;margin-bottom:4px">Karting <span style="color:var(--acc)">Admin</span></div>
-    <div style="font-size:13px;color:var(--mut);margin-bottom:20px">Connexion requise</div>
-    <div style="margin-bottom:12px">
-      <label style="display:block;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Email</label>
-      <input type="email" id="login-email" autocomplete="username" style="background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;padding:12px 14px;font-size:15px;width:100%;outline:none;box-sizing:border-box" />
-    </div>
-    <div style="margin-bottom:16px">
-      <label style="display:block;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">Mot de passe</label>
-      <input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();adminSignIn();}" style="background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;padding:12px 14px;font-size:15px;width:100%;outline:none;box-sizing:border-box" />
-    </div>
-    <button id="login-btn" class="btn btn-primary" style="width:100%" onclick="adminSignIn()">Se connecter</button>
-    <div id="login-error" style="color:var(--red);font-size:13px;margin-top:12px;min-height:1em"></div>
-  </div>
-</div>
-
 <div class="sidebar">
  <div class="sb-logo">Karting <span>Admin</span></div>
  <div class="sb-status"><div class="dot" id="status-dot"></div><span id="status-txt">Aucune session</span></div>
@@ -153,7 +132,6 @@ input[readonly]{opacity:.6;cursor:not-allowed}
  <div class="sb-tab" onclick="switchTab('actives')"><span class="lbl">Sessions actives</span></div>
  <div class="sb-tab" onclick="switchTab('archives')"><span class="lbl">Archives</span></div>
  <div class="sb-tab" onclick="switchTab('parametres')"><span class="lbl">Parametres</span></div>
- <div class="sb-tab" onclick="adminSignOut()" style="margin-top:auto;color:var(--red)"><span class="lbl">Deconnexion</span></div>
 </div>
 
 <div class="main">
@@ -390,6 +368,21 @@ input[readonly]{opacity:.6;cursor:not-allowed}
     <button type="button" class="subtab-btn" data-subtab="avatars" onclick="switchAppearanceSubtab('avatars')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Avatars karts</button>
    </div>
    <div id="appearance-subtab-theme">
+    <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
+     <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Logo du circuit</div>
+     <div id="pref-logo-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
+      <div style="width:64px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
+       <img id="pref-logo-preview" src="" alt="Logo actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
+      </div>
+      <button id="pref-logo-remove-btn" class="btn btn-ghost btn-sm" style="display:none" onclick="removeLogo()">Retirer le logo</button>
+     </div>
+     <label class="btn btn-ghost btn-sm" style="display:inline-flex;cursor:pointer">
+      Choisir un fichier
+      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="uploadLogo(this)"/>
+     </label>
+     <div style="font-size:11px;color:var(--mut);margin-top:6px">PNG avec fond transparent recommandé. Affiché sur la page de résultats publics.</div>
+     <div class="msg" id="msg-logo"></div>
+    </div>
     <div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div>
     <div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div>
     <div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div>
