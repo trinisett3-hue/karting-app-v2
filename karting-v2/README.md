@@ -4,7 +4,7 @@ SaaS karting — inscriptions pilotes, attribution des karts, import des chronos
 
 ## Stack
 
-- **Frontend** : HTML/CSS/JS statique, sans framework. L'admin (`admin.html`) est modulaire (ES modules), `register.html` et `results.html` restent en un seul fichier pour l'instant (à moduler plus tard, voir Roadmap).
+- **Frontend** : HTML/CSS/JS statique, sans framework. `admin.html`, `register.html` et `results.html` sont tous les trois modulaires (ES modules).
 - **Backend** : [Supabase](https://supabase.com) (PostgreSQL + API REST auto-générée + stockage des photos pilotes).
 - **Hébergement** : [Cloudflare Pages](https://pages.cloudflare.com) (déploiement statique, CDN, HTTPS automatique).
 
@@ -17,6 +17,8 @@ SaaS karting — inscriptions pilotes, attribution des karts, import des chronos
 ├── karting-v2/
 │   ├── src/
 │   │   ├── app.js              # Point d'entrée — orchestrateur, câble les modules sur admin.html
+│   │   ├── register-app.js     # Point d'entrée — câble modules/register.js sur register.html
+│   │   ├── results-app.js      # Point d'entrée — câble modules/public-results.js sur results.html
 │   │   ├── config.js           # ⚠️ SEUL fichier à modifier pour changer d'environnement Supabase
 │   │   ├── state.js            # État partagé de l'admin (sessions, prefs, sélection en cours…)
 │   │   ├── lib/
@@ -24,8 +26,10 @@ SaaS karting — inscriptions pilotes, attribution des karts, import des chronos
 │   │   └── modules/
 │   │       ├── ui.js           # Helpers génériques (formatage, avatars, QR, messages)
 │   │       ├── sessions.js     # Sessions, inscriptions, attribution des karts
-│   │       ├── results.js      # Classement, import chronos (avec secteurs), publication, archives
-│   │       └── settings.js     # Préférences globales, apparence, casques, secteurs
+│   │       ├── results.js      # Classement, import chronos (avec secteurs), publication, archives (admin)
+│   │       ├── settings.js     # Préférences globales, apparence, casques, secteurs
+│   │       ├── register.js     # Logique de la page publique d'inscription (register.html)
+│   │       └── public-results.js # Logique de la page publique de résultats (results.html) : podium, top10, PDF
 │   └── supabase/
 │       └── migration-v2.sql    # Schéma complet à exécuter sur un projet Supabase neuf
 └── README.md
@@ -43,10 +47,9 @@ Ce projet est **déjà configuré et prêt à tester**, pas besoin de rejouer de
 ## Démarrage rapide (si tu changes d'environnement Supabase)
 
 1. Dans **Project Settings → API** du nouveau projet, récupère l'URL et la clé publique (`anon` / `publishable`).
-2. Mets à jour `karting-v2/src/config.js` (URL + clé) — **c'est le seul fichier à toucher** pour changer d'environnement admin.
-3. Fais le même remplacement dans les constantes `SUPA_URL` / `SUPA_KEY` en tête de script de `register.html` et `results.html` (ces deux pages ne sont pas encore modulaires, voir Roadmap).
-4. Rejoue `karting-v2/supabase/migration-v2.sql` sur le nouveau projet si le schéma n'existe pas encore.
-5. Ouvre `admin.html` via un serveur local (**pas** en double-clic — voir ci-dessous) ou déploie sur Cloudflare Pages pour tester.
+2. Mets à jour `karting-v2/src/config.js` (URL + clé) — **c'est le seul fichier à toucher**, `admin.html`, `register.html` et `results.html` le réutilisent tous automatiquement (via `lib/supabase.js`).
+3. Rejoue `karting-v2/supabase/migration-v2.sql` sur le nouveau projet si le schéma n'existe pas encore.
+4. Ouvre les pages via un serveur local (**pas** en double-clic — voir ci-dessous) ou déploie sur Cloudflare Pages pour tester.
 
 ## ⚠️ Pourquoi je ne peux pas juste double-cliquer sur admin.html
 
@@ -71,8 +74,10 @@ Sur Cloudflare Pages (HTTP réel), ce problème n'existe pas.
 
 | Je veux... | Fichier à modifier |
 |---|---|
-| Changer d'environnement Supabase (URL/clé) | `karting-v2/src/config.js` (+ `register.html` / `results.html` en attendant leur migration) |
-| Modifier la logique sessions / inscriptions / karts | `karting-v2/src/modules/sessions.js` |
+| Changer d'environnement Supabase (URL/clé) | `karting-v2/src/config.js` (seul fichier à toucher) |
+| Modifier la logique sessions / inscriptions / karts (admin) | `karting-v2/src/modules/sessions.js` |
+| Modifier le formulaire d'inscription public | `karting-v2/src/modules/register.js` |
+| Modifier la page publique de résultats (podium, top10, PDF) | `karting-v2/src/modules/public-results.js` |
 | Modifier classement / import chronos / secteurs / publication / archives | `karting-v2/src/modules/results.js` |
 | Modifier les réglages (karts par défaut, apparence, casques) | `karting-v2/src/modules/settings.js` |
 | Ajouter un helper d'affichage générique (formatage, avatar...) | `karting-v2/src/modules/ui.js` |
@@ -98,5 +103,6 @@ Si `esbuild` ne renvoie aucune erreur, les imports/exports entre fichiers sont v
 - [ ] **Brancher l'authentification admin.** Le module `karting-v2/src/modules/auth.js` existe déjà (connexion/inscription par email + mot de passe via Supabase Auth) mais n'est pas encore câblé dans `app.js` — l'admin reste accessible sans login pendant la phase de test. Une fois branché : ajouter un écran de connexion dans `admin.html`, appeler `auth.getSession()` / `auth.onAuthStateChange()` au démarrage de `app.js` avant de booter les modules sessions/results/settings.
 - [ ] **Supprimer les policies RLS temporaires** (`temp_test_all_session_registrations`, `temp_test_all_laps`, `admin_all_sessions`) une fois l'auth branchée — voir requêtes en bas de `migration-v2.sql`. Sans ça, les policies tenant-scoped (`*_auth`) ne servent à rien : la porte reste grande ouverte.
 - [ ] Pour chaque nouveau client/organisateur : créer une ligne dans `tenants`, créer son compte Supabase Auth (self-service via l'écran de connexion, ou manuellement), puis le relier via `tenant_users` (`user_id`, `tenant_id`, `role`).
-- [ ] Moduler `register.html` et `results.html` sur le même principe que `admin.html` (actuellement en un seul fichier chacun). Elles n'ont pas besoin d'authentification — leurs policies RLS publiques (lecture par token, insertion des inscriptions) restent valables telles quelles.
+- [x] Moduler `register.html` sur le même principe que `admin.html` (fait — `karting-v2/src/modules/register.js` + `register-app.js`).
+- [x] Moduler `results.html` sur le même principe (fait — `karting-v2/src/modules/public-results.js` + `results-app.js`).
 - [ ] Pipeline CI (lint + `esbuild --bundle` en vérification automatique sur chaque pull request).
