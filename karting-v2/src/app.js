@@ -14,6 +14,13 @@ import { state } from './state.js';
 import * as sessions from './modules/sessions.js';
 import * as results from './modules/results.js';
 import * as settings from './modules/settings.js';
+// Note : un module auth.js existe déjà (src/modules/auth.js, Supabase Auth email+mot de
+// passe) mais n'est PAS branché ici pour l'instant — l'admin reste accessible sans login
+// pendant la phase de test sur le nouveau Supabase. À câbler plus tard (voir README,
+// section Roadmap) : tant qu'il n'est pas branché, les écritures sur sessions/
+// session_registrations/laps/drivers/app_settings resteront bloquées par les policies RLS
+// tenant-scoped une fois qu'elles seront activées strictement — pour l'instant elles
+// n'empêchent rien tant qu'aucun tenant_id n'est requis en pratique côté test.
 
 // --- Navigation entre onglets (Créer / Actives / Archives / Paramètres) ------------------
 // Reprend exactement la logique originale : avertit avant de quitter Paramètres si des

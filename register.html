@@ -78,8 +78,8 @@ input:focus,select:focus{border-color:var(--acc)}
 </div>
 
 <script>
-const SUPA_URL='https://ijopqddwqtlubikflmgr.supabase.co';
-const SUPA_KEY='sb_publishable_Qa90-PASOUvmE5yUK5BTcw_HrTfehNI';
+const SUPA_URL='https://yfgrvfdjakjnmryhtpgo.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlmZ3J2ZmRqYWtqbm1yeWh0cGdvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ3MzQ2NDYsImV4cCI6MjEwMDMxMDY0Nn0.swQCn6gp_FZl-jxlB-Pn0olbKWuZMUDC5CR1ksw72J4';
 const {createClient}=supabase;
 const db=createClient(SUPA_URL,SUPA_KEY);
 
@@ -182,7 +182,12 @@ async function submitForm(){
       btn.textContent='Inscription en cours…';
     }
     if(photoUrl){
-      const {data:drv,error:drvErr}=await db.from('drivers').insert({photo_url:photoUrl}).select('id').single();
+      // La table drivers exige first_name/last_name (NOT NULL) sur le nouveau schéma.
+      // Le formulaire ne collecte qu'un seul champ "nom" — on le découpe simplement.
+      const nameParts=name.split(/\s+/);
+      const firstName=nameParts[0]||name;
+      const lastName=nameParts.slice(1).join(' ')||'';
+      const {data:drv,error:drvErr}=await db.from('drivers').insert({first_name:firstName,last_name:lastName,photo_url:photoUrl}).select('id').single();
       if(drv)driverId=drv.id;
       else console.warn('Erreur création driver:',drvErr?.message);
     }
