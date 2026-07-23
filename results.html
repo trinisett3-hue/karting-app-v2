@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="classic">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Résultats Karting — Trinisette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600;1,700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<style>
+/* ============================================================
+   TOKENS COMMUNS — partagés par les 3 thèmes
+   ============================================================ */
+:root {
+  --font-display: 'Teko', 'Arial Narrow', sans-serif;
+  --font-body:    'Barlow Condensed', 'Arial Narrow', sans-serif;
+
+  --space-1: .25rem; --space-2: .5rem;  --space-3: .75rem;
+  --space-4: 1rem;   --space-6: 1.5rem; --space-8: 2rem;
+  --space-12: 3rem;  --space-16: 4rem;
+
+  --radius-sm: .375rem; --radius-md: .5rem;
+  --radius-lg: .75rem;  --radius-xl: 1rem;
+
+  --transition: 180ms cubic-bezier(.16,1,.3,1);
+
+  /* Tailles display */
+  --pos-size:  clamp(3.7rem, 6vw, 6.3rem);
+  --name-size: clamp(1.3rem, 2.5vw, 1.9rem);
+  --kart-size: clamp(.8rem, 1.4vw, 1rem);
+  --gap-size:  clamp(.8rem, 1.3vw, 1rem);
+  --label-size:clamp(.7rem, 1.1vw, .85rem);
+
+  --nav-h: 58px;
+  --vh: 1vh;
+}
+
+/* ============================================================
+   RESET + BASE
+   ============================================================ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: none; text-size-adjust: none; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: var(--font-body);
+  font-size: 1rem;
+  background: var(--c-bg);
+  color: var(--c-text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+img { display: block; max-width: 100%; height: auto; }
+button { cursor: pointer; background: none; border: none; font: inherit; color: inherit; }
+
+
+/* ============================================================
+   DÉCLINAISON 1 — CLASSIC RACING DARK
+   ============================================================ */
+[data-theme="classic"] {
+  --c-bg:          #050608;
+  --c-surface:     #0d0f14;
+  --c-surface-2:   #12151c;
+  --c-border:      rgba(255,255,255,.07);
+  --c-text:        #f4f5f8;
+  --c-muted:       #7a7d8a;
+  --c-faint:       #3a3d48;
+  --c-accent:      #ff2a2a;
+  --c-accent-glow: rgba(255,42,42,.35);
+  --c-accent-2:    #ff5555;
+  --c-p1-border:   #ff2a2a;
+  --c-p1-glow:     0 0 40px rgba(255,42,42,.45), 0 0 80px rgba(255,42,42,.2);
+  --c-p2-border:   rgba(255,255,255,.25);
+  --c-p3-border:   rgba(180,120,50,.55);
+  --c-gap-bg:      #ff2a2a;
+  --c-gap-text:    #fff;
+
+  /* fond grille verticale */
+  --bg-grid: repeating-linear-gradient(
+    90deg,
+    rgba(255,255,255,.014) 0px,
+    rgba(255,255,255,.014) 1px,
+    transparent 1px,
+    transparent 40px
+  );
+  /* radial rouges coins */
+  --bg-radial:
+    radial-gradient(ellipse 55% 38% at 0% 0%, rgba(255,42,42,.07) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 30% at 100% 0%, rgba(255,42,42,.05) 0%, transparent 70%);
+
+  /* clip-path standard pour cartes */
+  --clip-card:  polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  --clip-badge: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
+  --clip-wrap:  polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%);
+
+  --corner-radius: 0px;
+  --card-stripe: repeating-linear-gradient(
+    -45deg,
+    rgba(255,255,255,.018) 0px, rgba(255,255,255,.018) 1px,
+    transparent 1px, transparent 8px
+  );
+}
+
+/* ============================================================
+   DÉCLINAISON 2 — NEON NIGHT
+   ============================================================ */
+[data-theme="neon"] {
+  --c-bg:          #060810;
+  --c-surface:     #0b0e18;
+  --c-surface-2:   #10142200;
+  --c-border:      rgba(0,212,255,.08);
+  --c-text:        #f0f4ff;
+  --c-muted:       #6a7a9a;
+  --c-faint:       #252d3d;
+  --c-accent:      #00d4ff;
+  --c-accent-glow: rgba(0,212,255,.3);
+  --c-accent-2:    #ff0080;
+  --c-p1-border:   #00d4ff;
+  --c-p1-glow:     0 0 40px rgba(0,212,255,.5), 0 0 80px rgba(0,212,255,.2);
+  --c-p2-border:   rgba(255,0,128,.5);
+  --c-p3-border:   rgba(255,0,128,.3);
+  --c-gap-bg:      #00d4ff;
+  --c-gap-text:    #060810;
+
+  --bg-grid: repeating-linear-gradient(
+    90deg,
+    rgba(0,212,255,.03) 0px,
+    rgba(0,212,255,.03) 1px,
+    transparent 1px,
+    transparent 36px
+  ),
+  repeating-linear-gradient(
+    0deg,
+    rgba(0,212,255,.015) 0px,
+    rgba(0,212,255,.015) 1px,
+    transparent 1px,
+    transparent 36px
+  );
+  --bg-radial:
+    radial-gradient(ellipse 60% 40% at 0% 0%, rgba(0,212,255,.06) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 30% at 100% 0%, rgba(255,0,128,.05) 0%, transparent 70%);
+
+  --clip-card:  polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  --clip-badge: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
+  --clip-wrap:  polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+
+  --corner-radius: 0px;
+  --card-stripe: none;
+}
+
+/* ============================================================
+   DÉCLINAISON 3 — PREMIUM CARBON
+   ============================================================ */
+[data-theme="carbon"] {
+  --c-bg:          #111214;
+  --c-surface:     #181a1e;
+  --c-surface-2:   #1e2024;
+  --c-border:      rgba(255,255,255,.11);
+  --c-text:        #f5f0e8;
+  --c-muted:       #8a8880;
+  --c-faint:       #333230;
+  --c-accent:      #c9a84c;
+  --c-accent-glow: rgba(201,168,76,.2);
+  --c-accent-2:    #a0a0a0;
+  --c-p1-border:   #c9a84c;
+  --c-p1-glow:     0 0 30px rgba(201,168,76,.25), 0 2px 24px rgba(0,0,0,.6);
+  --c-p2-border:   rgba(180,180,180,.3);
+  --c-p3-border:   rgba(140,100,60,.4);
+  --c-gap-bg:      transparent;
+  --c-gap-text:    #c9a84c;
+
+  --bg-grid: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28'%3E%3Cpolygon points='14,2 24,8 24,20 14,26 4,20 4,8' fill='none' stroke='rgba(255,255,255,0.04)' stroke-width='0.6'/%3E%3C/svg%3E");
+  --bg-radial:
+    radial-gradient(ellipse 50% 35% at 50% 0%, rgba(201,168,76,.04) 0%, transparent 70%);
+
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
+
+  --corner-radius: var(--radius-md);
+  --card-stripe: none;
+}
+
+/* ============================================================
+   ARRIÈRE-PLAN GLOBAL
+   ============================================================ */
+.results-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--c-bg);
+  background-image: var(--bg-grid), var(--bg-radial);
+}
+/* lueur latérale subtile */
+.results-bg::before,
+.results-bg::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 60%;
+  background: linear-gradient(to bottom, rgba(255,255,255,.06), transparent);
+}
+.results-bg::before { left: 0; }
+.results-bg::after  { right: 0; }
+
+/* ============================================================
+   LAYOUT PRINCIPAL
+   ============================================================ */
+.results-page {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-4) calc(var(--nav-h) + var(--space-12));
+}
+
+/* ============================================================
+   HEADER CIRCUIT
+   ============================================================ */
+.circuit-header {
+  position: relative;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--c-accent-glow);
+  clip-path: var(--clip-wrap);
+  border-radius: var(--corner-radius);
+  padding: var(--space-4) var(--space-6);
+  margin-bottom: var(--space-6);
+  overflow: hidden;
+}
+
+/* bande décorative haut-gauche (3 tirets) */
+.circuit-header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0;
+  width: 60px; height: 3px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--c-accent) 0px, var(--c-accent) 14px,
+    transparent 14px, transparent 20px
+  );
+  box-shadow: 0 0 8px var(--c-accent-glow);
+}
+/* coin haut-droit double bordure */
+.circuit-header::after {
+  content: '';
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 28px; height: 28px;
+  border-top: 2px solid var(--c-accent);
+  border-right: 2px solid var(--c-accent);
+  opacity: .6;
+}
+
+.circuit-name {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--c-text);
+  transform: skewX(-7deg);
+  display: inline-block;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+}
+
+.circuit-meta {
+  display: flex;
+  gap: var(--space-6);
+  flex-wrap: wrap;
+  align-items: center;
+}
+.circuit-meta-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-body);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+.circuit-meta-item svg {
+  width: 14px; height: 14px;
+  stroke: var(--c-accent);
+  flex-shrink: 0;
+}
+.circuit-meta-item span.val {
+  color: var(--c-text);
+  font-weight: 700;
+}
+
+/* ============================================================
+   SECTION TITLE
+   ============================================================ */
+.section-title {
+  font-family: var(--font-display);
+  font-size: clamp(1rem, 2.5vw, 1.4rem);
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--c-accent);
+  margin-bottom: var(--space-4);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.section-title::before {
+  content: '';
+  display: block;
+  width: 3px;
+  height: 1.2em;
+  background: var(--c-accent);
+  box-shadow: 0 0 8px var(--c-accent-glow);
+  border-radius: 1px;
+}
+
+/* ============================================================
+   PODIUM — STRUCTURE
+   ============================================================ */
+.podium-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1.18fr 1fr;
+  gap: var(--space-3);
+  align-items: end;
+  margin-bottom: var(--space-6);
+}
+
+/* ============================================================
+   PODIUM — CARTE COMMUNE
+   ============================================================ */
+.podium-card {
+  position: relative;
+  background: var(--c-surface);
+  background-image: var(--card-stripe);
+  clip-path: var(--clip-card);
+  border-radius: var(--corner-radius);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 22rem;
+  min-width: 0;
+  border: 1px solid var(--c-border);
+  transition: transform var(--transition);
+}
+
+/* P1 */
+.podium-card.p1 {
+  min-height: 31rem;
+  order: 2;
+  border-color: var(--c-p1-border);
+  box-shadow: var(--c-p1-glow);
+}
+/* P2 */
+.podium-card.p2 {
+  order: 1;
+  transform: translateY(1rem);
+  border-color: var(--c-p2-border);
+}
+/* P3 */
+.podium-card.p3 {
+  order: 3;
+  transform: translateY(1rem);
+  border-color: var(--c-p3-border);
+}
+
+/* Badge position */
+.pos-badge {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-3);
+  z-index: 10;
+  font-family: var(--font-display);
+  font-size: var(--pos-size);
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  color: var(--c-text);
+  transform: skewX(-7deg);
+  text-shadow: 0 2px 12px rgba(0,0,0,.7);
+  pointer-events: none;
+  letter-spacing: -.02em;
+}
+.podium-card.p1 .pos-badge { color: var(--c-accent); }
+.podium-card.p2 .pos-badge { color: rgba(255,255,255,.65); }
+.podium-card.p3 .pos-badge { color: rgba(180,120,50,.8); }
+
+/* Photo pilote */
+.pilot-photo-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.pilot-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  filter: drop-shadow(0 4px 16px rgba(0,0,0,.6));
+  display: block;
+}
+/* fallback avatar */
+.pilot-avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 12rem;
+  background: var(--c-surface-2, #12151c);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pilot-avatar-placeholder svg {
+  width: 56px; height: 56px;
+  opacity: .18;
+}
+
+/* Bande nom bas */
+.pilot-name-band {
+  position: relative;
+  padding: var(--space-3) var(--space-3) var(--space-3);
+  background: linear-gradient(to top, rgba(0,0,0,.92) 0%, rgba(0,0,0,.6) 100%);
+  flex-shrink: 0;
+}
+.podium-card.p1 .pilot-name-band {
+  background: linear-gradient(to top, rgba(80,8,8,.92) 0%, rgba(40,5,5,.6) 100%);
+}
+
+.pilot-name {
+  font-family: var(--font-display);
+  font-size: var(--name-size);
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--c-text);
+  transform: skewX(-7deg);
+  display: block;
+  line-height: 1.08;
+  margin-bottom: var(--space-2);
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+}
+.podium-card.p2 .pilot-name,
+.podium-card.p3 .pilot-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.pilot-info-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.pilot-kart {
+  font-family: var(--font-body);
+  font-size: var(--kart-size);
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+.pilot-kart strong {
+  color: var(--c-accent);
+  font-size: 1.1em;
+}
+
+.pilot-gap {
+  font-family: var(--font-body);
+  font-size: var(--gap-size);
+  font-weight: 700;
+  letter-spacing: .06em;
+  color: var(--c-gap-text);
+  background: var(--c-gap-bg);
+  padding: .15rem .55rem;
+  clip-path: var(--clip-badge);
+  border-radius: var(--corner-radius);
+  border: 1px solid var(--c-accent);
+  text-transform: uppercase;
+  margin-left: auto;
+  white-space: nowrap;
+  min-width: 5.5rem;
+  text-align: center;
+}
+[data-theme="carbon"] .pilot-gap {
+  border-color: var(--c-accent);
+  background: transparent;
+}
+.podium-card.p1 .pilot-gap {
+  background: var(--c-accent);
+  color: #fff;
+}
+[data-theme="carbon"] .podium-card.p1 .pilot-gap {
+  background: var(--c-accent);
+  color: #111214;
+}
+
+/* ============================================================
+   TOP 10 — CONTAINER
+   ============================================================ */
+.top10-wrap {
+  background: var(--c-surface);
+  clip-path: var(--clip-wrap);
+  border-radius: var(--corner-radius);
+  border: 1px solid var(--c-border);
+  overflow: hidden;
+}
+
+/* ============================================================
+   TOP 10 — LIGNES
+   ============================================================ */
+.top10-row {
+  display: grid;
+  grid-template-columns: 2.5rem 3.2rem 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid rgba(255,255,255,.07);
+  transition: background var(--transition);
+}
+.top10-row:first-child { border-top: none; }
+.top10-row:hover { background: rgba(255,255,255,.03); }
+
+/* Position */
+.rank-pos {
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 3.2vw, 2.5rem);
+  font-weight: 700;
+  font-style: italic;
+  line-height: 1;
+  text-align: center;
+  color: var(--c-muted);
+  transform: skewX(-7deg);
+  display: inline-block;
+  letter-spacing: -.02em;
+}
+.top10-row:nth-child(1) .rank-pos { color: var(--c-accent); }
+
+/* Avatar */
+.rank-avatar {
+  width: 3.2rem;
+  height: 3.2rem;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.12);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.rank-avatar img {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+.rank-avatar-placeholder {
+  width: 100%; height: 100%;
+  background: var(--c-faint);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rank-avatar-placeholder svg { width: 20px; height: 20px; opacity: .3; }
+
+/* Nom + kart */
+.rank-main {
+  min-width: 0;
+}
+.rank-name {
+  font-family: var(--font-display);
+  font-size: clamp(.95rem, 1.9vw, 1.45rem);
+  font-weight: 700;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  color: var(--c-text);
+  transform: skewX(-7deg);
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  hyphens: auto;
+  max-width: 100%;
+  line-height: 1.08;
+}
+.rank-kartline {
+  font-family: var(--font-body);
+  font-size: var(--kart-size);
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+  margin-top: .15rem;
+}
+.rank-kartline .kart-num { color: var(--c-accent); }
+
+/* Écart */
+.rank-gap {
+  font-family: var(--font-body);
+  font-size: var(--gap-size);
+  font-weight: 700;
+  letter-spacing: .05em;
+  color: var(--c-gap-text);
+  background: var(--c-gap-bg);
+  padding: .2rem .5rem;
+  clip-path: var(--clip-badge);
+  border-radius: var(--corner-radius);
+  border: 1px solid var(--c-accent);
+  min-width: 4.6rem;
+  text-align: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+[data-theme="carbon"] .rank-gap {
+  background: transparent;
+  border-color: rgba(201,168,76,.35);
+}
+.rank-gap.leader {
+  background: var(--c-accent);
+  color: #fff;
+  border-color: var(--c-accent);
+}
+[data-theme="carbon"] .rank-gap.leader {
+  color: #111214;
+}
+
+/* ============================================================
+   ÉTATS VIDES / CHARGEMENT
+   ============================================================ */
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--c-surface) 25%,
+    rgba(255,255,255,.04) 50%,
+    var(--c-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-16) var(--space-8);
+  color: var(--c-muted);
+  gap: var(--space-4);
+}
+.empty-state svg { width: 48px; height: 48px; opacity: .25; }
+.empty-state p { font-size: var(--label-size); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+
+/* ============================================================
+   PAGES — affichage d'une seule page à la fois
+   ============================================================ */
+.page-screen { display: none; }
+.page-screen.active { display: block; }
+
+/* ============================================================
+   DRAPEAUX (nationalité)
+   ============================================================ */
+.pilot-flag, .rank-flag { margin-right: .3em; }
+
+/* Écart / temps indisponible (kart libre, aucun tour enregistré) */
+.pilot-gap.no-data, .rank-gap.no-data {
+  background: var(--c-surface-2);
+  color: var(--c-muted);
+  border-color: var(--c-border);
+}
+
+/* Nom non confirmé (walk-in ajouté par le staff, ou kart jamais attribué) */
+.pilot-name.unknown, .rank-name.unknown {
+  font-style: italic;
+  opacity: .72;
+}
+
+/* ============================================================
+   PAGE 3 — DÉTAIL TOUR PAR TOUR (accordéon)
+   ============================================================ */
+.acc-item { border-top: 1px solid rgba(255,255,255,.07); }
+.acc-item:first-child { border-top: none; }
+
+.acc-head {
+  display: grid;
+  grid-template-columns: 2.5rem 3.2rem minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+.acc-head .rank-main { min-width: 0; }
+.acc-head:hover { background: rgba(255,255,255,.03); }
+
+.acc-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: var(--corner-radius);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  color: var(--c-muted);
+  flex-shrink: 0;
+  transition: color var(--transition), border-color var(--transition);
+}
+.acc-icon-btn:hover { color: var(--c-accent); border-color: var(--c-accent-glow); }
+.acc-icon-btn svg { width: 16px; height: 16px; }
+.acc-icon-btn.loading svg { animation: acc-spin .8s linear infinite; }
+@keyframes acc-spin { to { transform: rotate(360deg); } }
+.acc-toggle-icon { transition: transform var(--transition); }
+.acc-item.open .acc-toggle-icon { transform: rotate(180deg); }
+
+.acc-body { max-height: 0; overflow: hidden; transition: max-height .25s ease; }
+.acc-item.open .acc-body { max-height: 1400px; }
+.acc-body-inner {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-4);
+}
+.lap-chip {
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--corner-radius);
+  padding: var(--space-2);
+  text-align: center;
+}
+.lap-chip.best { border-color: var(--c-accent); background: var(--c-accent-glow); }
+.lap-chip .lc-idx {
+  font-family: var(--font-body);
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--c-muted);
+}
+.lap-chip.best .lc-idx { color: var(--c-accent); }
+.lap-chip .lc-time {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--c-text);
+  margin-top: .1rem;
+}
+.lap-chip-empty { grid-column: 1 / -1; color: var(--c-muted); font-size: var(--label-size); padding: var(--space-2); }
+
+/* ============================================================
+   EXPORT PDF
+   ============================================================ */
+.pdf-btn-wrap { display: flex; justify-content: center; padding-top: var(--space-6); }
+.pdf-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--c-accent);
+  color: #fff;
+  border: none;
+  padding: .8rem 1.6rem;
+  border-radius: var(--corner-radius);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+[data-theme="carbon"] .pdf-btn { color: #111214; }
+.pdf-btn:disabled { opacity: .5; }
+.pdf-btn svg { width: 18px; height: 18px; }
+
+/* ============================================================
+   NAVIGATION BAS DE PAGE (Précédent / points / Suivant)
+   ============================================================ */
+.page-nav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 20;
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: var(--nav-h);
+  background: var(--c-surface);
+  border-top: 1px solid var(--c-accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  padding-bottom: calc(var(--space-2) + env(safe-area-inset-bottom));
+}
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  color: var(--c-text);
+  padding: .55rem 1rem;
+  border-radius: var(--corner-radius);
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.nav-btn:disabled { opacity: .3; }
+.nav-btn svg { width: 15px; height: 15px; flex-shrink: 0; }
+.nav-dots { display: flex; gap: var(--space-2); }
+.nav-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-faint); padding: 0; transition: background var(--transition), transform var(--transition); }
+.nav-dot.active { background: var(--c-accent); transform: scale(1.35); }
+
+/* ============================================================
+   MOBILE — 375px
+   ============================================================ */
+@media (max-width: 600px) {
+  /* L'écran d'accueil reste une vue "podium" complète : le classement
+     détaillé est disponible sur la page 2, sans faire défiler cet écran. */
+  body.podium-page-active {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  body.podium-page-active .results-page {
+    height: calc(100dvh - var(--nav-h) - env(safe-area-inset-bottom));
+    padding: var(--space-2) var(--space-3);
+    overflow: hidden;
+  }
+  #page-screen-1.active {
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+  #page-screen-1 .circuit-header {
+    padding: var(--space-2) var(--space-3);
+    margin: 0;
+  }
+  #page-screen-1 .circuit-name { font-size: clamp(1.7rem, 8vw, 2.2rem); }
+  #page-screen-1 .circuit-meta { gap: var(--space-3); }
+  #page-screen-1 > section[aria-labelledby="podium-title"] {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  #page-screen-1 .section-title {
+    margin-bottom: var(--space-2);
+    font-size: 1.05rem;
+  }
+  .podium-wrap {
+    grid-template-columns: 1fr 1.18fr 1fr;
+    align-items: end;
+    height: clamp(8.5rem, 25dvh, 11rem);
+    margin: 0;
+    gap: var(--space-2);
+  }
+  .podium-card { min-height: 0; height: 84%; }
+  .podium-card.p1 { order: 2; min-height: 0; height: 100%; }
+  .podium-card.p2 { order: 1; transform: none; }
+  .podium-card.p3 { order: 3; transform: none; }
+  .pos-badge { top: var(--space-1); left: var(--space-2); font-size: clamp(2.3rem, 13vw, 3.7rem); }
+  .pilot-avatar-placeholder { min-height: 0; }
+  .pilot-avatar-placeholder svg { width: 34px; height: 34px; }
+  .pilot-name-band { padding: var(--space-2); }
+  .pilot-name { font-size: clamp(.8rem, 5.1vw, 1.15rem); margin-bottom: var(--space-1); }
+  .podium-card.p2 .pilot-name,
+  .podium-card.p3 .pilot-name {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .pilot-info-bar { gap: var(--space-1); }
+  .pilot-kart { font-size: .65rem; letter-spacing: .04em; }
+  .pilot-gap { min-width: 0; margin-left: 0; padding: .1rem .25rem; font-size: .63rem; letter-spacing: 0; }
+  #page-screen-1 > section[aria-labelledby="top10-title"] {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  #page-screen-1 > section[aria-labelledby="top10-title"] .section-title { flex-shrink: 0; }
+  #page-screen-1 > section[aria-labelledby="top10-title"] .top10-wrap {
+    min-height: 0;
+    flex: 1;
+  }
+  #page-screen-1 #top10-rows {
+    height: 100%;
+    display: grid;
+    grid-auto-rows: minmax(0, 1fr);
+  }
+
+  #page-screen-1 .top10-row {
+    grid-template-columns: 1.45rem 1.8rem minmax(0, 1fr) auto;
+    gap: .35rem;
+    min-height: 0;
+    padding: .15rem var(--space-2);
+  }
+  #page-screen-1 .rank-pos { font-size: 1.35rem; }
+  #page-screen-1 .rank-avatar { width: 1.8rem; height: 1.8rem; }
+  #page-screen-1 .rank-name { font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #page-screen-1 .rank-kartline { display: none; }
+  #page-screen-1 .rank-gap { min-width: 3.5rem; padding: .08rem .3rem; font-size: .62rem; }
+
+  /* Page 2 : le classement complet reste dans le viewport, quelle que soit
+     la taille de la grille. La densité est ajustée par renderPage2(). */
+  body.compact-results-page { height: 100dvh; overflow: hidden; overscroll-behavior: none; }
+  body.compact-results-page .results-page {
+    height: calc(100dvh - var(--nav-h) - env(safe-area-inset-bottom));
+    padding: var(--space-2) var(--space-3);
+    overflow: hidden;
+  }
+  #page-screen-2.active {
+    height: 100%;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+  #page-screen-2 .circuit-header { padding: var(--space-2) var(--space-3); margin: 0; }
+  #page-screen-2 .circuit-name { font-size: clamp(1.7rem, 8vw, 2.2rem); }
+  #page-screen-2 > section { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+  #page-screen-2 > section .section-title { flex-shrink: 0; margin-bottom: var(--space-2); }
+  #page-screen-2 .top10-wrap { flex: 1; min-height: 0; }
+  #page2-ranking {
+    height: 100%;
+    display: grid;
+    grid-template-rows: repeat(var(--page2-count, 1), minmax(0, 1fr));
+  }
+  #page2-ranking .top10-row {
+    min-height: 0;
+    grid-template-columns: calc(1.55rem * var(--page2-density, 1)) calc(2rem * var(--page2-density, 1)) minmax(0, 1fr) auto;
+    gap: calc(.4rem * var(--page2-density, 1));
+    padding: 0 calc(.5rem * var(--page2-density, 1));
+  }
+  #page2-ranking .rank-pos { font-size: calc(1.45rem * var(--page2-density, 1)); }
+  #page2-ranking .rank-avatar { width: calc(2rem * var(--page2-density, 1)); height: calc(2rem * var(--page2-density, 1)); }
+  #page2-ranking .rank-name { font-size: calc(.95rem * var(--page2-density, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #page2-ranking .rank-kartline { margin-top: 0; font-size: calc(.65rem * var(--page2-density, 1)); }
+  #page2-ranking .rank-gap { min-width: calc(3.4rem * var(--page2-density, 1)); padding: .05rem calc(.25rem * var(--page2-density, 1)); font-size: calc(.65rem * var(--page2-density, 1)); }
+  #page2-ranking.is-ultra-dense .rank-avatar,
+  #page2-ranking.is-ultra-dense .rank-kartline { display: none; }
+  #page2-ranking.is-ultra-dense .top10-row { grid-template-columns: calc(1.45rem * var(--page2-density, 1)) minmax(0, 1fr) auto; }
+
+  .circuit-header { padding: var(--space-3) var(--space-4); }
+  .circuit-meta { gap: var(--space-3); }
+
+  .acc-head {
+    grid-template-columns: 1.45rem 2.15rem minmax(0, 1fr) 3.45rem 1.9rem 1.9rem;
+    gap: .35rem;
+    padding: var(--space-2) var(--space-3);
+  }
+  .acc-head .rank-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .acc-head .rank-kartline { font-size: .65rem; }
+  .acc-icon-btn { width: 1.9rem; height: 1.9rem; }
+  .acc-icon-btn svg { width: 14px; height: 14px; }
+
+  .nav-btn { padding: .5rem .7rem; font-size: .85rem; gap: var(--space-1); }
+  .nav-btn svg { width: 14px; height: 14px; }
+  .page-nav { gap: var(--space-2); padding-left: var(--space-3); padding-right: var(--space-3); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    transition-duration: .01ms !important;
+  }
+}
+</style>
+</head>
+<body class="podium-page-active">
+
+<!-- Fond décoratif -->
+<div class="results-bg" aria-hidden="true"></div>
+
+<!-- Switcher de thème -->
+
+
+<!-- PAGE RÉSULTATS -->
+<main class="results-page" role="main">
+
+  <section class="page-screen active" id="page-screen-1">
+    <header class="circuit-header" aria-label="Informations circuit">
+      <div id="circuit-name" class="circuit-name">Circuit de Trinisette</div>
+      <div class="circuit-meta">
+        <div class="circuit-meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/>
+            <line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+          </svg>
+          <span id="session-date" class="val">--</span>
+        </div>
+        <div class="circuit-meta-item">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+            <circle cx="7" cy="7" r="1.5" fill="currentColor" stroke="none"/>
+          </svg>
+          <span id="session-label" class="val">Session --</span>
+        </div>
+      </div>
+    </header>
+
+    <section aria-labelledby="podium-title">
+      <h2 id="podium-title" class="section-title">Podium</h2>
+      <div id="podium-wrap" class="podium-wrap" aria-label="Top 3 podium">
+        <div class="empty-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+          <p>Chargement des résultats…</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="top10-title">
+      <h2 id="top10-title" class="section-title">Top 10</h2>
+      <div class="top10-wrap">
+        <div id="top10-rows" role="list" aria-label="Classement top 10"></div>
+      </div>
+    </section>
+  </section>
+
+  <section class="page-screen" id="page-screen-2">
+    <header class="circuit-header" aria-label="Highlights session">
+      <div class="circuit-name">Classement complet</div>
+      <div class="circuit-meta">
+        <div class="circuit-meta-item"><span class="val">Tous les pilotes</span></div>
+        <div class="circuit-meta-item"><span class="val">Ordre final</span></div>
+      </div>
+    </header>
+
+    <section aria-labelledby="page2-top-title">
+      <h2 id="page2-top-title" class="section-title">Classement complet</h2>
+      <div class="top10-wrap"><div id="page2-ranking" role="list" aria-label="Classement complet"></div></div>
+    </section>
+  </section>
+
+  <section class="page-screen" id="page-screen-3">
+    <header class="circuit-header" aria-label="Détail tour par tour">
+      <div class="circuit-name">Détail tour par tour</div>
+      <div class="circuit-meta">
+        <div class="circuit-meta-item"><span class="val">Tous les tours</span></div>
+        <div class="circuit-meta-item"><span class="val">Par pilote</span></div>
+      </div>
+    </header>
+
+    <section aria-labelledby="page3-title">
+      <h2 id="page3-title" class="section-title">Détail tour par tour</h2>
+      <p style="color:var(--c-muted);font-size:var(--label-size);margin:calc(-1 * var(--space-2)) 0 var(--space-4)">Touche un pilote pour voir tous ses tours</p>
+      <div class="top10-wrap"><div id="page3-accordion" role="list" aria-label="Détail tour par tour"></div></div>
+    </section>
+
+    <div class="pdf-btn-wrap">
+      <button class="pdf-btn" id="btn-pdf-full">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+        PDF complet (classement)
+      </button>
+    </div>
+  </section>
+
+</main>
+
+<nav class="page-nav" id="page-nav" style="display:none" aria-label="Navigation entre les pages de résultats">
+  <button class="nav-btn" id="nav-prev" disabled>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+    <span>Précédent</span>
+  </button>
+  <div class="nav-dots">
+    <button type="button" class="nav-dot active" data-dot="1" aria-label="Page 1 — Podium"></button>
+    <button type="button" class="nav-dot" data-dot="2" aria-label="Page 2 — Classement complet"></button>
+    <button type="button" class="nav-dot" data-dot="3" aria-label="Page 3 — Détail tour par tour"></button>
+  </div>
+  <button class="nav-btn" id="nav-next">
+    <span id="nav-next-label">Classement</span>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+  </button>
+</nav>
+
+<div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
+
+<!-- ============================================================
+     JAVASCRIPT — Logique métier (à connecter avec l'existant)
+     ============================================================ -->
+<script>
+/* ------------------------------------------------------------------
+   CONNEXION SUPABASE (partagée par tout le fichier)
+   ------------------------------------------------------------------ */
+const SUPA_URL = 'https://ijopqddwqtlubikflmgr.supabase.co';
+const SUPA_KEY = 'sb_publishable_Qa90-PASOUvmE5yUK5BTcw_HrTfehNI';
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+
+const FLAGS = { FR:'🇫🇷', BE:'🇧🇪', LU:'🇱🇺', DE:'🇩🇪', CH:'🇨🇭', NL:'🇳🇱', IT:'🇮🇹', ES:'🇪🇸', GB:'🇬🇧', US:'🇺🇸', OTHER:'🏁' };
+const PAGE1MAX = 10;
+const NO_TIME = 999999; // valeur sentinelle : toujours trié en dernier
+
+let allResults = [];
+let sessionInfo = null;
+let currentPage = 1;
+
+/* ------------------------------------------------------------------
+   THEME — Lu depuis app_settings (key='global'), défini dans
+   index.html > Paramètres > Apparence. (Corrige : le fichier lisait
+   auparavant la clé 'prefs', qui n'existe pas — la clé réelle est
+   'global' — et des variables SUPABASE_URL/SUPABASE_ANON_KEY jamais
+   déclarées, donc ce bloc échouait toujours silencieusement.)
+   ------------------------------------------------------------------ */
+(function () {
+  const MAP = { classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon' };
+  db.from('app_settings').select('value').eq('key', 'global').maybeSingle().then(({ data }) => {
+    const theme = data && data.value && data.value.results_theme;
+    if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
+  }).catch(() => {});
+})();
+
+/* ------------------------------------------------------------------
+   HELPERS
+   ------------------------------------------------------------------ */
+function flagOf(nat) { return FLAGS[nat] || FLAGS.OTHER; }
+
+function avatarHTML(src, alt, cls = '') {
+  if (src) {
+    return `<img class="pilot-avatar ${cls}" src="${src}" alt="${alt}" loading="lazy" crossorigin="anonymous" width="200" height="280">`;
+  }
+  return `<div class="pilot-avatar-placeholder ${cls}" role="img" aria-label="${alt}">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+    </svg>
+  </div>`;
+}
+function rankAvatarHTML(src) {
+  if (src) return `<img src="${src}" alt="" loading="lazy" crossorigin="anonymous" width="57" height="57">`;
+  return `<div class="rank-avatar-placeholder"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg></div>`;
+}
+
+/* Temps stockés en SECONDES dans Supabase (colonne laps.lap_time_seconds) */
+function fmtTime(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n <= 0 || n >= 9000) return '--';
+  if (n >= 60) { const m = Math.floor(n / 60); const s = (n % 60).toFixed(3).padStart(6, '0'); return `${m}:${s}`; }
+  return `${n.toFixed(3)}s`;
+}
+function fmtGap(diffSec) {
+  if (diffSec == null || !Number.isFinite(diffSec)) return '--';
+  if (diffSec >= 60) { const m = Math.floor(diffSec / 60); const s = (diffSec % 60).toFixed(3).padStart(6, '0'); return `+${m}:${s}`; }
+  return `+${diffSec.toFixed(3)}s`;
+}
+function fmtSessionDate(d) {
+  if (!d) return '--';
+  return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+/* Badge écart/temps, partagé podium + listes : au 1er on affiche son temps, sinon l'écart, sinon '--' */
+function gapBadge(d) {
+  if (!d.hasTime) return '--';
+  return d.gap === 0 ? fmtTime(d.total) : fmtGap(d.gap);
+}
+
+/* ------------------------------------------------------------------
+   RENDER — PODIUM (top 3) — classement = temps total (somme des tours),
+   comme dans l'admin (index.html > loadRanking), pas le meilleur tour seul.
+   ------------------------------------------------------------------ */
+function renderPodium(items) {
+  const wrap = document.getElementById('podium-wrap');
+  if (!items || !items.length) {
+    wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>Aucun résultat disponible</p></div>`;
+    return;
+  }
+  const posClass = ['', 'p1', 'p2', 'p3'];
+  wrap.innerHTML = items.map(d => {
+    const cls = posClass[d.pos] || '';
+    const gapTxt = gapBadge(d);
+    return `<article class="podium-card ${cls}" aria-label="P${d.pos} — ${d.name}">
+      <div class="pos-badge" aria-hidden="true">${d.pos}</div>
+      <div class="pilot-photo-wrap">${avatarHTML(d.photo, `Photo de ${d.name}`)}</div>
+      <div class="pilot-name-band">
+        <div class="pilot-name ${d.isUnknown ? 'unknown' : ''}"><span class="pilot-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
+        <div class="pilot-info-bar">
+          <span class="pilot-kart">KART&nbsp;<strong>${d.kart ?? '-'}</strong></span>
+          <span class="pilot-gap ${d.pos === 1 ? 'leader' : ''} ${!d.hasTime ? 'no-data' : ''}" aria-label="Écart : ${gapTxt}">${gapTxt}</span>
+        </div>
+      </div>
+    </article>`;
+  }).join('');
+}
+
+/* ------------------------------------------------------------------
+   RENDER — une ligne de classement, réutilisée par le Top 10 (page 1)
+   et le Classement complet (page 2, avec le nombre de tours en plus)
+   ------------------------------------------------------------------ */
+function rankRowHTML(d, extraLine) {
+  const gapTxt = gapBadge(d);
+  const isLdr = d.hasTime && d.gap === 0;
+  return `<article class="top10-row" role="listitem" aria-label="P${d.pos} — ${d.name}">
+    <span class="rank-pos" aria-hidden="true">${d.pos}</span>
+    <div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo)}</div>
+    <div class="rank-main">
+      <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
+      <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${extraLine ? ' · ' + extraLine : ''}</div>
+    </div>
+    <span class="rank-gap ${isLdr ? 'leader' : ''} ${!d.hasTime ? 'no-data' : ''}" aria-label="Écart : ${gapTxt}">${gapTxt}</span>
+  </article>`;
+}
+
+function renderTop10(items) {
+  const container = document.getElementById('top10-rows');
+  if (!items || !items.length) {
+    container.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>Aucun pilote classé</p></div>`;
+    return;
+  }
+  container.innerHTML = items.map(d => rankRowHTML(d)).join('');
+}
+
+function renderPage2(items) {
+  const container = document.getElementById('page2-ranking');
+  if (!container) return;
+  if (!items || !items.length) {
+    container.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>Aucun classement disponible</p></div>`;
+    return;
+  }
+  const count = items.length;
+  const density = Math.max(.48, Math.min(1, 12 / Math.max(count, 1)));
+  container.style.setProperty('--page2-count', String(count));
+  container.style.setProperty('--page2-density', String(density));
+  container.classList.toggle('is-ultra-dense', count > 16);
+  container.innerHTML = items.map(d => rankRowHTML(d, d.hasTime ? `${d.lapsCount} TOUR${d.lapsCount > 1 ? 'S' : ''}` : null)).join('');
+}
+
+/* ------------------------------------------------------------------
+   RENDER — PAGE 3 : détail tour par tour (accordéon dépliable)
+   Remplace l'ancienne page "Meilleurs tours" : chaque pilote ayant au
+   moins un tour enregistré, dans l'ordre du classement, avec tous ses
+   tours et le meilleur mis en évidence + téléchargement PDF individuel.
+   ------------------------------------------------------------------ */
+function renderAccordion(items) {
+  const wrap = document.getElementById('page3-accordion');
+  if (!wrap) return;
+  if (!items || !items.length) {
+    wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>Aucun tour enregistré</p></div>`;
+    return;
+  }
+  wrap.innerHTML = items.map(d => {
+    const chips = d.lapsArr.map(l => {
+      const isBest = d.bestLap != null && l.time === d.bestLap;
+      return `<div class="lap-chip ${isBest ? 'best' : ''}"><div class="lc-idx">Tour ${l.idx}</div><div class="lc-time">${fmtTime(l.time)}</div></div>`;
+    }).join('') || `<div class="lap-chip-empty">Aucun tour enregistré.</div>`;
+    return `<article class="acc-item">
+      <div class="acc-head">
+        <span class="rank-pos acc-toggle" aria-hidden="true">${d.pos}</span>
+        <div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo)}</div>
+        <div class="rank-main acc-toggle">
+          <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
+          <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span></div>
+        </div>
+        <span class="rank-gap leader" aria-label="Meilleur tour">${d.bestLap != null ? fmtTime(d.bestLap) : '--'}</span>
+        <button type="button" class="acc-icon-btn acc-pdf-btn" title="Télécharger la fiche pilote" aria-label="Télécharger la fiche pilote">${PDF_ICON}</button>
+        <button type="button" class="acc-icon-btn acc-toggle" aria-label="Afficher le détail des tours">${CHEVRON_ICON}</button>
+      </div>
+      <div class="acc-body"><div class="acc-body-inner">${chips}</div></div>
+    </article>`;
+  }).join('');
+
+  wrap.querySelectorAll('.acc-item').forEach((item, i) => {
+    item.querySelectorAll('.acc-toggle').forEach(el => el.addEventListener('click', () => item.classList.toggle('open')));
+    const pdfBtn = item.querySelector('.acc-pdf-btn');
+    if (pdfBtn) pdfBtn.addEventListener('click', (e) => { e.stopPropagation(); downloadPilotPDF(items[i], pdfBtn); });
+  });
+}
+
+/* ------------------------------------------------------------------
+   CHARGEMENT DES DONNÉES RÉELLES (Supabase)
+   Règles de gestion :
+   - la session est retrouvée via ?result=TOKEN (public_results_token),
+     c'est bien le paramètre que génère index.html (updateQRRes/copyLink) ;
+   - le classement se fait sur le TEMPS TOTAL (somme des lap_time_seconds),
+     exactement comme loadRanking() côté admin — pas le meilleur tour seul ;
+   - un pilote sans aucun tour importé apparaît quand même, avec '--' ;
+   - un numéro de kart configuré (max_karts) mais jamais attribué à un
+     inscrit apparaît en fin de classement, marqué "Kart libre" ;
+   - la nationalité vient d'abord de l'inscription, puis du profil pilote.
+   ------------------------------------------------------------------ */
+async function load() {
+  const token = new URLSearchParams(window.location.search).get('result');
+  if (!token) return fail();
+
+  const { data: session, error: sErr } = await db.from('sessions').select('*').eq('public_results_token', token).maybeSingle();
+  if (sErr || !session) return fail();
+  sessionInfo = session;
+
+  document.getElementById('circuit-name').textContent = session.circuit_name || 'Circuit de Trinisette';
+  document.getElementById('session-label').textContent = session.title || '--';
+  document.getElementById('session-date').textContent = fmtSessionDate(session.session_date);
+
+  const [lapsRes, regsRes, driversRes] = await Promise.all([
+    db.from('laps').select('registration_id,lap_index,lap_time_seconds,sector_1_seconds,sector_2_seconds,sector_3_seconds').eq('session_id', session.id),
+    db.from('session_registrations').select('*').eq('session_id', session.id),
+    db.from('drivers').select('id,nationality,photo_url'),
+  ]);
+  if (lapsRes.error || regsRes.error || driversRes.error) return fail();
+
+  const driversById = new Map((driversRes.data || []).map(d => [d.id, d]));
+  const totals = new Map(), lapCounts = new Map(), lapDetails = new Map();
+  (lapsRes.data || []).forEach(l => {
+    if (!l.registration_id) return;
+    totals.set(l.registration_id, (totals.get(l.registration_id) || 0) + Number(l.lap_time_seconds || 0));
+    lapCounts.set(l.registration_id, (lapCounts.get(l.registration_id) || 0) + 1);
+    if (!lapDetails.has(l.registration_id)) lapDetails.set(l.registration_id, []);
+    lapDetails.get(l.registration_id).push({
+      idx: l.lap_index,
+      time: Number(l.lap_time_seconds),
+      sectors: [l.sector_1_seconds, l.sector_2_seconds, l.sector_3_seconds].map(v => v == null ? null : Number(v)),
+    });
+  });
+
+  const results = [];
+  const usedKarts = new Set();
+
+  (regsRes.data || []).forEach(r => {
+    const drv = r.driver_id ? driversById.get(r.driver_id) : null;
+    const hasTime = totals.has(r.id);
+    const lapsArr = (lapDetails.get(r.id) || []).sort((a, b) => a.idx - b.idx);
+    const bestLap = lapsArr.length ? Math.min(...lapsArr.map(l => l.time)) : null;
+    results.push({
+      kart: r.kart_number,
+      name: r.display_name || 'Inconnu',
+      nat: r.nationality || (drv && drv.nationality) || 'OTHER',
+      photo: (drv && drv.photo_url) || null,
+      total: hasTime ? totals.get(r.id) : NO_TIME,
+      lapsCount: lapCounts.get(r.id) || 0,
+      lapsArr, bestLap,
+      isUnknown: !!r.is_unknown,
+      hasTime,
+    });
+    if (r.kart_number != null) usedKarts.add(Number(r.kart_number));
+  });
+
+  const maxKarts = Number(session.max_karts || 0);
+  for (let k = 1; k <= maxKarts; k++) {
+    if (usedKarts.has(k)) continue;
+    results.push({ kart: k, name: 'Kart libre', nat: 'OTHER', photo: null, total: NO_TIME, lapsCount: 0, lapsArr: [], bestLap: null, isUnknown: true, hasTime: false });
+  }
+
+  results.sort((a, b) => a.total - b.total);
+  const leader = results.find(r => r.hasTime);
+  const leaderTotal = leader ? leader.total : 0;
+  results.forEach((r, i) => { r.gap = r.hasTime ? (r.total - leaderTotal) : null; r.pos = i + 1; });
+
+  allResults = results;
+  renderPodium(results.slice(0, 3));
+  renderTop10(results.slice(3, PAGE1MAX));
+  renderPage2(results);
+  renderAccordion(results.filter(r => r.hasTime));
+
+  document.getElementById('page-nav').style.display = 'flex';
+  goToPage(1);
+}
+
+function fail() {
+  const msg = `<div class="empty-state">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    <p>Résultats indisponibles ou lien invalide</p>
+  </div>`;
+  ['podium-wrap', 'top10-rows', 'page2-ranking', 'page3-accordion'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = msg;
+  });
+}
+
+/* ------------------------------------------------------------------
+   NAVIGATION — Précédent / points / Suivant (remplace les anciens
+   onglets "Page 1/2/3" en haut, qui n'avaient d'ailleurs aucun style)
+   ------------------------------------------------------------------ */
+function goToPage(n) {
+  if (n < 1 || n > 3) return;
+  currentPage = n;
+  document.querySelectorAll('.page-screen').forEach(el => el.classList.toggle('active', el.id === `page-screen-${n}`));
+  document.body.classList.toggle('podium-page-active', n === 1);
+  document.body.classList.toggle('compact-results-page', n === 1 || n === 2);
+  document.querySelectorAll('.nav-dot').forEach(d => d.classList.toggle('active', Number(d.dataset.dot) === n));
+  document.getElementById('nav-prev').disabled = (n === 1);
+  document.getElementById('nav-next').disabled = (n === 3);
+  document.getElementById('nav-next-label').textContent = (n === 1 ? 'Classement' : 'Détails');
+  window.scrollTo(0, 0);
+}
+document.getElementById('nav-prev').addEventListener('click', () => goToPage(currentPage - 1));
+document.getElementById('nav-next').addEventListener('click', () => goToPage(currentPage + 1));
+document.querySelectorAll('.nav-dot').forEach(d => d.addEventListener('click', () => goToPage(Number(d.dataset.dot))));
+
+/* ------------------------------------------------------------------
+   EXPORT PDF (jsPDF + html2canvas) — rendu à partir des mêmes pages
+   HTML/CSS déjà stylées, donc le PDF suit toujours le thème actif.
+   Limite connue : html2canvas ne supporte pas clip-path, donc les
+   coins découpés des thèmes Classic/Neon apparaissent en rectangles
+   simples dans le PDF (l'affichage web n'est pas concerné).
+   ------------------------------------------------------------------ */
+const PDF_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>';
+const SPIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 12a9 9 0 1 1-2.64-6.36"/></svg>';
+const CHEVRON_ICON = '<svg class="acc-toggle-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 9l6 6 6-6"/></svg>';
+
+function cloneScreen(pageNum) {
+  const original = document.getElementById(`page-screen-${pageNum}`);
+  const clone = original.cloneNode(true);
+  clone.classList.add('active');
+  clone.style.cssText = 'display:block;width:100%;';
+  const pdfWrap = clone.querySelector('.pdf-btn-wrap');
+  if (pdfWrap) pdfWrap.remove();
+  return clone;
+}
+
+function escapeHTML(value) {
+  const node = document.createElement('span');
+  node.textContent = value == null ? '' : String(value);
+  return node.innerHTML;
+}
+
+function pdfBgRGB() {
+  const bg = getComputedStyle(document.body).backgroundColor;
+  const rgb = (bg.match(/\d+/g) || [5, 6, 8]).map(Number);
+  return rgb;
+}
+
+async function sectionToCanvas(node, width) {
+  const holder = document.getElementById('pdf-render-root');
+  holder.innerHTML = '';
+  holder.style.width = width + 'px';
+  const wrap = document.createElement('div');
+  wrap.style.width = width + 'px';
+  wrap.style.background = 'var(--c-bg)';
+  wrap.style.padding = '16px';
+  wrap.appendChild(node);
+  holder.appendChild(wrap);
+  await new Promise(r => setTimeout(r, 60));
+  const canvas = await html2canvas(wrap, { backgroundColor: getComputedStyle(wrap).backgroundColor, scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
+  holder.innerHTML = '';
+  return canvas;
+}
+function canvasHeightMm(canvas, usableWmm) { return canvas.height * usableWmm / canvas.width; }
+
+async function downloadFullPDF(btn) {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `${SPIN_ICON} Génération…`;
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const composite = buildResultsPDFNode();
+
+    const pageW = 210, pageH = 297, margin = 8;
+    const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
+    const canvas = await sectionToCanvas(composite, 760);
+    const imgH = canvasHeightMm(canvas, usableW);
+    const [r, g, b] = pdfBgRGB();
+    pdf.setFillColor(r, g, b);
+    pdf.rect(0, 0, pageW, pageH, 'F');
+    const scale = imgH > usableH ? usableH / imgH : 1;
+    const dw = usableW * scale, dh = imgH * scale;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (usableW - dw) / 2, margin, dw, dh);
+    pdf.save('classement_karting.pdf');
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = original;
+}
+
+/* Une mise en page dédiée, compacte et stable : les exports ne dépendent plus
+   de la hauteur des écrans web et sont toujours ramenés à une seule feuille. */
+function buildResultsPDFNode() {
+  const node = document.createElement('div');
+  node.style.cssText = 'font-family:Arial,sans-serif;color:var(--c-text);padding:8px;';
+  const title = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+  const label = escapeHTML((sessionInfo && sessionInfo.title) || 'Classement final');
+  const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  const rows = allResults.map(d => `
+    <div style="display:grid;grid-template-columns:34px 1fr 62px 88px;gap:10px;align-items:center;padding:7px 10px;border-bottom:1px solid rgba(255,255,255,.12);font-size:14px;">
+      <strong style="color:var(--c-accent);font-size:18px;">${d.pos}</strong>
+      <span style="font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${flagOf(d.nat)} ${escapeHTML(d.name)}</span>
+      <span>Kart ${d.kart ?? '-'}</span>
+      <strong style="text-align:right;">${d.hasTime ? escapeHTML(gapBadge(d)) : '--'}</strong>
+    </div>`).join('');
+  node.innerHTML = `
+    <div style="border-bottom:3px solid var(--c-accent);padding:10px 12px 14px;margin-bottom:12px;">
+      <div style="font-size:28px;font-weight:800;text-transform:uppercase;">${title}</div>
+      <div style="display:flex;justify-content:space-between;gap:12px;color:var(--c-muted);font-size:14px;margin-top:4px;"><span>${label}</span><span>${date}</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:34px 1fr 62px 88px;gap:10px;padding:0 10px 6px;color:var(--c-muted);font-size:11px;font-weight:700;text-transform:uppercase;"><span>Pos.</span><span>Pilote</span><span>Kart</span><span style="text-align:right;">Temps / écart</span></div>
+    <div style="border:1px solid var(--c-border);background:var(--c-surface);">${rows || '<div style="padding:20px;">Aucun résultat disponible.</div>'}</div>`;
+  return node;
+}
+
+function buildPilotDetailNode(pilot) {
+  const node = document.createElement('div');
+  node.style.cssText = 'width:720px;background:#f5f6f8;color:#17191f;font-family:Arial,sans-serif;padding:20px;border-top:5px solid var(--c-accent);';
+  const sectorCount = [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))).length;
+  const visibleLaps = pilot.lapsArr.slice(0, 10);
+  const sectorHeaders = sectorCount ? [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))).map((i, n) => `<th style="padding:8px 6px;text-align:center;">SECTEUR ${n + 1}</th>`).join('') : '';
+  const photo = pilot.photo
+    ? `<img src="${escapeHTML(pilot.photo)}" crossorigin="anonymous" style="width:74px;height:74px;object-fit:cover;border-radius:8px;border:2px solid #17191f;">`
+    : `<div style="width:74px;height:74px;border-radius:8px;background:#20232b;color:#fff;display:flex;align-items:center;justify-content:center;font-size:30px;">${flagOf(pilot.nat)}</div>`;
+  const rows = visibleLaps.map(l => {
+    const isBest = pilot.bestLap != null && l.time === pilot.bestLap;
+    const delta = pilot.bestLap != null ? l.time - pilot.bestLap : null;
+    const sectors = sectorCount ? [0, 1, 2].filter(i => pilot.lapsArr.some(x => x.sectors && Number.isFinite(x.sectors[i]))).map(i => `<td style="padding:7px 6px;text-align:center;">${Number.isFinite(l.sectors?.[i]) ? fmtPdfTime(l.sectors[i]) : '--'}</td>`).join('') : '';
+    return `<tr style="background:${isBest ? 'var(--c-accent)' : (l.idx % 2 ? '#ffffff' : '#e9ebef')};color:${isBest ? '#fff' : '#20232b'};font-weight:${isBest ? '700' : '500'};">
+      <td style="padding:7px 8px;text-align:center;">${l.idx}</td><td style="padding:7px 8px;text-align:center;">${fmtPdfTime(l.time)}</td><td style="padding:7px 8px;text-align:center;">${delta == null ? '--' : (delta === 0 ? 'MEILLEUR' : '+' + fmtPdfTime(delta))}</td>${sectors}
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="padding:18px;text-align:center;">Aucun tour enregistré.</td></tr>';
+  const more = pilot.lapsArr.length > visibleLaps.length ? `<div style="margin-top:10px;text-align:center;font-size:11px;color:#656a75;">Les ${pilot.lapsArr.length - visibleLaps.length} tours supplémentaires sont disponibles dans l’application.</div>` : '';
+  node.innerHTML = `
+    <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:18px;align-items:center;padding:2px 0 16px;">
+      <div style="display:flex;align-items:center;gap:14px;min-width:0;">${photo}<div style="min-width:0;"><div style="font-size:24px;font-weight:900;font-style:italic;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHTML(pilot.name)}</div><div style="margin-top:5px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#555b67;">POSITION <strong style="color:var(--c-accent);">${pilot.pos}</strong>&nbsp;&nbsp; KART <strong style="color:var(--c-accent);">${pilot.kart ?? '-'}</strong></div></div></div>
+      <div style="border-radius:10px;background:#e6e8ec;padding:12px 14px;"><div style="font-size:11px;font-weight:800;letter-spacing:.08em;color:#606672;">RÉSUMÉ SESSION</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px;font-size:12px;"><div>MEILLEUR TOUR<br><strong style="font-size:16px;color:var(--c-accent);">${pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--'}</strong></div><div>NOMBRE DE TOURS<br><strong style="font-size:16px;">${pilot.lapsCount}</strong></div><div>TEMPS TOTAL<br><strong>${pilot.hasTime ? fmtPdfTime(pilot.total) : '--'}</strong></div><div>SESSION<br><strong>${escapeHTML((sessionInfo && sessionInfo.title) || 'Course')}</strong></div></div></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:end;border-top:1px solid #d2d5da;padding:12px 2px 10px;"><div><div style="font-size:22px;font-weight:900;font-style:italic;text-transform:uppercase;">${escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette')}</div><div style="margin-top:4px;font-size:12px;color:#656a75;">${escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date))} · Résultats individuels</div></div><div style="font-size:11px;font-weight:800;color:var(--c-accent);letter-spacing:.08em;">TRINISETTE KARTING</div></div>
+    <table style="width:100%;border-collapse:collapse;border:1px solid #d2d5da;font-size:12px;"><thead><tr style="background:#dfe1e5;color:#383d47;font-size:10px;letter-spacing:.04em;"><th style="padding:8px 6px;">TOUR</th><th style="padding:8px 6px;">TEMPS</th><th style="padding:8px 6px;">ÉCART</th>${sectorHeaders}</tr></thead><tbody>${rows}</tbody></table>${more}`;
+  return node;
+}
+
+function fmtPdfTime(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n < 0) return '--';
+  const min = Math.floor(n / 60);
+  const rest = (n % 60).toFixed(3).padStart(6, '0');
+  return `${String(min).padStart(2, '0')}:${rest}`;
+}
+
+async function downloadPilotPDF(pilot, btn) {
+  btn.classList.add('loading');
+  btn.innerHTML = SPIN_ICON;
+  try {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    const container = document.createElement('div');
+    container.style.cssText = 'display:flex;flex-direction:column;gap:16px;';
+
+    container.appendChild(buildPilotDetailNode(pilot));
+
+    const pageW = 210, pageH = 297, margin = 10;
+    const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
+    const canvas = await sectionToCanvas(container, 760);
+    const [r, g, b] = pdfBgRGB();
+    pdf.setFillColor(r, g, b);
+    pdf.rect(0, 0, pageW, pageH, 'F');
+    const imgH = canvasHeightMm(canvas, usableW);
+    const scale = imgH > usableH ? usableH / imgH : 1;
+    const drawW = usableW * scale, drawH = imgH * scale;
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (usableW - drawW) / 2, margin, drawW, drawH);
+    pdf.save(`Fiche_Pilote_${pilot.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.classList.remove('loading');
+  btn.innerHTML = PDF_ICON;
+}
+
+document.getElementById('btn-pdf-full').addEventListener('click', (e) => downloadFullPDF(e.currentTarget));
+
+load();
+</script>
+
+</body>
+</html>

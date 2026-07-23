@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Admin - Karting</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+:root{--bg:#0f1117;--surf:#161925;--surf2:#1e2235;--bord:#2e3248;--txt:#e8eaf6;--mut:#8b90b0;--acc:#6c63ff;--grn:#34c97b;--red:#f04040;--yel:#ecea2a;--rad:12px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;overflow:hidden;height:100vh}
+.sidebar{width:220px;background:var(--surf);border-right:1px solid var(--bord);display:flex;flex-direction:column;padding:20px 0;flex-shrink:0}
+.sb-logo{font-size:18px;font-weight:900;padding:0 20px 20px;border-bottom:1px solid var(--bord);margin-bottom:16px}
+.sb-logo span{color:var(--yel)}
+.sb-status{display:flex;align-items:center;gap:8px;padding:0 20px 20px;font-size:12px;color:var(--mut)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--red)}
+.dot.on{background:var(--grn)}
+.sb-tab{padding:12px 20px;font-size:14px;font-weight:700;color:var(--mut);cursor:pointer;border-left:3px solid transparent;display:flex;align-items:center;gap:10px;transition:.15s}
+.sb-tab:hover{color:var(--txt);background:var(--surf2)}
+.sb-tab.active{color:var(--txt);border-left-color:var(--acc);background:var(--surf2)}
+.main{flex:1;padding:24px;overflow-y:auto;max-height:100vh;min-width:0}
+.panel{display:none}.panel.active{display:block}
+.pg-title{font-size:22px;font-weight:900;margin-bottom:20px}
+.card{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:20px;margin-bottom:16px}
+.ctitle{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px}
+.field{margin-bottom:12px}
+label{display:block;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:5px}
+input,select,textarea{background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;padding:10px 14px;font-size:14px;width:100%;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--acc)}
+input[readonly]{opacity:.6;cursor:not-allowed}
+.btn{padding:10px 18px;border-radius:9px;font-size:14px;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:7px}
+.btn-primary{background:var(--acc);color:#fff}
+.btn-yel{background:var(--yel);color:#111}
+.btn-red{background:rgba(240,64,64,.13);color:var(--red);border:1px solid rgba(240,64,64,.3)}
+.ins-table-scroll{background:linear-gradient(var(--bg2,#1a1a2e) 30%,transparent) 0 0,linear-gradient(transparent,var(--bg2,#1a1a2e) 70%) 0 100%,radial-gradient(farthest-side at 50% 0,rgba(0,0,0,.3),transparent) 0 0,radial-gradient(farthest-side at 50% 100%,rgba(0,0,0,.3),transparent) 0 100%;background-color:var(--bg2,#1a1a2e);background-repeat:no-repeat;background-size:100% 40px,100% 40px,100% 12px,100% 12px;background-attachment:local,local,scroll,scroll}
+.btn-ghost{background:var(--surf2);color:var(--txt);border:1px solid var(--bord)}
+.btn-sm{padding:6px 12px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.icon-btn{padding:6px 8px;display:inline-flex;align-items:center;justify-content:center}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+.no-session{text-align:center;padding:36px;color:var(--mut);font-size:14px;background:var(--surf);border:1px dashed var(--bord);border-radius:var(--rad)}
+.tbl{width:100%;border-collapse:collapse}
+.tbl th{text-align:left;padding:9px 12px;font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;border-bottom:1px solid var(--bord)}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--bord);font-size:13px;vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.av{width:34px;height:34px;border-radius:50%;object-fit:cover}
+.av-ph{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:13px;color:#fff;flex-shrink:0}
+.input-inline{background:transparent;border:none;color:var(--txt);font-size:13px;width:100%;padding:2px 4px;border-radius:4px}
+.input-inline:focus{background:var(--surf2);border:1px solid var(--acc);outline:none}
+.kart-inp{width:64px;text-align:center;padding:6px;font-weight:700;font-size:14px}
+.qr-card{background:var(--surf);border:1px solid var(--bord);border-radius:var(--rad);padding:22px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+.qr-wrap{cursor:pointer;border-radius:18px;overflow:hidden;border:2px solid var(--bord);transition:.2s;background:#fff;padding:14px;display:inline-flex}
+.qr-wrap:hover{border-color:var(--acc)}
+.qr-wrap img{display:block;width:160px;height:160px;border-radius:8px}
+.qr-lbl{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+.rank-tbl{width:100%;border-collapse:collapse}
+.rank-tbl th{text-align:left;padding:8px 10px;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;border-bottom:1px solid var(--bord)}
+.rank-tbl td{padding:8px 10px;border-bottom:1px solid var(--bord);font-size:13px}
+.rank-tbl tr:last-child td{border-bottom:none}
+.p1{color:#b8860b;font-weight:800}.p2{color:#888;font-weight:800}.p3{color:#8b4513;font-weight:800}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px);padding:20px}
+.overlay.show{display:flex}
+.qr-zoom-box{background:var(--surf);border:1px solid var(--bord);border-radius:24px;padding:32px;display:flex;flex-direction:column;align-items:center;gap:16px;max-width:400px;width:90%}
+.qr-zoom-box .qr-wrap{padding:20px}
+.qr-zoom-box .qr-wrap img{width:280px;height:280px}
+.pres-box{background:var(--surf);border:2px solid var(--yel);border-radius:28px;padding:40px;display:flex;flex-direction:column;align-items:center;gap:20px;max-width:460px;width:90%}
+.pres-title{font-size:22px;font-weight:900;color:var(--yel);text-align:center}
+.pres-box .qr-wrap{padding:20px}
+.pres-box .qr-wrap img{width:280px;height:280px}
+.arch-item{background:var(--surf2);border:1px solid var(--bord);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;cursor:pointer;transition:.15s}
+.arch-item:hover{border-color:var(--acc)}
+.arch-title{font-size:14px;font-weight:700}
+.arch-meta{font-size:11px;color:var(--mut);margin-top:2px}
+.day-lbl{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;padding:6px 0;border-bottom:1px solid var(--bord);margin:14px 0 8px}
+.chrono-area{font-family:monospace;font-size:13px;min-height:110px;resize:vertical}
+.msg{padding:10px 16px;border-radius:8px;font-size:13px;margin-top:10px;display:none}
+.msg.ok{background:rgba(52,201,123,.12);color:var(--grn);display:block}
+.msg.err{background:rgba(240,64,64,.12);color:var(--red);display:block}
+.empty{text-align:center;padding:26px;color:var(--mut);font-size:13px}
+.flex{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.sess-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+.sess-card{background:var(--surf);border:1px solid var(--bord);border-radius:20px;padding:22px;cursor:pointer;transition:.18s;display:flex;flex-direction:column;gap:10px;min-height:150px}
+.sess-card:hover{border-color:var(--acc);transform:translateY(-2px)}
+.sess-card h3{font-size:16px;font-weight:900}
+.sess-card .sc-meta{font-size:12px;color:var(--mut)}
+.sess-card .sc-badge{align-self:flex-start;font-size:10px;font-weight:800;text-transform:uppercase;padding:4px 10px;border-radius:20px;background:rgba(108,99,255,.15);color:var(--acc)}
+.sess-card .sc-badge.pub{background:rgba(52,201,123,.15);color:var(--grn)}
+.sess-card .sc-occ{margin-top:auto;font-size:13px;font-weight:700}
+@media(max-width:850px){.g2,.g3{grid-template-columns:1fr}}
+
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spinAnim .7s linear infinite;margin-right:6px}
+@keyframes spinAnim{to{transform:rotate(360deg)}}
+
+.kart-grid-wrap{margin-bottom:16px}
+.kart-grid-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px}
+.kart-grid-legend{display:flex;gap:14px;font-size:11px;color:var(--mut)}
+.kg-leg{display:flex;align-items:center;gap:5px}
+.kg-dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+.kg-dot.free{background:var(--grn)}
+.kg-dot.taken{background:var(--surf2);border:1px solid var(--bord)}
+.kg-dot.selected{background:var(--acc)}
+.kart-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
+.kart-pastille{position:relative;aspect-ratio:1;border-radius:10px;border:1px solid var(--bord);background:var(--surf2);color:var(--txt);display:flex;flex-direction:column;align-items:center;justify-content:center;font-weight:800;font-size:15px;cursor:pointer;transition:.12s;padding:2px}
+.kart-pastille.free{background:rgba(52,201,123,.14);border-color:rgba(52,201,123,.4);color:var(--grn)}
+.kart-pastille.free:hover{background:rgba(52,201,123,.28);transform:translateY(-2px)}
+.kart-pastille.taken{background:var(--surf2);color:var(--mut);cursor:default}
+.kart-pastille.taken .kp-name{font-size:8px;font-weight600;max-width:90%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;opacity:.85}
+.kart-pastille.awaiting-select{outline:2px dashed var(--acc);animation:pulseKart 1.1s infinite}
+@keyframes pulseKart{0%,100%{opacity:1}50%{opacity:.55}}
+.pilot-row-select{cursor:pointer;transition:.12s}
+.pilot-row-select.selected{background:rgba(108,99,255,.14)!important}
+.pilot-row-select:hover{background:var(--surf2)}
+.kart-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 8px;border-radius:7px;font-weight:800;font-size:13px;background:var(--surf2);border:1px solid var(--bord)}
+.kart-badge.assigned{background:rgba(108,99,255,.15);color:var(--acc);border-color:rgba(108,99,255,.35)}
+.kart-badge.empty{color:var(--mut);font-weight:600;font-size:11px}
+</style>
+</head>
+<body>
+
+<div class="sidebar">
+ <div class="sb-logo">Karting <span>Admin</span></div>
+ <div class="sb-status"><div class="dot" id="status-dot"></div><span id="status-txt">Aucune session</span></div>
+ <div class="sb-tab active" onclick="switchTab('creer')"><span class="lbl">Nouvelle session</span></div>
+ <div class="sb-tab" onclick="switchTab('actives')"><span class="lbl">Sessions actives</span></div>
+ <div class="sb-tab" onclick="switchTab('archives')"><span class="lbl">Archives</span></div>
+ <div class="sb-tab" onclick="switchTab('parametres')"><span class="lbl">Parametres</span></div>
+</div>
+
+<div class="main">
+
+<!-- PANEL: CREER -->
+<div class="panel active" id="panel-creer">
+ <div class="pg-title">Nouvelle session</div>
+ <div class="card" style="max-width:520px">
+  <div class="ctitle">Configuration</div>
+  <div class="field"><label>Titre</label><input type="text" id="s-title" placeholder="Ex: Groupe A"/></div>
+  <div class="field"><label>Heure</label><select id="s-time"></select></div>
+  <div class="field" id="s-karts-wrap" style="display:none">
+   <label>Nombre de karts</label>
+   <input type="number" id="s-karts" min="1" max="30"/>
+  </div>
+  <div class="msg" style="display:block;background:rgba(108,99,255,.1);color:var(--acc);margin-bottom:12px" id="s-defaults-info"></div>
+  <button class="btn btn-primary" style="width:100%" onclick="createSession()">Demarrer la session</button>
+  <div class="msg" id="msg-create"></div>
+ </div>
+</div>
+
+<!-- PANEL: SESSIONS ACTIVES -->
+<div class="panel" id="panel-actives">
+
+ <div id="actives-list-view">
+  <div class="pg-title">Sessions actives</div>
+  <div id="actives-grid"><div class="empty">Chargement...</div></div>
+ </div>
+
+ <div id="actives-detail-view" style="display:none">
+  <div class="flex" style="justify-content:space-between;margin-bottom:16px">
+   <button class="btn btn-ghost btn-sm" onclick="backToActivesList()">Retour aux sessions actives</button>
+   <button class="btn btn-red btn-sm" onclick="deleteActiveSession()">Supprimer la session</button>
+  </div>
+
+  <div class="card">
+   <div class="flex" style="justify-content:space-between;margin-bottom:6px">
+    <div style="flex:1;min-width:200px">
+     <label>Titre de la session</label>
+     <input type="text" id="det-title-input" oninput="markDetailDirty()"/>
+    </div>
+    <div style="width:120px">
+     <label>Karts max</label>
+     <input type="number" id="det-karts-input" min="1" max="30" oninput="markDetailDirty()"/>
+    </div>
+    <div style="width:120px" id="det-laps-wrap">
+     <label>Tours</label>
+     <input type="number" id="det-laps-input" min="1" max="200" oninput="markDetailDirty()"/>
+    </div>
+    <button class="btn btn-primary btn-sm" id="det-save-btn" style="display:none;align-self:flex-end" onclick="saveDetailMeta()">Enregistrer</button>
+   </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:auto minmax(0,0.6fr) minmax(0,2fr);gap:12px;align-items:stretch;min-width:0">
+   <div class="qr-card">
+    <div class="qr-lbl">QR Inscription</div>
+    <div class="qr-wrap" onclick="zoomQR('reg')" id="qr-reg-wrap"></div>
+    <button class="btn btn-ghost btn-sm" onclick="copyLink('reg')">Copier le lien</button>
+   </div>
+   <div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:12px 8px">
+    <div class="ctitle" style="margin:0;font-size:10px">Occupation</div>
+    <div style="font-size:22px;font-weight:900" id="det-occ-main">--/--</div>
+    <div style="font-size:10px;color:var(--mut);text-align:center">Karts / inscrits</div>
+    <div style="font-size:10px;color:var(--yel);font-weight:700;text-align:center" id="det-remaining">-- restant(s)</div>
+   </div>
+   <div class="card" style="display:flex;flex-direction:column">
+    <div class="flex" style="justify-content:space-between;margin-bottom:10px;flex-shrink:0">
+     <div class="flex" style="justify-content:space-between;align-items:center;width:100%">
+      <div class="ctitle" style="margin:0">Pilotes inscrits</div>
+      <div class="msg" id="msg-ins" style="flex:1;text-align:center;min-height:0;padding:0 8px;font-size:12px"></div>
+      <div class="flex" style="gap:6px">
+       <button class="btn btn-ghost btn-sm" onclick="loadInscrits()">Actualiser</button>
+       <button class="btn btn-primary btn-sm" onclick="addUnknownParticipant()">+ Ajouter</button>
+      </div>
+     </div>
+    </div>
+    <div id="ins-table" class="ins-table-scroll" style="height:220px;overflow-y:auto"><div class="empty">Chargement...</div></div>
+   </div>
+  </div>
+
+  <div class="card">
+   <div class="kart-grid-wrap">
+    <div class="kart-grid-head">
+     <div class="ctitle" style="margin:0">Attribution des karts</div>
+     <div class="kart-grid-legend">
+      <div class="kg-leg"><span class="kg-dot free"></span>Libre</div>
+      <div class="kg-leg"><span class="kg-dot taken"></span>Pris</div>
+      <div class="kg-leg"><span class="kg-dot selected"></span>Pilote selectionne</div>
+     </div>
+    </div>
+    <div id="kart-select-hint" class="msg" style="display:none;background:rgba(108,99,255,.12);color:var(--acc)"></div>
+    <div id="kart-grid" class="kart-grid"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--bord)">
+     <button class="btn btn-ghost btn-sm" onclick="assignMissingKarts()">Attribuer les manquants</button>
+     <button class="btn btn-ghost btn-sm" onclick="autoKarts()">Karts aleatoires</button>
+    </div>
+   </div>
+  </div>
+
+
+
+  <div class="card">
+   <div class="ctitle">Import des chronos</div>
+   <div class="field">
+    <label id="chrono-format-label">Temps (format : Nom;Kart;NumTour;Temps — une ligne par tour)</label>
+    <textarea class="chrono-area" id="chrono-raw" placeholder="Pilote1;1;1;45.210&#10;Pilote1;1;2;44.980&#10;Pilote2;2;1;47.382"></textarea>
+    <div id="chrono-format-help" style="font-size:11px;color:var(--mut);margin-top:6px">Sans secteurs : Nom;Kart;NumTour;Temps</div>
+   </div>
+   <div class="flex">
+    <button class="btn btn-primary" onclick="importChrono()" id="btn-import-chrono">Importer le texte</button>
+    <label class="btn btn-ghost" style="cursor:pointer;margin:0">Importer CSV / Excel
+     <input type="file" id="chrono-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleChronoFile(this)"/>
+    </label>
+   </div>
+   <div class="msg" id="msg-chrono"></div>
+  </div>
+
+  <div class="card" id="stats-session-card" style="display:none">
+   <div class="ctitle">Statistiques de la session</div>
+   <div class="g3" id="stats-session-grid"></div>
+  </div>
+
+  <div class="g2">
+   <div class="card">
+    <div class="ctitle">Classement</div>
+    <div id="ranking-preview"><div class="empty">Importe les chronos.</div></div>
+    <div class="flex" style="margin-top:14px">
+     <button class="btn btn-yel btn-sm" onclick="publishResults()">Publier</button>
+     <button class="btn btn-ghost btn-sm" onclick="copyLink('res')">Copier lien</button>
+     <button class="btn btn-ghost btn-sm" onclick="exportCSV(activeDetailSession)">Exporter CSV</button>
+    </div>
+    <div class="msg" id="msg-res"></div>
+   </div>
+   <div class="qr-card">
+    <div class="qr-lbl">QR Resultats</div>
+    <div class="qr-wrap" onclick="zoomQR('res')" id="qr-res-wrap"></div>
+    <button class="btn btn-ghost btn-sm" onclick="togglePres()">Mode presentation</button>
+   </div>
+  </div>
+  <div class="card" style="margin-top:8px">
+   <button class="btn btn-red" style="width:100%" onclick="terminerSession()">Terminer la session</button>
+  </div>
+ </div>
+</div>
+
+<!-- PANEL: ARCHIVES -->
+<div class="panel" id="panel-archives">
+ <div class="pg-title">Archives</div>
+ <div id="arch-list-view">
+  <div class="card">
+   <div class="ctitle">Sessions passees (7 derniers jours)</div>
+   <div id="arch-list"><div class="empty">Chargement...</div></div>
+  </div>
+ </div>
+ <div id="arch-detail-view" style="display:none">
+  <button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="backToArchives()">Retour aux archives</button>
+  <div class="pg-title" id="arch-detail-title" style="font-size:18px"></div>
+
+  <div class="card" id="arch-stats-card" style="display:none">
+   <div class="ctitle">Statistiques de la session</div>
+   <div class="g3" id="arch-stats-grid"></div>
+  </div>
+
+  <div class="g2">
+   <div class="card">
+    <div class="ctitle">Classement</div>
+    <div id="arch-ranking"></div>
+   </div>
+   <div class="card">
+    <div class="ctitle">Inscrits</div>
+    <div id="arch-inscrits"></div>
+   </div>
+  </div>
+  <div class="card">
+   <div class="ctitle">QR Resultats</div>
+   <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+    <div id="arch-qr-wrap"><div class="empty">Non publie</div></div>
+    <div class="flex">
+     <button class="btn btn-yel btn-sm" onclick="archPublish()">Republier</button>
+     <button class="btn btn-ghost btn-sm" onclick="archCopyLink()">Copier lien</button>
+     <button class="btn btn-ghost btn-sm" onclick="archTogglePres()">Presentation</button>
+     <button class="btn btn-ghost btn-sm" onclick="exportCSV(archiveSession)">Exporter CSV</button>
+    </div>
+    <div class="msg" id="msg-arch"></div>
+   </div>
+  </div>
+ </div>
+</div>
+
+<!-- PANEL: PARAMETRES -->
+<div class="panel" id="panel-parametres">
+ <div class="pg-title">Parametres</div>
+ <div class="card" style="max-width:520px">
+  <div class="ctitle">Valeurs par defaut des sessions</div>
+  <div class="field"><label>Nombre de karts par defaut</label><input type="number" id="pref-karts" min="1" max="30" oninput="markPrefsDirty()"/></div>
+  <div class="field">
+   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+    <input type="checkbox" id="pref-karts-locked" style="width:auto" checked onchange="markPrefsDirty()"/>
+    <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Verrouiller ce nombre (identique pour toutes les sessions)</span>
+   </label>
+   <div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Si desactive, tu pourras choisir un nombre de karts different a chaque session.</div>
+  </div>
+  <div class="field">
+   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+    <input type="checkbox" id="pref-laps-enabled" style="width:auto" onchange="toggleLapsField();markPrefsDirty()"/>
+    <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer le suivi du nombre de tours</span>
+   </label>
+  </div>
+  <div class="g2" style="gap:10px">
+   <div class="field" id="pref-laps-wrap"><label>Nombre de tours par defaut</label><input type="number" id="pref-laps" min="1" max="200" oninput="markPrefsDirty()"/></div>
+   <div class="field"><label>Unite de temps</label>
+    <select id="pref-time-unit" onchange="markPrefsDirty()">
+     <option value="seconds">Secondes</option>
+     <option value="minutes">Minutes:secondes</option>
+     <option value="minutes_ms">Minutes:secondes:millieme</option>
+    </select>
+   </div>
+  </div>
+  <div class="field" style="margin-top:8px">
+   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+    <input type="checkbox" id="pref-sectors-enabled" style="width:auto" onchange="toggleSectorsField();markPrefsDirty()"/>
+    <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer les secteurs (import et fiche PDF)</span>
+   </label>
+   <div id="pref-sectors-status" style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Lorsque désactivé ou absent des chronos, la fiche pilote utilise automatiquement le tableau simplifié.</div>
+  </div>
+  <div class="field" id="pref-sectors-wrap"><label>Nombre de secteurs</label>
+   <select id="pref-sector-count" onchange="updateChronoFormat();markPrefsDirty()"><option value="2">2 secteurs</option><option value="3">3 secteurs</option></select>
+  </div>
+  <div class="field"><label>Apparence &amp; personnalisation</label><div style="display:flex;gap:8px;margin-bottom:12px;border-bottom:1px solid var(--bord);padding-bottom:8px"><button type="button" class="subtab-btn active" data-subtab="theme" onclick="switchAppearanceSubtab('theme')" style="background:none;border:none;color:var(--txt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid var(--acc)">Apparence</button><button type="button" class="subtab-btn" data-subtab="casque" onclick="switchAppearanceSubtab('casque')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Choix casque</button></div><div id="appearance-subtab-theme" style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap"><div style="flex:1;min-width:180px"><div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div><div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div><div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div><select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Premium Carbon</option></select></div><div id="theme-preview-box" style="flex:1;min-width:180px;border-radius:10px;padding:14px;background:#050608;border:1px solid rgba(255,255,255,.1);position:relative;overflow:hidden;min-height:150px"><div id="theme-preview-inner" style="font-family:'Segoe UI',sans-serif"><div id="tp-name" style="font-weight:800;font-size:18px;color:#fff;margin-bottom:6px">P1 - PILOTE</div><div id="tp-badge" style="display:inline-block;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;background:#ff2a2a;color:#fff">1:02.345</div><div style="margin-top:10px;font-size:10px;color:#8a8a8a;text-transform:uppercase;letter-spacing:1px">Previsualisation en direct</div></div></div></div><div id="appearance-subtab-casque" style="display:none;gap:14px;flex-wrap:wrap"><div id="helmet-choices" style="display:flex;gap:14px;flex-wrap:wrap"></div><button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="regenerateHelmetColors()">Regenerer les couleurs</button><input type="hidden" id="pref-helmet-choice" value="1"></div><div style="font-size:11px;color:var(--mut);margin-top:4px">Le choix s'applique aux pages publiques et aux exports PDF.</div></div>
+  <button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer</button>
+  <div class="msg" id="msg-prefs"></div>
+ </div>
+
+ <div class="card" style="max-width:520px">
+  <div class="ctitle">Numeros de karts existants</div>
+  <div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
+  <div class="field">
+   <label>Ajouter un numero</label>
+   <div class="flex" style="gap:8px">
+    <input type="number" id="pref-kart-num-input" min="1" max="999" placeholder="Ex: 7" style="max-width:120px" onkeydown="if(event.key==='Enter'){event.preventDefault();addKartNumber();}"/>
+    <button class="btn btn-primary btn-sm" onclick="addKartNumber()">Ajouter</button>
+    <button class="btn btn-ghost btn-sm" onclick="autoFillKartNumbers()">Generer 1 a N</button>
+   </div>
+  </div>
+  <div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
+  <div class="msg" id="msg-kart-numbers"></div>
+ </div>
+</div>
+
+</div>
+
+<div class="overlay" id="qr-overlay" onclick="if(event.target===this)closeZoom()">
+ <div class="qr-zoom-box">
+  <div style="font-size:15px;font-weight:800" id="qr-zoom-title"></div>
+  <div class="qr-wrap" id="qr-zoom-imgwrap"><img id="qr-zoom-img" src="" alt="QR"/></div>
+  <button class="btn btn-ghost btn-sm" onclick="closeZoom()">Fermer</button>
+ </div>
+</div>
+
+<div class="overlay" id="hist-overlay" onclick="if(event.target===this)closeHistory()">
+ <div class="qr-zoom-box" style="max-width:480px">
+  <div style="font-size:16px;font-weight:800" id="hist-title"></div>
+  <div id="hist-content" style="width:100%;max-height:400px;overflow-y:auto"></div>
+  <button class="btn btn-ghost btn-sm" onclick="closeHistory()">Fermer</button>
+ </div>
+</div>
+
+<div class="overlay" id="pres-overlay" onclick="if(event.target===this)togglePres()" style="background:rgba(10,12,20,.88)">
+ <div class="pres-box">
+  <div class="pres-title">Scanne pour les resultats !</div>
+  <div class="qr-wrap"><img id="pres-img" src="" alt="QR"/></div>
+  <div style="font-size:13px;color:var(--mut);text-align:center" id="pres-sub"></div>
+  <button class="btn btn-ghost btn-sm" onclick="togglePres()">Quitter</button>
+ </div>
+</div>
+
+
+<script type="module" src="karting-v2/src/app.js"></script>
+</body>
+</html>

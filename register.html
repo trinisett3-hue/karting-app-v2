@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Inscription – Karting</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{--bg:#0f1117;--surf:#161925;--surf2:#1e2235;--bord:#2e3248;--txt:#e8eaf6;--mut:#8b90b0;--acc:#6c63ff;--grn:#34c97b;--red:#f04040;--yel:#ecea2a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px}
+.card{background:var(--surf);border:1px solid var(--bord);border-radius:16px;padding:28px;width:100%;max-width:420px}
+.logo{text-align:center;font-size:28px;font-weight:900;margin-bottom:6px}
+.logo span{color:var(--yel)}
+.subtitle{text-align:center;font-size:13px;color:var(--mut);margin-bottom:24px}
+.session-title{text-align:center;background:var(--surf2);border:1px solid var(--bord);border-radius:10px;padding:10px;font-size:14px;font-weight:700;margin-bottom:20px;color:var(--grn)}
+.field{margin-bottom:14px}
+label{display:block;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+input,select{background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;padding:12px 14px;font-size:15px;width:100%;outline:none}
+input:focus,select:focus{border-color:var(--acc)}
+.photo-area{border:2px dashed var(--bord);border-radius:10px;padding:20px;text-align:center;cursor:pointer;transition:.2s;position:relative;overflow:hidden}
+.photo-area:hover{border-color:var(--acc)}
+.photo-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.photo-preview{width:90px;height:90px;border-radius:50%;object-fit:cover;margin:0 auto 8px;display:block}
+.photo-placeholder{font-size:40px;margin-bottom:6px}
+.photo-txt{font-size:12px;color:var(--mut)}
+.btn{width:100%;padding:14px;border-radius:10px;font-size:16px;font-weight:800;border:none;cursor:pointer;margin-top:8px}
+.btn-primary{background:var(--acc);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.msg{padding:12px;border-radius:8px;font-size:13px;margin-top:12px;text-align:center;display:none}
+.msg.ok{background:rgba(52,201,123,.12);color:var(--grn);display:block}
+.msg.err{background:rgba(240,64,64,.12);color:var(--red);display:block}
+.success-screen{display:none;text-align:center;padding:20px}
+.success-icon{font-size:60px;margin-bottom:12px}
+.success-title{font-size:20px;font-weight:900;margin-bottom:8px}
+.success-sub{font-size:14px;color:var(--mut)}
+.nationalities{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px}
+.nat-btn{background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:10px;font-size:13px;cursor:pointer;text-align:center;transition:.15s;color:var(--txt)}
+.nat-btn.selected{border-color:var(--acc);background:rgba(108,99,255,.15);color:var(--acc);font-weight:700}
+</style>
+</head>
+<body>
+<div class="card" id="form-card">
+  <div class="logo">🏎️ Karting <span>Trinisette</span></div>
+  <div class="subtitle">Inscris-toi pour la course !</div>
+  <div class="session-title" id="session-name">Chargement…</div>
+
+  <div class="field">
+    <label>📸 Ta photo (optionnel)</label>
+    <div class="photo-area" id="photo-area">
+      <input type="file" id="photo-input" accept="image/*" onchange="previewPhoto(this)"/>
+      <div id="photo-content">
+        <div class="photo-placeholder">🧑</div>
+        <div class="photo-txt">Appuie pour ajouter une photo</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="field">
+    <label>👤 Ton prénom / pseudo</label>
+    <input type="text" id="inp-name" placeholder="Ex: Michel" maxlength="30"/>
+  </div>
+
+  <div class="field">
+    <label>🌍 Nationalité</label>
+    <div class="nationalities" id="nat-grid"></div>
+  </div>
+
+  <button class="btn btn-primary" id="btn-submit" onclick="submitForm()">S'inscrire à la course 🏁</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<div class="card success-screen" id="success-card">
+  <div class="success-icon">🏁</div>
+  <div class="success-title">Tu es inscrit !</div>
+  <div class="success-sub" id="success-name"></div>
+  <div class="success-sub" style="margin-top:8px">Attends que le staff t'attribue ton kart.</div>
+</div>
+
+<script>
+const SUPA_URL='https://ijopqddwqtlubikflmgr.supabase.co';
+const SUPA_KEY='sb_publishable_Qa90-PASOUvmE5yUK5BTcw_HrTfehNI';
+const {createClient}=supabase;
+const db=createClient(SUPA_URL,SUPA_KEY);
+
+const NATS=[
+  {code:'FR',flag:'🇫🇷',label:'France'},
+  {code:'BE',flag:'🇧🇪',label:'Belgique'},
+  {code:'DE',flag:'🇩🇪',label:'Allemagne'},
+  {code:'IT',flag:'🇮🇹',label:'Italie'},
+  {code:'ES',flag:'🇪🇸',label:'Espagne'},
+  {code:'GB',flag:'🇬🇧',label:'Angleterre'},
+  {code:'NL',flag:'🇳🇱',label:'Pays-Bas'},
+  {code:'OTHER',flag:'🌍',label:'Autre'},
+];
+
+let selectedNat='FR';
+let sessionId=null;
+let photoFile=null;
+
+// Render nationalites immediatement (independant de la session)
+(function renderNats(){
+  const grid=document.getElementById('nat-grid');
+  grid.innerHTML=NATS.map(n=>`<div class="nat-btn ${n.code==='FR'?'selected':''}" onclick="selectNat('${n.code}',this)">${n.flag} ${n.label}</div>`).join('');
+})();
+
+window.addEventListener('DOMContentLoaded',async()=>{
+  const params=new URLSearchParams(window.location.search);
+  const token=params.get('session');
+  if(!token){document.getElementById('session-name').textContent='Lien invalide';return;}
+  const {data:sess}=await db.from('sessions').select('id,title').eq('public_registration_token',token).single();
+  if(!sess){document.getElementById('session-name').textContent='Session introuvable';return;}
+  sessionId=sess.id;
+  document.getElementById('session-name').textContent=sess.title;
+});
+
+function selectNat(code,el){
+  selectedNat=code;
+  document.querySelectorAll('.nat-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function previewPhoto(input){
+  const file=input.files[0];
+  if(!file)return;
+  photoFile=file;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('photo-content').innerHTML='<img src="'+e.target.result+'" class="photo-preview"/><div class="photo-txt">Appuie pour changer</div>';
+  };
+  reader.readAsDataURL(file);
+}
+
+// Compresse et redimensionne l image avant upload (max 800px, qualite 0.82)
+function compressImage(file){
+  return new Promise((resolve)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      const MAX=800;
+      let w=img.width,h=img.height;
+      if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob=>resolve(blob||file),'image/jpeg',0.82);
+    };
+    img.onerror=()=>resolve(file);
+    img.src=url;
+  });
+}
+
+async function submitForm(){
+  if(!sessionId){showMsg('Session invalide.','err');return;}
+  const name=document.getElementById('inp-name').value.trim();
+  if(!name){showMsg('Entre ton prénom.','err');return;}
+  const btn=document.getElementById('btn-submit');
+  btn.disabled=true;btn.textContent='Inscription en cours…';
+  try{
+    let photoUrl=null;
+    let driverId=null;
+    if(photoFile){
+      btn.textContent='Upload photo…';
+      try{
+        const compressed=await compressImage(photoFile);
+        const path='photos/'+Date.now()+'.jpg';
+        const {data:upData,error:upErr}=await db.storage
+          .from('driver-photos')
+          .upload(path,compressed,{upsert:true,contentType:'image/jpeg'});
+        if(upErr){
+          console.warn('Upload photo echoue:',upErr.message);
+          showMsg('Photo non sauvegardée ('+upErr.message+') — inscription sans photo.','warn');
+          await new Promise(r=>setTimeout(r,2000));
+        } else {
+          const {data:urlData}=db.storage.from('driver-photos').getPublicUrl(path);
+          photoUrl=urlData.publicUrl;
+        }
+      } catch(imgErr){
+        console.warn('Erreur compression:',imgErr);
+      }
+      btn.textContent='Inscription en cours…';
+    }
+    if(photoUrl){
+      const {data:drv,error:drvErr}=await db.from('drivers').insert({photo_url:photoUrl}).select('id').single();
+      if(drv)driverId=drv.id;
+      else console.warn('Erreur création driver:',drvErr?.message);
+    }
+    const {error}=await db.from('session_registrations').insert({
+      session_id:sessionId,
+      display_name:name,
+      nationality:selectedNat,
+      driver_id:driverId,
+      is_unknown:false,
+    });
+    if(error)throw error;
+    document.getElementById('form-card').style.display='none';
+    document.getElementById('success-card').style.display='block';
+    document.getElementById('success-name').textContent='Bonne course '+name+' !';
+  }catch(e){
+    showMsg('Erreur: '+e.message,'err');
+    btn.disabled=false;btn.textContent='S’inscrire à la course 🏁';
+  }
+}
+function showMsg(msg,type){
+  const el=document.getElementById('msg');
+  el.textContent=msg;el.className='msg '+type;
+}
+</script>
+</body>
+</html>
