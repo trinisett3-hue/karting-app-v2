@@ -90,12 +90,15 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     radial-gradient(ellipse 55% 38% at 0% 0%, rgba(255,42,42,.07) 0%, transparent 70%),
     radial-gradient(ellipse 45% 30% at 100% 0%, rgba(255,42,42,.05) 0%, transparent 70%);
 
-  /* clip-path standard pour cartes */
-  --clip-card:  polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
-  --clip-badge: polygon(0 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%);
-  --clip-wrap:  polygon(0 0, 100% 0, 100% calc(100% - 18px), calc(100% - 18px) 100%, 0 100%);
+  /* Coins arrondis classiques plutot que decoupes en diagonale (clip-path) :
+     Safari ne rend pas correctement la bordure le long d'un clip-path aux coins
+     coupes (essaye a deux reprises, toujours casse). border-radius classique est
+     fiable sur tous les navigateurs. */
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
 
-  --corner-radius: 0px;
+  --corner-radius: var(--radius-md);
   --card-stripe: repeating-linear-gradient(
     -45deg,
     rgba(255,255,255,.018) 0px, rgba(255,255,255,.018) 1px,
@@ -142,11 +145,12 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     radial-gradient(ellipse 60% 40% at 0% 0%, rgba(0,212,255,.06) 0%, transparent 70%),
     radial-gradient(ellipse 40% 30% at 100% 0%, rgba(255,0,128,.05) 0%, transparent 70%);
 
-  --clip-card:  polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
-  --clip-badge: polygon(0 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%);
-  --clip-wrap:  polygon(0 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%);
+  /* Coins arrondis (cf. commentaire theme classic ci-dessus). */
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
 
-  --corner-radius: 0px;
+  --corner-radius: var(--radius-md);
   --card-stripe: none;
 }
 
