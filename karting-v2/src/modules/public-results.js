@@ -25,21 +25,18 @@ export function initTheme() {
 
     const logoUrl = data && data.value && data.value.logo_url;
     if (logoUrl) {
-      const nameEl = document.getElementById('circuit-name');
-      if (nameEl && nameEl.parentElement && !document.getElementById('circuit-logo')) {
-        // Le logo doit apparaître à DROITE du nom du circuit : on enveloppe le nom dans une
-        // rangée flex (nom à gauche, logo à droite) plutôt que de l'insérer au-dessus.
-        const row = document.createElement('div');
-        row.id = 'circuit-name-row';
-        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap';
-        nameEl.parentElement.insertBefore(row, nameEl);
-        row.appendChild(nameEl);
+      const header = document.querySelector('.circuit-header');
+      if (header && !document.getElementById('circuit-logo')) {
+        // Le logo doit apparaître à DROITE du nom du circuit, sans pousser le nom en
+        // dessous sur mobile : on le positionne en absolu dans le coin supérieur droit du
+        // header (qui est déjà `position:relative`), plutôt qu'en flex-row qui wrappait
+        // sous le nom dès que celui-ci était large (cas des écrans de téléphone).
         const img = document.createElement('img');
         img.id = 'circuit-logo';
         img.src = logoUrl;
         img.alt = 'Logo du circuit';
-        img.style.cssText = 'max-height:52px;max-width:200px;object-fit:contain;display:block;flex-shrink:0';
-        row.appendChild(img);
+        img.style.cssText = 'position:absolute;top:14px;right:14px;max-height:40px;max-width:110px;object-fit:contain;display:block;z-index:2';
+        header.appendChild(img);
       }
     }
 
