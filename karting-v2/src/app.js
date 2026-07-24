@@ -14,122 +14,180 @@ import { state } from './state.js';
 import * as sessions from './modules/sessions.js';
 import * as results from './modules/results.js';
 import * as settings from './modules/settings.js';
-// Note : un module auth.js existe déjà (src/modules/auth.js, Supabase Auth email+mot de
-// passe) mais n'est PAS branché ici pour l'instant — l'admin reste accessible sans login
-// pendant la phase de test sur le nouveau Supabase. À câbler plus tard (voir README,
-// section Roadmap) : tant qu'il n'est pas branché, les écritures sur sessions/
-// session_registrations/laps/drivers/app_settings resteront bloquées par les policies RLS
-// tenant-scoped une fois qu'elles seront activées strictement — pour l'instant elles
-// n'empêchent rien tant qu'aucun tenant_id n'est requis en pratique côté test.
+import * as auth from './modules/auth.js';
+// Auth branchée (24/07) : l'admin nécessite désormais une session Supabase Auth valide.
+// Voir doLogin()/doLogout() et l'overlay #login-overlay dans admin.html.
 
 // --- Navigation entre onglets (Créer / Actives / Archives / Paramètres) ------------------
 // Reprend exactement la logique originale : avertit avant de quitter Paramètres si des
 // changements ne sont pas enregistrés.
 
 async function renderArchivesList() {
-  const list = await sessions.loadArchives();
-  const el = document.getElementById('arch-list');
-  if (!el) return;
-  if (!list.length) {
-    el.innerHTML = '<div class="empty">Aucune session archivee.</div>';
-    return;
-  }
-  const groups = {};
-  list.forEach((s) => {
-    const d = s.session_date || s.created_at.slice(0, 10);
-    if (!groups[d]) groups[d] = [];
-    groups[d].push(s);
-  });
-  const { formatDate } = await import('./modules/ui.js');
-  el.innerHTML = Object.entries(groups)
-    .map(
-      ([date, dayList]) =>
-        '<div class="day-lbl">' + formatDate(date) + '</div>' +
-        dayList
-          .map(
-            (s) =>
-              '<div class="arch-item" onclick="openArchiveDetail(\'' + s.id + '\')">' +
-              '<div><div class="arch-title">' + s.title + '</div><div class="arch-meta">' + s.max_karts + ' karts</div></div>' +
-              '<div class="flex">' +
-              '<button class="btn btn-ghost btn-sm icon-btn" title="Voir" onclick="event.stopPropagation();openArchiveDetail(\'' + s.id + '\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
-              '<button class="btn btn-red btn-sm icon-btn" title="Supprimer" onclick="event.stopPropagation();deleteSession(\'' + s.id + '\').then(loadArchives)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +
-              '</div></div>'
-          )
-          .join('')
-    )
-    .join('');
+const list = await sessions.loadArchives();
+const el = document.getElementById('arch-list');
+if (!el) return;
+if (!list.length) {
+el.innerHTML = '<div class="empty">Aucune session archivee.</div>';
+return;
+}
+const groups = {};
+list.forEach((s) => {
+const d = s.session_date || s.created_at.slice(0, 10);
+if (!groups[d]) groups[d] = [];
+groups[d].push(s);
+});
+const { formatDate } = await import('./modules/ui.js');
+el.innerHTML = Object.entries(groups)
+.map(
+([date, dayList]) =>
+'<div class="day-lbl">' + formatDate(date) + '</div>' +
+dayList
+.map(
+(s) =>
+'<div class="arch-item" onclick="openArchiveDetail(\'' + s.id + '\')">' +
+'<div><div class="arch-title">' + s.title + '</div><div class="arch-meta">' + s.max_karts + ' karts</div></div>' +
+'<div class="flex">' +
+'<button class="btn btn-ghost btn-sm icon-btn" title="Voir" onclick="event.stopPropagation();openArchiveDetail(\'' + s.id + '\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
+'<button class="btn btn-red btn-sm icon-btn" title="Supprimer" onclick="event.stopPropagation();deleteSession(\'' + s.id + '\').then(loadArchives)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +
+'</div></div>'
+)
+.join('')
+)
+.join('');
 }
 
 async function loadArchivesTab() {
-  await renderArchivesList();
+await renderArchivesList();
 }
 
 function switchTab(tab) {
-  const isLeavingParams = document.getElementById('panel-parametres').classList.contains('active');
-  if (isLeavingParams && state.prefsDirty && tab !== 'parametres') {
-    const ok = confirm('Vous avez des modifications non enregistrees dans Parametres. Voulez-vous vraiment quitter sans enregistrer ?');
-    if (!ok) return;
-    state.prefsDirty = false;
-    settings.loadPrefs();
-  }
-  const names = ['creer', 'actives', 'archives', 'parametres'];
-  document.querySelectorAll('.sb-tab').forEach((t, i) => t.classList.toggle('active', names[i] === tab));
-  document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
-  document.getElementById('panel-' + tab).classList.add('active');
-  if (tab === 'creer') settings.updateDefaultsInfo();
-  if (tab === 'actives') {
-    sessions.backToActivesList();
-    sessions.loadActiveSessions();
-  }
-  if (tab === 'archives') loadArchivesTab();
+const isLeavingParams = document.getElementById('panel-parametres').classList.contains('active');
+if (isLeavingParams && state.prefsDirty && tab !== 'parametres') {
+const ok = confirm('Vous avez des modifications non enregistrees dans Parametres. Voulez-vous vraiment quitter sans enregistrer ?');
+if (!ok) return;
+state.prefsDirty = false;
+settings.loadPrefs();
+}
+const names = ['creer', 'actives', 'archives', 'parametres'];
+document.querySelectorAll('.sb-tab').forEach((t, i) => t.classList.toggle('active', names[i] === tab));
+document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+document.getElementById('panel-' + tab).classList.add('active');
+if (tab === 'creer') settings.updateDefaultsInfo();
+if (tab === 'actives') {
+sessions.backToActivesList();
+sessions.loadActiveSessions();
+}
+if (tab === 'archives') loadArchivesTab();
 }
 
 // --- Wrappers qui recollent les morceaux entre modules (remplacent les callbacks
 // implicites que l'original obtenait en ayant tout dans un seul fichier) ------------------
 
 async function createSessionAndOpen() {
-  await sessions.createSession({
-    onCreated: async (id) => {
-      switchTab('actives');
-      await openActiveDetailAndShowResults(id);
-    },
-  });
+await sessions.createSession({
+onCreated: async (id) => {
+switchTab('actives');
+await openActiveDetailAndShowResults(id);
+},
+});
 }
 
 async function openActiveDetailAndShowResults(id) {
-  await sessions.openActiveDetail(id, {
-    onOpened: async () => {
-      await results.renderResultatsSection();
-    },
-  });
+await sessions.openActiveDetail(id, {
+onOpened: async () => {
+await results.renderResultatsSection();
+},
+});
 }
 
 async function deleteActiveSessionAndGoBack() {
-  await sessions.deleteActiveSession({ afterDelete: () => switchTab('actives') });
+await sessions.deleteActiveSession({ afterDelete: () => switchTab('actives') });
 }
 
 async function terminerSessionAndGoBack() {
-  await sessions.terminerSession({ afterEnd: () => switchTab('actives') });
+await sessions.terminerSession({ afterEnd: () => switchTab('actives') });
 }
 
 async function loadArchives() {
-  await renderArchivesList();
+await renderArchivesList();
+}
+
+// --- Authentification -----------------------------------------------------------------------
+// L'admin est désormais protégé : rien n'est initialisé (sessions/results/settings) tant
+// qu'une session Supabase Auth valide n'est pas confirmée. L'overlay #login-overlay est
+// visible par défaut dans le HTML (fail-closed) et n'est masqué qu'après connexion réussie.
+
+let appInitialized = false;
+
+function showLoginOverlay(message) {
+const overlay = document.getElementById('login-overlay');
+if (overlay) overlay.classList.add('show');
+const msgEl = document.getElementById('login-msg');
+if (msgEl) {
+msgEl.textContent = message || '';
+msgEl.className = message ? 'msg err' : 'msg';
+}
+}
+
+function hideLoginOverlay() {
+const overlay = document.getElementById('login-overlay');
+if (overlay) overlay.classList.remove('show');
+}
+
+async function initAppOnce(session) {
+if (appInitialized) return;
+appInitialized = true;
+const emailEl = document.getElementById('login-user-email');
+if (emailEl && session?.user?.email) emailEl.textContent = session.user.email;
+await settings.loadPrefs();
+settings.populateTimeSelect();
+settings.updateDefaultsInfo();
+await sessions.loadActiveSessions();
+}
+
+async function doLogin() {
+const emailInput = document.getElementById('login-email');
+const passwordInput = document.getElementById('login-password');
+const email = (emailInput?.value || '').trim();
+const password = passwordInput?.value || '';
+const msgEl = document.getElementById('login-msg');
+if (!email || !password) {
+if (msgEl) { msgEl.textContent = 'Email et mot de passe requis.'; msgEl.className = 'msg err'; }
+return;
+}
+if (msgEl) { msgEl.textContent = 'Connexion...'; msgEl.className = 'msg ok'; }
+try {
+const session = await auth.signIn(email, password);
+hideLoginOverlay();
+await initAppOnce(session);
+} catch (err) {
+if (msgEl) { msgEl.textContent = err?.message || 'Identifiants invalides.'; msgEl.className = 'msg err'; }
+}
+}
+
+async function doLogout() {
+await auth.signOut();
+appInitialized = false;
+location.reload();
 }
 
 // --- Initialisation ------------------------------------------------------------------------
 
 window.addEventListener('DOMContentLoaded', async () => {
-  await settings.loadPrefs();
-  settings.populateTimeSelect();
-  settings.updateDefaultsInfo();
-  await sessions.loadActiveSessions();
+const session = await auth.getSession();
+if (session) {
+hideLoginOverlay();
+await initAppOnce(session);
+} else {
+showLoginOverlay();
+}
 });
 
 window.addEventListener('beforeunload', (e) => {
-  if (state.prefsDirty) {
-    e.preventDefault();
-    e.returnValue = '';
-  }
+if (state.prefsDirty) {
+e.preventDefault();
+e.returnValue = '';
+}
 });
 
 // --- Exposition sur window pour les onclick="..." du HTML ---------------------------------
@@ -138,56 +196,59 @@ window.addEventListener('beforeunload', (e) => {
 // utilisée par le HTML.
 
 Object.assign(window, {
-  // Navigation
-  switchTab,
-  // Sessions
-  createSession: createSessionAndOpen,
-  openActiveDetail: openActiveDetailAndShowResults,
-  backToActivesList: sessions.backToActivesList,
-  markDetailDirty: sessions.markDetailDirty,
-  saveDetailMeta: sessions.saveDetailMeta,
-  deleteActiveSession: deleteActiveSessionAndGoBack,
-  terminerSession: terminerSessionAndGoBack,
-  // Inscriptions & karts
-  addUnknownParticipant: sessions.addUnknownParticipant,
-  loadInscrits: sessions.loadInscrits,
-  saveNameInline: sessions.saveNameInline,
-  assignKartToPilot: sessions.assignKartToPilot,
-  reassignKart: sessions.reassignKart,
-  assignMissingKarts: sessions.assignMissingKarts,
-  autoKarts: sessions.autoKarts,
-  // Archives
-  openArchiveDetail: results.openArchiveDetail,
-  backToArchives: results.backToArchives,
-  archPublish: results.archPublish,
-  archCopyLink: results.archCopyLink,
-  archTogglePres: results.archTogglePres,
-  deleteSession: results.deleteSession,
-  loadArchives,
-  // Résultats & import chronos
-  exportCSV: results.exportCSV,
-  showPilotHistory: results.showPilotHistory,
-  closeHistory: results.closeHistory,
-  handleChronoFile: results.handleChronoFile,
-  importChrono: results.importChrono,
-  publishResults: results.publishResults,
-  copyLink: results.copyLink,
-  zoomQR: results.zoomQR,
-  closeZoom: results.closeZoom,
-  togglePres: results.togglePres,
-  toggleSectorsField: results.toggleSectorsField,
-  updateChronoFormat: results.updateChronoFormat,
-  // Paramètres
-  markPrefsDirty: () => (state.prefsDirty = true),
-  addKartNumber: settings.addKartNumber,
-  removeKartNumber: settings.removeKartNumber,
-  autoFillKartNumbers: settings.autoFillKartNumbers,
-  toggleLapsField: settings.toggleLapsField,
-  switchAppearanceSubtab: settings.switchAppearanceSubtab,
-  selectResultsTheme: settings.selectResultsTheme,
-  uploadLogo: settings.uploadLogo,
-  removeLogo: settings.removeLogo,
-  uploadTrackMap: settings.uploadTrackMap,
-  removeTrackMap: settings.removeTrackMap,
-  savePrefs: settings.savePrefs,
+// Authentification
+doLogin,
+doLogout,
+// Navigation
+switchTab,
+// Sessions
+createSession: createSessionAndOpen,
+openActiveDetail: openActiveDetailAndShowResults,
+backToActivesList: sessions.backToActivesList,
+markDetailDirty: sessions.markDetailDirty,
+saveDetailMeta: sessions.saveDetailMeta,
+deleteActiveSession: deleteActiveSessionAndGoBack,
+terminerSession: terminerSessionAndGoBack,
+// Inscriptions & karts
+addUnknownParticipant: sessions.addUnknownParticipant,
+loadInscrits: sessions.loadInscrits,
+saveNameInline: sessions.saveNameInline,
+assignKartToPilot: sessions.assignKartToPilot,
+reassignKart: sessions.reassignKart,
+assignMissingKarts: sessions.assignMissingKarts,
+autoKarts: sessions.autoKarts,
+// Archives
+openArchiveDetail: results.openArchiveDetail,
+backToArchives: results.backToArchives,
+archPublish: results.archPublish,
+archCopyLink: results.archCopyLink,
+archTogglePres: results.archTogglePres,
+deleteSession: results.deleteSession,
+loadArchives,
+// Résultats & import chronos
+exportCSV: results.exportCSV,
+showPilotHistory: results.showPilotHistory,
+closeHistory: results.closeHistory,
+handleChronoFile: results.handleChronoFile,
+importChrono: results.importChrono,
+publishResults: results.publishResults,
+copyLink: results.copyLink,
+zoomQR: results.zoomQR,
+closeZoom: results.closeZoom,
+togglePres: results.togglePres,
+toggleSectorsField: results.toggleSectorsField,
+updateChronoFormat: results.updateChronoFormat,
+// Paramètres
+markPrefsDirty: () => (state.prefsDirty = true),
+addKartNumber: settings.addKartNumber,
+removeKartNumber: settings.removeKartNumber,
+autoFillKartNumbers: settings.autoFillKartNumbers,
+toggleLapsField: settings.toggleLapsField,
+switchAppearanceSubtab: settings.switchAppearanceSubtab,
+selectResultsTheme: settings.selectResultsTheme,
+uploadLogo: settings.uploadLogo,
+removeLogo: settings.removeLogo,
+uploadTrackMap: settings.uploadTrackMap,
+removeTrackMap: settings.removeTrackMap,
+savePrefs: settings.savePrefs,
 });
