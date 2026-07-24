@@ -126,344 +126,360 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 <body>
 
 <div class="sidebar">
- <div class="sb-logo">Karting <span>Admin</span></div>
- <div class="sb-status"><div class="dot" id="status-dot"></div><span id="status-txt">Aucune session</span></div>
- <div class="sb-tab active" onclick="switchTab('creer')"><span class="lbl">Nouvelle session</span></div>
- <div class="sb-tab" onclick="switchTab('actives')"><span class="lbl">Sessions actives</span></div>
- <div class="sb-tab" onclick="switchTab('archives')"><span class="lbl">Archives</span></div>
- <div class="sb-tab" onclick="switchTab('parametres')"><span class="lbl">Parametres</span></div>
+<div class="sb-logo">Karting <span>Admin</span></div>
+<div class="sb-status"><div class="dot" id="status-dot"></div><span id="status-txt">Aucune session</span></div>
+<div class="sb-tab active" onclick="switchTab('creer')"><span class="lbl">Nouvelle session</span></div>
+<div class="sb-tab" onclick="switchTab('actives')"><span class="lbl">Sessions actives</span></div>
+<div class="sb-tab" onclick="switchTab('archives')"><span class="lbl">Archives</span></div>
+<div class="sb-tab" onclick="switchTab('parametres')"><span class="lbl">Parametres</span></div>
+<div style="margin-top:auto;padding:14px 20px 0;border-top:1px solid var(--bord)">
+<div style="font-size:11px;color:var(--mut);margin-bottom:8px;word-break:break-all" id="login-user-email"></div>
+<button class="btn btn-ghost btn-sm" style="width:100%" onclick="doLogout()">Deconnexion</button>
+</div>
 </div>
 
 <div class="main">
 
 <!-- PANEL: CREER -->
 <div class="panel active" id="panel-creer">
- <div class="pg-title">Nouvelle session</div>
- <div class="card" style="max-width:520px">
-  <div class="ctitle">Configuration</div>
-  <div class="field"><label>Titre</label><input type="text" id="s-title" placeholder="Ex: Groupe A"/></div>
-  <div class="field"><label>Heure</label><select id="s-time"></select></div>
-  <div class="field" id="s-karts-wrap" style="display:none">
-   <label>Nombre de karts</label>
-   <input type="number" id="s-karts" min="1" max="30"/>
-  </div>
-  <div class="msg" style="display:block;background:rgba(108,99,255,.1);color:var(--acc);margin-bottom:12px" id="s-defaults-info"></div>
-  <button class="btn btn-primary" style="width:100%" onclick="createSession()">Demarrer la session</button>
-  <div class="msg" id="msg-create"></div>
- </div>
+<div class="pg-title">Nouvelle session</div>
+<div class="card" style="max-width:520px">
+<div class="ctitle">Configuration</div>
+<div class="field"><label>Titre</label><input type="text" id="s-title" placeholder="Ex: Groupe A"/></div>
+<div class="field"><label>Heure</label><select id="s-time"></select></div>
+<div class="field" id="s-karts-wrap" style="display:none">
+<label>Nombre de karts</label>
+<input type="number" id="s-karts" min="1" max="30"/>
+</div>
+<div class="msg" style="display:block;background:rgba(108,99,255,.1);color:var(--acc);margin-bottom:12px" id="s-defaults-info"></div>
+<button class="btn btn-primary" style="width:100%" onclick="createSession()">Demarrer la session</button>
+<div class="msg" id="msg-create"></div>
+</div>
 </div>
 
 <!-- PANEL: SESSIONS ACTIVES -->
 <div class="panel" id="panel-actives">
 
- <div id="actives-list-view">
-  <div class="pg-title">Sessions actives</div>
-  <div id="actives-grid"><div class="empty">Chargement...</div></div>
- </div>
+<div id="actives-list-view">
+<div class="pg-title">Sessions actives</div>
+<div id="actives-grid"><div class="empty">Chargement...</div></div>
+</div>
 
- <div id="actives-detail-view" style="display:none">
-  <div class="flex" style="justify-content:space-between;margin-bottom:16px">
-   <button class="btn btn-ghost btn-sm" onclick="backToActivesList()">Retour aux sessions actives</button>
-   <button class="btn btn-red btn-sm" onclick="deleteActiveSession()">Supprimer la session</button>
-  </div>
+<div id="actives-detail-view" style="display:none">
+<div class="flex" style="justify-content:space-between;margin-bottom:16px">
+<button class="btn btn-ghost btn-sm" onclick="backToActivesList()">Retour aux sessions actives</button>
+<button class="btn btn-red btn-sm" onclick="deleteActiveSession()">Supprimer la session</button>
+</div>
 
-  <div class="card">
-   <div class="flex" style="justify-content:space-between;margin-bottom:6px">
-    <div style="flex:1;min-width:200px">
-     <label>Titre de la session</label>
-     <input type="text" id="det-title-input" oninput="markDetailDirty()"/>
-    </div>
-    <div style="width:120px">
-     <label>Karts max</label>
-     <input type="number" id="det-karts-input" min="1" max="30" oninput="markDetailDirty()"/>
-    </div>
-    <div style="width:120px" id="det-laps-wrap">
-     <label>Tours</label>
-     <input type="number" id="det-laps-input" min="1" max="200" oninput="markDetailDirty()"/>
-    </div>
-    <button class="btn btn-primary btn-sm" id="det-save-btn" style="display:none;align-self:flex-end" onclick="saveDetailMeta()">Enregistrer</button>
-   </div>
-  </div>
+<div class="card">
+<div class="flex" style="justify-content:space-between;margin-bottom:6px">
+<div style="flex:1;min-width:200px">
+<label>Titre de la session</label>
+<input type="text" id="det-title-input" oninput="markDetailDirty()"/>
+</div>
+<div style="width:120px">
+<label>Karts max</label>
+<input type="number" id="det-karts-input" min="1" max="30" oninput="markDetailDirty()"/>
+</div>
+<div style="width:120px" id="det-laps-wrap">
+<label>Tours</label>
+<input type="number" id="det-laps-input" min="1" max="200" oninput="markDetailDirty()"/>
+</div>
+<button class="btn btn-primary btn-sm" id="det-save-btn" style="display:none;align-self:flex-end" onclick="saveDetailMeta()">Enregistrer</button>
+</div>
+</div>
 
-  <div style="display:grid;grid-template-columns:auto minmax(0,0.6fr) minmax(0,2fr);gap:12px;align-items:stretch;min-width:0">
-   <div class="qr-card">
-    <div class="qr-lbl">QR Inscription</div>
-    <div class="qr-wrap" onclick="zoomQR('reg')" id="qr-reg-wrap"></div>
-    <button class="btn btn-ghost btn-sm" onclick="copyLink('reg')">Copier le lien</button>
-   </div>
-   <div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:12px 8px">
-    <div class="ctitle" style="margin:0;font-size:10px">Occupation</div>
-    <div style="font-size:22px;font-weight:900" id="det-occ-main">--/--</div>
-    <div style="font-size:10px;color:var(--mut);text-align:center">Karts / inscrits</div>
-    <div style="font-size:10px;color:var(--yel);font-weight:700;text-align:center" id="det-remaining">-- restant(s)</div>
-   </div>
-   <div class="card" style="display:flex;flex-direction:column">
-    <div class="flex" style="justify-content:space-between;margin-bottom:10px;flex-shrink:0">
-     <div class="flex" style="justify-content:space-between;align-items:center;width:100%">
-      <div class="ctitle" style="margin:0">Pilotes inscrits</div>
-      <div class="msg" id="msg-ins" style="flex:1;text-align:center;min-height:0;padding:0 8px;font-size:12px"></div>
-      <div class="flex" style="gap:6px">
-       <button class="btn btn-ghost btn-sm" onclick="loadInscrits()">Actualiser</button>
-       <button class="btn btn-primary btn-sm" onclick="addUnknownParticipant()">+ Ajouter</button>
-      </div>
-     </div>
-    </div>
-    <div id="ins-table" class="ins-table-scroll" style="height:220px;overflow-y:auto"><div class="empty">Chargement...</div></div>
-   </div>
-  </div>
+<div style="display:grid;grid-template-columns:auto minmax(0,0.6fr) minmax(0,2fr);gap:12px;align-items:stretch;min-width:0">
+<div class="qr-card">
+<div class="qr-lbl">QR Inscription</div>
+<div class="qr-wrap" onclick="zoomQR('reg')" id="qr-reg-wrap"></div>
+<button class="btn btn-ghost btn-sm" onclick="copyLink('reg')">Copier le lien</button>
+</div>
+<div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:12px 8px">
+<div class="ctitle" style="margin:0;font-size:10px">Occupation</div>
+<div style="font-size:22px;font-weight:900" id="det-occ-main">--/--</div>
+<div style="font-size:10px;color:var(--mut);text-align:center">Karts / inscrits</div>
+<div style="font-size:10px;color:var(--yel);font-weight:700;text-align:center" id="det-remaining">-- restant(s)</div>
+</div>
+<div class="card" style="display:flex;flex-direction:column">
+<div class="flex" style="justify-content:space-between;margin-bottom:10px;flex-shrink:0">
+<div class="flex" style="justify-content:space-between;align-items:center;width:100%">
+<div class="ctitle" style="margin:0">Pilotes inscrits</div>
+<div class="msg" id="msg-ins" style="flex:1;text-align:center;min-height:0;padding:0 8px;font-size:12px"></div>
+<div class="flex" style="gap:6px">
+<button class="btn btn-ghost btn-sm" onclick="loadInscrits()">Actualiser</button>
+<button class="btn btn-primary btn-sm" onclick="addUnknownParticipant()">+ Ajouter</button>
+</div>
+</div>
+</div>
+<div id="ins-table" class="ins-table-scroll" style="height:220px;overflow-y:auto"><div class="empty">Chargement...</div></div>
+</div>
+</div>
 
-  <div class="card">
-   <div class="kart-grid-wrap">
-    <div class="kart-grid-head">
-     <div class="ctitle" style="margin:0">Attribution des karts</div>
-     <div class="kart-grid-legend">
-      <div class="kg-leg"><span class="kg-dot free"></span>Libre</div>
-      <div class="kg-leg"><span class="kg-dot taken"></span>Pris</div>
-      <div class="kg-leg"><span class="kg-dot selected"></span>Pilote selectionne</div>
-     </div>
-    </div>
-    <div id="kart-select-hint" class="msg" style="display:none;background:rgba(108,99,255,.12);color:var(--acc)"></div>
-    <div id="kart-grid" class="kart-grid"></div>
-    <div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--bord)">
-     <button class="btn btn-ghost btn-sm" onclick="assignMissingKarts()">Attribuer les manquants</button>
-     <button class="btn btn-ghost btn-sm" onclick="autoKarts()">Karts aleatoires</button>
-    </div>
-   </div>
-  </div>
+<div class="card">
+<div class="kart-grid-wrap">
+<div class="kart-grid-head">
+<div class="ctitle" style="margin:0">Attribution des karts</div>
+<div class="kart-grid-legend">
+<div class="kg-leg"><span class="kg-dot free"></span>Libre</div>
+<div class="kg-leg"><span class="kg-dot taken"></span>Pris</div>
+<div class="kg-leg"><span class="kg-dot selected"></span>Pilote selectionne</div>
+</div>
+</div>
+<div id="kart-select-hint" class="msg" style="display:none;background:rgba(108,99,255,.12);color:var(--acc)"></div>
+<div id="kart-grid" class="kart-grid"></div>
+<div style="display:flex;gap:8px;margin-top:12px;padding-top:10px;border-top:1px solid var(--bord)">
+<button class="btn btn-ghost btn-sm" onclick="assignMissingKarts()">Attribuer les manquants</button>
+<button class="btn btn-ghost btn-sm" onclick="autoKarts()">Karts aleatoires</button>
+</div>
+</div>
+</div>
 
+<div class="card">
+<div class="ctitle">Import des chronos</div>
+<div class="field">
+<label id="chrono-format-label">Temps (format : Nom;Kart;NumTour;Temps — une ligne par tour)</label>
+<textarea class="chrono-area" id="chrono-raw" placeholder="Pilote1;1;1;45.210&#10;Pilote1;1;2;44.980&#10;Pilote2;2;1;47.382"></textarea>
+<div id="chrono-format-help" style="font-size:11px;color:var(--mut);margin-top:6px">Sans secteurs : Nom;Kart;NumTour;Temps</div>
+</div>
+<div class="flex">
+<button class="btn btn-primary" onclick="importChrono()" id="btn-import-chrono">Importer le texte</button>
+<label class="btn btn-ghost" style="cursor:pointer;margin:0">Importer CSV / Excel
+<input type="file" id="chrono-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleChronoFile(this)"/>
+</label>
+</div>
+<div class="msg" id="msg-chrono"></div>
+</div>
 
+<div class="card" id="stats-session-card" style="display:none">
+<div class="ctitle">Statistiques de la session</div>
+<div class="g3" id="stats-session-grid"></div>
+</div>
 
-  <div class="card">
-   <div class="ctitle">Import des chronos</div>
-   <div class="field">
-    <label id="chrono-format-label">Temps (format : Nom;Kart;NumTour;Temps — une ligne par tour)</label>
-    <textarea class="chrono-area" id="chrono-raw" placeholder="Pilote1;1;1;45.210&#10;Pilote1;1;2;44.980&#10;Pilote2;2;1;47.382"></textarea>
-    <div id="chrono-format-help" style="font-size:11px;color:var(--mut);margin-top:6px">Sans secteurs : Nom;Kart;NumTour;Temps</div>
-   </div>
-   <div class="flex">
-    <button class="btn btn-primary" onclick="importChrono()" id="btn-import-chrono">Importer le texte</button>
-    <label class="btn btn-ghost" style="cursor:pointer;margin:0">Importer CSV / Excel
-     <input type="file" id="chrono-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleChronoFile(this)"/>
-    </label>
-   </div>
-   <div class="msg" id="msg-chrono"></div>
-  </div>
-
-  <div class="card" id="stats-session-card" style="display:none">
-   <div class="ctitle">Statistiques de la session</div>
-   <div class="g3" id="stats-session-grid"></div>
-  </div>
-
-  <div class="g2">
-   <div class="card">
-    <div class="ctitle">Classement</div>
-    <div id="ranking-preview"><div class="empty">Importe les chronos.</div></div>
-    <div class="flex" style="margin-top:14px">
-     <button class="btn btn-yel btn-sm" onclick="publishResults()">Publier</button>
-     <button class="btn btn-ghost btn-sm" onclick="copyLink('res')">Copier lien</button>
-     <button class="btn btn-ghost btn-sm" onclick="exportCSV(activeDetailSession)">Exporter CSV</button>
-    </div>
-    <div class="msg" id="msg-res"></div>
-   </div>
-   <div class="qr-card">
-    <div class="qr-lbl">QR Resultats</div>
-    <div class="qr-wrap" onclick="zoomQR('res')" id="qr-res-wrap"></div>
-    <button class="btn btn-ghost btn-sm" onclick="togglePres()">Mode presentation</button>
-   </div>
-  </div>
-  <div class="card" style="margin-top:8px">
-   <button class="btn btn-red" style="width:100%" onclick="terminerSession()">Terminer la session</button>
-  </div>
- </div>
+<div class="g2">
+<div class="card">
+<div class="ctitle">Classement</div>
+<div id="ranking-preview"><div class="empty">Importe les chronos.</div></div>
+<div class="flex" style="margin-top:14px">
+<button class="btn btn-yel btn-sm" onclick="publishResults()">Publier</button>
+<button class="btn btn-ghost btn-sm" onclick="copyLink('res')">Copier lien</button>
+<button class="btn btn-ghost btn-sm" onclick="exportCSV(activeDetailSession)">Exporter CSV</button>
+</div>
+<div class="msg" id="msg-res"></div>
+</div>
+<div class="qr-card">
+<div class="qr-lbl">QR Resultats</div>
+<div class="qr-wrap" onclick="zoomQR('res')" id="qr-res-wrap"></div>
+<button class="btn btn-ghost btn-sm" onclick="togglePres()">Mode presentation</button>
+</div>
+</div>
+<div class="card" style="margin-top:8px">
+<button class="btn btn-red" style="width:100%" onclick="terminerSession()">Terminer la session</button>
+</div>
+</div>
 </div>
 
 <!-- PANEL: ARCHIVES -->
 <div class="panel" id="panel-archives">
- <div class="pg-title">Archives</div>
- <div id="arch-list-view">
-  <div class="card">
-   <div class="ctitle">Sessions passees (7 derniers jours)</div>
-   <div id="arch-list"><div class="empty">Chargement...</div></div>
-  </div>
- </div>
- <div id="arch-detail-view" style="display:none">
-  <button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="backToArchives()">Retour aux archives</button>
-  <div class="pg-title" id="arch-detail-title" style="font-size:18px"></div>
+<div class="pg-title">Archives</div>
+<div id="arch-list-view">
+<div class="card">
+<div class="ctitle">Sessions passees (7 derniers jours)</div>
+<div id="arch-list"><div class="empty">Chargement...</div></div>
+</div>
+</div>
+<div id="arch-detail-view" style="display:none">
+<button class="btn btn-ghost btn-sm" style="margin-bottom:16px" onclick="backToArchives()">Retour aux archives</button>
+<div class="pg-title" id="arch-detail-title" style="font-size:18px"></div>
 
-  <div class="card" id="arch-stats-card" style="display:none">
-   <div class="ctitle">Statistiques de la session</div>
-   <div class="g3" id="arch-stats-grid"></div>
-  </div>
+<div class="card" id="arch-stats-card" style="display:none">
+<div class="ctitle">Statistiques de la session</div>
+<div class="g3" id="arch-stats-grid"></div>
+</div>
 
-  <div class="g2">
-   <div class="card">
-    <div class="ctitle">Classement</div>
-    <div id="arch-ranking"></div>
-   </div>
-   <div class="card">
-    <div class="ctitle">Inscrits</div>
-    <div id="arch-inscrits"></div>
-   </div>
-  </div>
-  <div class="card">
-   <div class="ctitle">QR Resultats</div>
-   <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
-    <div id="arch-qr-wrap"><div class="empty">Non publie</div></div>
-    <div class="flex">
-     <button class="btn btn-yel btn-sm" onclick="archPublish()">Republier</button>
-     <button class="btn btn-ghost btn-sm" onclick="archCopyLink()">Copier lien</button>
-     <button class="btn btn-ghost btn-sm" onclick="archTogglePres()">Presentation</button>
-     <button class="btn btn-ghost btn-sm" onclick="exportCSV(archiveSession)">Exporter CSV</button>
-    </div>
-    <div class="msg" id="msg-arch"></div>
-   </div>
-  </div>
- </div>
+<div class="g2">
+<div class="card">
+<div class="ctitle">Classement</div>
+<div id="arch-ranking"></div>
+</div>
+<div class="card">
+<div class="ctitle">Inscrits</div>
+<div id="arch-inscrits"></div>
+</div>
+</div>
+<div class="card">
+<div class="ctitle">QR Resultats</div>
+<div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+<div id="arch-qr-wrap"><div class="empty">Non publie</div></div>
+<div class="flex">
+<button class="btn btn-yel btn-sm" onclick="archPublish()">Republier</button>
+<button class="btn btn-ghost btn-sm" onclick="archCopyLink()">Copier lien</button>
+<button class="btn btn-ghost btn-sm" onclick="archTogglePres()">Presentation</button>
+<button class="btn btn-ghost btn-sm" onclick="exportCSV(archiveSession)">Exporter CSV</button>
+</div>
+<div class="msg" id="msg-arch"></div>
+</div>
+</div>
+</div>
 </div>
 
 <!-- PANEL: PARAMETRES -->
 <div class="panel" id="panel-parametres">
- <div class="pg-title">Parametres</div>
- <div class="params-layout">
- <div class="params-col-left">
- <div class="card">
-  <div class="ctitle">Valeurs par defaut des sessions</div>
-  <div class="field"><label>Nombre de karts par defaut</label><input type="number" id="pref-karts" min="1" max="30" oninput="markPrefsDirty()"/></div>
-  <div class="field">
-   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-    <input type="checkbox" id="pref-karts-locked" style="width:auto" checked onchange="markPrefsDirty()"/>
-    <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Verrouiller ce nombre (identique pour toutes les sessions)</span>
-   </label>
-   <div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Si desactive, tu pourras choisir un nombre de karts different a chaque session.</div>
-  </div>
-  <div class="field">
-   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-    <input type="checkbox" id="pref-laps-enabled" style="width:auto" onchange="toggleLapsField();markPrefsDirty()"/>
-    <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer le suivi du nombre de tours</span>
-   </label>
-  </div>
-  <div class="g2" style="gap:10px">
-   <div class="field" id="pref-laps-wrap"><label>Nombre de tours par defaut</label><input type="number" id="pref-laps" min="1" max="200" oninput="markPrefsDirty()"/></div>
-   <div class="field"><label>Unite de temps</label>
-    <select id="pref-time-unit" onchange="markPrefsDirty()">
-     <option value="seconds">Secondes</option>
-     <option value="minutes">Minutes:secondes</option>
-     <option value="minutes_ms">Minutes:secondes:millieme</option>
-    </select>
-   </div>
-  </div>
-  <div class="field" style="margin-top:8px">
-   <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-    <input type="checkbox" id="pref-sectors-enabled" style="width:auto" onchange="toggleSectorsField();markPrefsDirty()"/>
-    <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer les secteurs (import et fiche PDF)</span>
-   </label>
-   <div id="pref-sectors-status" style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Lorsque désactivé ou absent des chronos, la fiche pilote utilise automatiquement le tableau simplifié.</div>
-  </div>
-  <div class="field" id="pref-sectors-wrap"><label>Nombre de secteurs</label>
-   <select id="pref-sector-count" onchange="updateChronoFormat();markPrefsDirty()"><option value="2">2 secteurs</option><option value="3">3 secteurs</option></select>
-  </div>
-  <div class="field"><label>Apparence &amp; personnalisation</label>
-   <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--bord);padding-bottom:8px">
-    <button type="button" class="subtab-btn active" data-subtab="theme" onclick="switchAppearanceSubtab('theme')" style="background:none;border:none;color:var(--txt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid var(--acc)">Thème</button>
-    <button type="button" class="subtab-btn" data-subtab="avatars" onclick="switchAppearanceSubtab('avatars')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Avatars karts</button>
-   </div>
-   <div id="appearance-subtab-theme">
-    <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
-     <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Logo du circuit</div>
-     <div id="pref-logo-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
-      <div style="width:64px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
-       <img id="pref-logo-preview" src="" alt="Logo actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
-      </div>
-      <button id="pref-logo-remove-btn" class="btn btn-ghost btn-sm" style="display:none" onclick="removeLogo()">Retirer le logo</button>
-     </div>
-     <label class="btn btn-ghost btn-sm" style="display:inline-flex;cursor:pointer">
-      Choisir un fichier
-      <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="uploadLogo(this)"/>
-     </label>
-     <div style="font-size:11px;color:var(--mut);margin-top:6px">PNG avec fond transparent recommandé. Affiché sur la page de résultats publics.</div>
-     <div class="msg" id="msg-logo"></div>
-    </div>
-    <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
-     <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Plan du circuit <span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.7">(optionnel · Pro)</span></div>
-     <div id="pref-trackmap-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
-      <div style="width:96px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
-       <img id="pref-trackmap-preview" src="" alt="Plan actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
-      </div>
-      <button id="pref-trackmap-remove-btn" class="btn btn-ghost btn-sm" style="display:none" onclick="removeTrackMap()">Retirer le plan</button>
-     </div>
-     <label class="btn btn-ghost btn-sm" style="display:inline-flex;cursor:pointer">
-      Choisir un fichier
-      <input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadTrackMap(this)"/>
-     </label>
-     <div style="font-size:11px;color:var(--mut);margin-top:6px">Affiche le tracé du circuit juste au-dessus du podium sur la page de résultats publics.</div>
-     <div class="msg" id="msg-trackmap"></div>
-    </div>
-    <div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div>
-    <div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div>
-    <div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div>
-    <select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Premium Carbon</option></select>
-    <div style="font-size:11px;color:var(--mut);margin-top:10px">Le thème s'applique à la page publique de résultats et aux exports PDF. Aperçu en direct à droite &rarr;</div>
-   </div>
-   <div id="appearance-subtab-avatars" style="display:none">
-    <div style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px">Chaque pilote reçoit automatiquement l'avatar de son kart : le <b style="color:var(--txt)">numéro affiché est celui du kart</b>, et la couleur est propre à chaque numéro (identique d'une session à l'autre). Voici les avatars de ta flotte :</div>
-    <div id="kart-avatars-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:10px"></div>
-   </div>
-  </div>
-  <button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer</button>
-  <div class="msg" id="msg-prefs"></div>
- </div>
+<div class="pg-title">Parametres</div>
+<div class="params-layout">
+<div class="params-col-left">
+<div class="card">
+<div class="ctitle">Valeurs par defaut des sessions</div>
+<div class="field"><label>Nombre de karts par defaut</label><input type="number" id="pref-karts" min="1" max="30" oninput="markPrefsDirty()"/></div>
+<div class="field">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-karts-locked" style="width:auto" checked onchange="markPrefsDirty()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Verrouiller ce nombre (identique pour toutes les sessions)</span>
+</label>
+<div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Si desactive, tu pourras choisir un nombre de karts different a chaque session.</div>
+</div>
+<div class="field">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-laps-enabled" style="width:auto" onchange="toggleLapsField();markPrefsDirty()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer le suivi du nombre de tours</span>
+</label>
+</div>
+<div class="g2" style="gap:10px">
+<div class="field" id="pref-laps-wrap"><label>Nombre de tours par defaut</label><input type="number" id="pref-laps" min="1" max="200" oninput="markPrefsDirty()"/></div>
+<div class="field"><label>Unite de temps</label>
+<select id="pref-time-unit" onchange="markPrefsDirty()">
+<option value="seconds">Secondes</option>
+<option value="minutes">Minutes:secondes</option>
+<option value="minutes_ms">Minutes:secondes:millieme</option>
+</select>
+</div>
+</div>
+<div class="field" style="margin-top:8px">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-sectors-enabled" style="width:auto" onchange="toggleSectorsField();markPrefsDirty()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer les secteurs (import et fiche PDF)</span>
+</label>
+<div id="pref-sectors-status" style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Lorsque désactivé ou absent des chronos, la fiche pilote utilise automatiquement le tableau simplifié.</div>
+</div>
+<div class="field" id="pref-sectors-wrap"><label>Nombre de secteurs</label>
+<select id="pref-sector-count" onchange="updateChronoFormat();markPrefsDirty()"><option value="2">2 secteurs</option><option value="3">3 secteurs</option></select>
+</div>
+<div class="field"><label>Apparence &amp; personnalisation</label>
+<div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--bord);padding-bottom:8px">
+<button type="button" class="subtab-btn active" data-subtab="theme" onclick="switchAppearanceSubtab('theme')" style="background:none;border:none;color:var(--txt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid var(--acc)">Thème</button>
+<button type="button" class="subtab-btn" data-subtab="avatars" onclick="switchAppearanceSubtab('avatars')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Avatars karts</button>
+</div>
+<div id="appearance-subtab-theme">
+<div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Logo du circuit</div>
+<div id="pref-logo-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
+<div style="width:64px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
+<img id="pref-logo-preview" src="" alt="Logo actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
+</div>
+<button id="pref-logo-remove-btn" class="btn btn-ghost btn-sm" style="display:none" onclick="removeLogo()">Retirer le logo</button>
+</div>
+<label class="btn btn-ghost btn-sm" style="display:inline-flex;cursor:pointer">
+Choisir un fichier
+<input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="uploadLogo(this)"/>
+</label>
+<div style="font-size:11px;color:var(--mut);margin-top:6px">PNG avec fond transparent recommandé. Affiché sur la page de résultats publics.</div>
+<div class="msg" id="msg-logo"></div>
+</div>
+<div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Plan du circuit <span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.7">(optionnel · Premium)</span></div>
+<div id="pref-trackmap-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
+<div style="width:96px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
+<img id="pref-trackmap-preview" src="" alt="Plan actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
+</div>
+<button id="pref-trackmap-remove-btn" class="btn btn-ghost btn-sm" style="display:none" onclick="removeTrackMap()">Retirer le plan</button>
+</div>
+<label id="trackmap-upload-label" class="btn btn-ghost btn-sm" style="display:inline-flex;cursor:pointer">
+Choisir un fichier
+<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadTrackMap(this)"/>
+</label>
+<div id="trackmap-upsell" style="display:none;font-size:12px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px 12px">
+Le plan du circuit est reserve au plan <strong>Premium</strong>. Passe au plan superieur pour debloquer cette fonction.
+</div>
+<div style="font-size:11px;color:var(--mut);margin-top:6px">Affiche le tracé du circuit juste au-dessus du podium sur la page de résultats publics.</div>
+<div class="msg" id="msg-trackmap"></div>
+</div>
+<div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div>
+<div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div>
+<div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div>
+<select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Premium Carbon</option></select>
+<div style="font-size:11px;color:var(--mut);margin-top:10px">Le thème s'applique à la page publique de résultats et aux exports PDF. Aperçu en direct à droite &rarr;</div>
+</div>
+<div id="appearance-subtab-avatars" style="display:none">
+<div style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px">Chaque pilote reçoit automatiquement l'avatar de son kart : le <b style="color:var(--txt)">numéro affiché est celui du kart</b>, et la couleur est propre à chaque numéro (identique d'une session à l'autre). Voici les avatars de ta flotte :</div>
+<div id="kart-avatars-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:10px"></div>
+</div>
+</div>
+<button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer</button>
+<div class="msg" id="msg-prefs"></div>
+</div>
 
- <div class="card">
-  <div class="ctitle">Numeros de karts existants</div>
-  <div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
-  <div class="field">
-   <label>Ajouter un numero</label>
-   <div class="flex" style="gap:8px">
-    <input type="number" id="pref-kart-num-input" min="1" max="999" placeholder="Ex: 7" style="max-width:120px" onkeydown="if(event.key==='Enter'){event.preventDefault();addKartNumber();}"/>
-    <button class="btn btn-primary btn-sm" onclick="addKartNumber()">Ajouter</button>
-    <button class="btn btn-ghost btn-sm" onclick="autoFillKartNumbers()">Generer 1 a N</button>
-   </div>
-  </div>
-  <div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
-  <div class="msg" id="msg-kart-numbers"></div>
- </div>
- </div>
- <div class="params-col-right">
-  <div class="card">
-   <div class="ctitle">Aperçu en direct — page résultats</div>
-   <div id="results-live-preview"></div>
-  </div>
- </div>
- </div>
+<div class="card">
+<div class="ctitle">Numeros de karts existants</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
+<div class="field">
+<label>Ajouter un numero</label>
+<div class="flex" style="gap:8px">
+<input type="number" id="pref-kart-num-input" min="1" max="999" placeholder="Ex: 7" style="max-width:120px" onkeydown="if(event.key==='Enter'){event.preventDefault();addKartNumber();}"/>
+<button class="btn btn-primary btn-sm" onclick="addKartNumber()">Ajouter</button>
+<button class="btn btn-ghost btn-sm" onclick="autoFillKartNumbers()">Generer 1 a N</button>
+</div>
+</div>
+<div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
+<div class="msg" id="msg-kart-numbers"></div>
+</div>
+</div>
+<div class="params-col-right">
+<div class="card">
+<div class="ctitle">Aperçu en direct — page résultats</div>
+<div id="results-live-preview"></div>
+</div>
+</div>
+</div>
 </div>
 
 </div>
 
 <div class="overlay" id="qr-overlay" onclick="if(event.target===this)closeZoom()">
- <div class="qr-zoom-box">
-  <div style="font-size:15px;font-weight:800" id="qr-zoom-title"></div>
-  <div class="qr-wrap" id="qr-zoom-imgwrap"><img id="qr-zoom-img" src="" alt="QR"/></div>
-  <button class="btn btn-ghost btn-sm" onclick="closeZoom()">Fermer</button>
- </div>
+<div class="qr-zoom-box">
+<div style="font-size:15px;font-weight:800" id="qr-zoom-title"></div>
+<div class="qr-wrap" id="qr-zoom-imgwrap"><img id="qr-zoom-img" src="" alt="QR"/></div>
+<button class="btn btn-ghost btn-sm" onclick="closeZoom()">Fermer</button>
+</div>
 </div>
 
 <div class="overlay" id="hist-overlay" onclick="if(event.target===this)closeHistory()">
- <div class="qr-zoom-box" style="max-width:480px">
-  <div style="font-size:16px;font-weight:800" id="hist-title"></div>
-  <div id="hist-content" style="width:100%;max-height:400px;overflow-y:auto"></div>
-  <button class="btn btn-ghost btn-sm" onclick="closeHistory()">Fermer</button>
- </div>
+<div class="qr-zoom-box" style="max-width:480px">
+<div style="font-size:16px;font-weight:800" id="hist-title"></div>
+<div id="hist-content" style="width:100%;max-height:400px;overflow-y:auto"></div>
+<button class="btn btn-ghost btn-sm" onclick="closeHistory()">Fermer</button>
+</div>
 </div>
 
 <div class="overlay" id="pres-overlay" onclick="if(event.target===this)togglePres()" style="background:rgba(10,12,20,.88)">
- <div class="pres-box">
-  <div class="pres-title">Scanne pour les resultats !</div>
-  <div class="qr-wrap"><img id="pres-img" src="" alt="QR"/></div>
-  <div style="font-size:13px;color:var(--mut);text-align:center" id="pres-sub"></div>
-  <button class="btn btn-ghost btn-sm" onclick="togglePres()">Quitter</button>
- </div>
+<div class="pres-box">
+<div class="pres-title">Scanne pour les resultats !</div>
+<div class="qr-wrap"><img id="pres-img" src="" alt="QR"/></div>
+<div style="font-size:13px;color:var(--mut);text-align:center" id="pres-sub"></div>
+<button class="btn btn-ghost btn-sm" onclick="togglePres()">Quitter</button>
+</div>
 </div>
 
+<!-- OVERLAY LOGIN : visible par defaut (fail-closed) tant qu'aucune session Auth n'est confirmee -->
+<div class="overlay show" id="login-overlay" style="z-index:200">
+<div class="qr-zoom-box" style="max-width:360px">
+<div style="font-size:18px;font-weight:900">Karting <span style="color:var(--yel)">Admin</span></div>
+<div style="font-size:12px;color:var(--mut);text-align:center">Connecte-toi pour acceder a ton espace de gestion.</div>
+<div class="field" style="width:100%"><label>Email</label><input type="email" id="login-email" autocomplete="username"/></div>
+<div class="field" style="width:100%"><label>Mot de passe</label><input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"/></div>
+<button class="btn btn-primary" style="width:100%" onclick="doLogin()">Se connecter</button>
+<div class="msg" id="login-msg"></div>
+</div>
+</div>
 
 <script type="module" src="karting-v2/src/app.js"></script>
 </body>
