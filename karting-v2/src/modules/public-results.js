@@ -14,8 +14,8 @@ let sessionInfo = null;
 let currentPage = 1;
 
 // Réglage « secteurs » (Paramètres › Apparence), lu depuis app_settings.global.
-// Activé par défaut ; désactivé uniquement si value.show_sectors === false.
-let PDF_SHOW_SECTORS = true;
+// Affiché uniquement si value.sectors_enabled === true (Paramètres › Apparence).
+let PDF_SHOW_SECTORS = false;
 function sectorsEnabled() { return PDF_SHOW_SECTORS !== false; }
 
 /* ------------------------------------------------------------------
@@ -26,7 +26,7 @@ export function initTheme() {
   const MAP = { classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon' };
   db.from('app_settings').select('value').eq('key', 'global').maybeSingle().then(({ data }) => {
     const theme = data && data.value && data.value.results_theme;
-    PDF_SHOW_SECTORS = !(data && data.value && data.value.show_sectors === false);
+    PDF_SHOW_SECTORS = !!(data && data.value && data.value.sectors_enabled);
     if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
 
     const logoUrl = data && data.value && data.value.logo_url;
