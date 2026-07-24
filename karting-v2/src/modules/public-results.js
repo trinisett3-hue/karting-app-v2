@@ -13,6 +13,11 @@ let allResults = [];
 let sessionInfo = null;
 let currentPage = 1;
 
+// Réglage « secteurs » (Paramètres › Apparence), lu depuis app_settings.global.
+// Activé par défaut ; désactivé uniquement si value.show_sectors === false.
+let PDF_SHOW_SECTORS = true;
+function sectorsEnabled() { return PDF_SHOW_SECTORS !== false; }
+
 /* ------------------------------------------------------------------
    THEME — Lu depuis app_settings (key='global'), défini dans
    admin.html > Paramètres > Apparence.
@@ -21,6 +26,7 @@ export function initTheme() {
   const MAP = { classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon' };
   db.from('app_settings').select('value').eq('key', 'global').maybeSingle().then(({ data }) => {
     const theme = data && data.value && data.value.results_theme;
+    PDF_SHOW_SECTORS = !(data && data.value && data.value.show_sectors === false);
     if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
 
     const logoUrl = data && data.value && data.value.logo_url;
@@ -437,7 +443,10 @@ export function buildResultsPDFNode(results, session, t) {
   const podium = results.slice(0, 3);
   const podOrder = [podium[1], podium[0], podium[2]].filter(Boolean); // 2 - 1 - 3
   const podBorder = { 1: t.p1, 2: t.p2, 3: t.p3 };
-  const cols = '28px 32px 1fr 42px 42px 64px 78px';
+  const showSec = sectorsEnabled();
+  const cols = showSec ? '24px 28px 1fr 34px 34px 58px 70px 44px 44px 44px' : '28px 32px 1fr 42px 42px 64px 78px';
+  const bestSec = (d, si) => { let m = Infinity; for (const l of (d.lapsArr || [])) { const v = l.sectors && l.sectors[si]; if (Number.isFinite(v)) m = Math.min(m, v); } return Number.isFinite(m) ? m : null; };
+  const secCellsFor = (d) => showSec ? [0, 1, 2].map(si => { const v = bestSec(d, si); return '<span style="text-align:center;color:' + t.muted + '">' + (v != null ? fmtPdfTime(v) : '--') + '</span>'; }).join('') : '';
   const podHTML = podOrder.map(d => {
     const first = d.pos === 1;
     const bc = podBorder[d.pos] || t.border;
@@ -458,6 +467,7 @@ export function buildResultsPDFNode(results, session, t) {
       <span style="text-align:center;color:${t.muted}">${d.hasTime ? d.lapsCount : '--'}</span>
       <span style="text-align:center;color:${t.text}">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span>
       <b style="text-align:right;color:${t.text}">${d.hasTime ? escapeHTML(gapBadge(d)) : '--'}</b>
+      ${secCellsFor(d)}
     </div>`).join('');
   node.innerHTML = `
     <div style="background:${t.accent};padding:12px 16px;display:flex;justify-content:space-between;align-items:flex-end">
@@ -466,7 +476,7 @@ export function buildResultsPDFNode(results, session, t) {
     </div>
     <div style="padding:14px 16px 6px"><div style="display:flex;gap:9px;align-items:stretch">${podHTML || ''}</div></div>
     <div style="padding:6px 16px 14px">
-      <div style="display:grid;grid-template-columns:${cols};gap:6px;padding:2px 8px 4px;font-size:9px;font-weight:800;color:${t.muted};text-transform:uppercase;letter-spacing:.04em"><span>Pos</span><span></span><span>Pilote</span><span style="text-align:center">Kart</span><span style="text-align:center">Tours</span><span style="text-align:center">Meill. tour</span><span style="text-align:right">Temps/écart</span></div>
+      <div style="display:grid;grid-template-columns:${cols};gap:6px;padding:2px 8px 4px;font-size:9px;font-weight:800;color:${t.muted};text-transform:uppercase;letter-spacing:.04em"><span>Pos</span><span></span><span>Pilote</span><span style="text-align:center">Kart</span><span style="text-align:center">Tours</span><span style="text-align:center">Meill. tour</span><span style="text-align:right">Temps/écart</span>${showSec ? '<span style="text-align:center">S1</span><span style="text-align:center">S2</span><span style="text-align:center">S3</span>' : ''}</div>
       <div style="border:1px solid ${t.border};border-radius:8px;overflow:hidden">${rows || `<div style="padding:16px;text-align:center;color:${t.muted}">Aucun résultat.</div>`}</div>
       <div style="display:flex;justify-content:space-between;margin-top:10px;font-size:9px;color:${t.muted};text-transform:uppercase;letter-spacing:.06em"><span>Trinisette Karting</span><span>Classement complet — podium, classement &amp; détail réunis</span></div>
     </div>`;
@@ -479,7 +489,7 @@ export function buildResultsPDFNode(results, session, t) {
 export function buildPilotDetailNode(pilot, session, t) {
   const node = document.createElement('div');
   node.style.cssText = `width:760px;background:${t.bg};color:${t.text};font-family:Arial,Helvetica,sans-serif;`;
-  const sectorsPresent = [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i])));
+  const sectorsPresent = sectorsEnabled() ? [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))) : [];
   const laps = pilot.lapsArr.slice(0, 20);
   const avg = pilot.hasTime && pilot.lapsCount ? pilot.total / pilot.lapsCount : null;
   const gapTxt = pilot.pos === 1 ? 'Leader' : (Number.isFinite(pilot.gap) ? '+' + fmtPdfTime(pilot.gap) : '--');
