@@ -360,9 +360,18 @@ wrap.style.width = width + 'px';
 wrap.style.background = bg || '#ffffff';
 wrap.appendChild(node);
 holder.appendChild(wrap);
-// laisser le temps aux <img> (avatars data-URI) de se décoder avant la capture
+// Laisser le temps aux <img> (avatars data-URI) de se décoder avant la capture.
+// NB : on ne teste QUE img.complete. Tester naturalWidth bloquait indéfiniment
+// sur les SVG data-URI sans dimensions intrinsèques (naturalWidth === 0) déjà
+// chargés : le prédicat restait faux et onload ne se redéclenchait jamais —
+// ce qui figeait la génération dès la 2e page. Filet de sécurité à 3 s.
 await Promise.all(Array.from(wrap.querySelectorAll('img')).map(img =>
-(img.complete && img.naturalWidth) ? Promise.resolve() : new Promise(res => { img.onload = img.onerror = res; })
+img.complete ? Promise.resolve() : new Promise(res => {
+let done = false;
+const fin = () => { if (!done) { done = true; res(); } };
+img.onload = img.onerror = fin;
+setTimeout(fin, 3000);
+})
 ));
 await new Promise(r => setTimeout(r, 80));
 const canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
@@ -410,37 +419,75 @@ const rest = (n % 60).toFixed(3).padStart(6, '0');
 return `${String(min).padStart(2, '0')}:${rest}`;
 }
 
-/* ------------------------------------------------------------------
-STYLE DES PDF — reprend exactement l'identité graphique de la page
-résultats (mêmes polices Teko/Barlow Condensed déjà chargées, mêmes
-variables CSS de thème --c-*), au lieu de l'ancien style Arial/tableau
-plat. Injecté une seule fois dans <head>.
------------------------------------------------------------------- */
+/* ==================================================================
+   PDF — IDENTITÉ VISUELLE DES MAQUETTES
+   Le rendu est construit à la taille réelle d'une feuille A4 en points
+   CSS (595 x 842 en portrait, 842 x 595 en paysage) avec 22px de marge
+   intérieure : la capture html2canvas se pose donc 1:1 sur la page PDF,
+   sans remise à l'échelle, exactement comme dans les maquettes.
+   Toutes les couleurs proviennent des variables de thème --c-* de
+   results.html : le PDF suit automatiquement le thème du circuit.
+   ================================================================== */
+
+/* Format demandé par l'utilisateur : 'portrait' ou 'landscape'. */
+let PDF_ORIENT = 'portrait';
+
+/* Dimensions de la feuille selon le format. */
+function pdfxGeom(orient) {
+  const landscape = orient === 'landscape';
+  return {
+    landscape,
+    renderW: landscape ? 842 : 595,   // largeur de rendu en px CSS
+    sheetH: landscape ? 595 : 842,    // hauteur de la feuille en px CSS
+    pageW: landscape ? 297 : 210,     // largeur PDF en mm
+    pageH: landscape ? 210 : 297,     // hauteur PDF en mm
+    // 44 = padding de la page (22 x 2), 10 = marge de sécurité
+    budgetPx: (landscape ? 595 : 842) - 44 - 10,
+  };
+}
+
 let PDF_STYLES_INJECTED = false;
 function ensurePdfStyles() {
-if (PDF_STYLES_INJECTED) return;
-const style = document.createElement('style');
-style.id = 'pdfx-styles';
-style.textContent = `
-.pdfx-page{width:760px}
-.pdfx-sheet{display:flex;flex-direction:column;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;overflow:hidden;font-family:var(--font-body)}
-.pdfx-head-band{position:relative;padding:16px 24px;background:linear-gradient(120deg,var(--c-accent-glow),transparent 65%),var(--c-surface-2);border-bottom:1px solid var(--c-border);display:flex;align-items:center;justify-content:space-between;gap:16px}
+  if (PDF_STYLES_INJECTED) return;
+  const style = document.createElement('style');
+  style.id = 'pdfx-styles';
+  style.textContent = `
+.pdfx-page{
+  --pdx-p1:#ffd54a; --pdx-p2:#c7cbd6; --pdx-p3:#d98a4a;
+  background:var(--c-bg);padding:22px;position:relative;
+  font-family:var(--font-body);box-sizing:border-box;
+}
+.pdfx-page *{box-sizing:border-box;margin:0;padding:0}
+.pdfx-page.portrait{width:595px}
+.pdfx-page.landscape{width:842px}
+.pdfx-sheet{display:flex;flex-direction:column;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;overflow:hidden}
+
+/* ---------- Bandeau d'en-tête (classement) ---------- */
+.pdfx-head-band{position:relative;padding:16px 24px;background:linear-gradient(120deg,var(--c-accent-glow,rgba(255,42,42,.35)),transparent 65%),var(--c-surface-2);border-bottom:1px solid var(--c-border);display:flex;align-items:center;justify-content:space-between;gap:16px}
+.pdfx-page.landscape .pdfx-head-band{padding:14px 28px}
 .pdfx-head-band::after{content:'';position:absolute;top:8px;right:8px;width:18px;height:18px;border-top:2px solid var(--c-accent);border-right:2px solid var(--c-accent);opacity:.5}
-.pdfx-circuit-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:22px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;transform:skewX(-6deg);transform-origin:left}
-.pdfx-session-lbl{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-accent);margin-top:2px}
-.pdfx-date{font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--c-muted);text-transform:uppercase;text-align:right}
-.pdfx-count{font-size:10.5px;color:var(--c-muted);margin-top:2px;text-align:right}
+.pdfx-head-left .pdfx-circuit-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:22px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;transform:skewX(-6deg);transform-origin:left}
+.pdfx-head-left .pdfx-session-lbl{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-accent);margin-top:2px}
+.pdfx-head-right{text-align:right}
+.pdfx-head-right .pdfx-date{font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--c-muted);text-transform:uppercase}
+.pdfx-head-right .pdfx-count{font-size:10.5px;color:var(--c-muted);margin-top:2px}
+
+/* ---------- Corps : 1 colonne en portrait, 2 en paysage ---------- */
+.pdfx-body-wrap{display:flex;flex-direction:column;flex:1;min-height:0}
+.pdfx-page.landscape .pdfx-body-wrap{flex-direction:row;align-items:stretch}
+
+/* ---------- Podium horizontal (portrait) ---------- */
 .pdfx-podium{display:flex;align-items:flex-end;gap:10px;padding:16px 24px 14px;border-bottom:1px solid var(--c-border)}
 .pdfx-p-card{flex:1;min-width:0;background:var(--c-surface-2);border-radius:12px;border:2px solid var(--c-border);padding:10px 8px 8px;position:relative;text-align:center}
-.pdfx-p-card.p1{border-color:var(--c-p1-border);order:2;padding-top:6px}
-.pdfx-p-card.p2{border-color:var(--c-p2-border);order:1}
-.pdfx-p-card.p3{border-color:var(--c-p3-border);order:3}
+.pdfx-p-card.p1{border-color:var(--pdx-p1);order:2;padding-top:6px}
+.pdfx-p-card.p2{border-color:var(--pdx-p2);order:1}
+.pdfx-p-card.p3{border-color:var(--pdx-p3);order:3}
 .pdfx-p-rank{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:14px;position:absolute;top:6px;left:8px;color:var(--c-muted)}
-.pdfx-p-card.p1 .pdfx-p-rank{color:var(--c-p1-border);font-size:17px}
-.pdfx-p-avatar{width:54px;height:54px;border-radius:50%;margin:4px auto 6px;overflow:hidden;background:var(--c-bg);border:2px solid var(--c-border)}
-.pdfx-p-card.p1 .pdfx-p-avatar{width:66px;height:66px;border-color:var(--c-p1-border)}
-.pdfx-p-card.p2 .pdfx-p-avatar{border-color:var(--c-p2-border)}
-.pdfx-p-card.p3 .pdfx-p-avatar{border-color:var(--c-p3-border)}
+.pdfx-p-card.p1 .pdfx-p-rank{color:var(--pdx-p1);font-size:17px}
+.pdfx-p-avatar{width:54px;height:54px;border-radius:50%;margin:4px auto 6px;overflow:hidden;background:var(--c-bg);border:2px solid var(--c-border);flex-shrink:0}
+.pdfx-p-card.p1 .pdfx-p-avatar{width:66px;height:66px;border-color:var(--pdx-p1)}
+.pdfx-p-card.p2 .pdfx-p-avatar{border-color:var(--pdx-p2)}
+.pdfx-p-card.p3 .pdfx-p-avatar{border-color:var(--pdx-p3)}
 .pdfx-p-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 .pdfx-p-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;text-transform:uppercase;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pdfx-p-card.p1 .pdfx-p-name{font-size:15px}
@@ -450,274 +497,492 @@ style.textContent = `
 .pdfx-p-stat .k{font-size:7px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted)}
 .pdfx-p-stat .v{font-family:var(--font-display);font-weight:700;font-size:12px;color:var(--c-text)}
 .pdfx-p-stat .v.best{color:var(--c-accent)}
-.pdfx-p-card.p1 .pdfx-p-stat .v.best{color:var(--c-p1-border)}
+.pdfx-p-card.p1 .pdfx-p-stat .v.best{color:var(--pdx-p1)}
+
+/* ---------- Podium vertical (paysage) : colonne latérale ---------- */
+.pdfx-podium-col{width:238px;flex-shrink:0;border-right:1px solid var(--c-border);padding:14px 16px 10px;display:flex;flex-direction:column;gap:9px}
+.pdfx-podium-col-title{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-muted);border-left:3px solid var(--c-accent);padding-left:7px;margin-bottom:2px}
+.pdfx-pv-card{display:flex;align-items:center;gap:10px;background:var(--c-surface-2);border:2px solid var(--c-border);border-radius:10px;padding:8px 10px}
+.pdfx-pv-card.pv1{border-color:var(--pdx-p1)}
+.pdfx-pv-card.pv2{border-color:var(--pdx-p2)}
+.pdfx-pv-card.pv3{border-color:var(--pdx-p3)}
+.pdfx-pv-rank{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:16px;color:var(--c-muted);width:14px;flex-shrink:0;text-align:center}
+.pdfx-pv-card.pv1 .pdfx-pv-rank{color:var(--pdx-p1);font-size:19px}
+.pdfx-pv-avatar{width:36px;height:36px;border-radius:50%;overflow:hidden;background:var(--c-bg);border:2px solid var(--c-border);flex-shrink:0}
+.pdfx-pv-card.pv1 .pdfx-pv-avatar{border-color:var(--pdx-p1);width:42px;height:42px}
+.pdfx-pv-card.pv2 .pdfx-pv-avatar{border-color:var(--pdx-p2)}
+.pdfx-pv-card.pv3 .pdfx-pv-avatar{border-color:var(--pdx-p3)}
+.pdfx-pv-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.pdfx-pv-info{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+.pdfx-pv-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13.5px;text-transform:uppercase;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfx-pv-meta{display:flex;gap:6px;flex-wrap:wrap}
+.pdfx-pv-meta span{font-size:7.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
+.pdfx-pv-meta b{color:var(--c-accent)}
+.pdfx-pv-card.pv1 .pdfx-pv-meta b{color:var(--pdx-p1)}
+
+/* ---------- Tableau du classement ---------- */
 .pdfx-rank-wrap{padding:12px 24px 16px;flex:1;min-width:0}
-.pdfx-rank-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-muted);border-left:3px solid var(--c-accent);padding-left:8px;margin-bottom:6px;font-family:var(--font-body)}
+.pdfx-page.landscape .pdfx-rank-wrap{padding:12px 22px 16px}
+.pdfx-rank-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-muted);border-left:3px solid var(--c-accent);padding-left:8px;margin-bottom:6px}
 .pdfx-rank-head{display:grid;grid-template-columns:26px 28px 1.5fr 46px 44px 74px 66px;gap:4px;padding:0 8px 6px;font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted);border-bottom:1px solid var(--c-border)}
-.pdfx-rank-head.with-sec,.pdfx-rank-row.with-sec{grid-template-columns:22px 24px minmax(60px,1fr) 34px 34px 60px 50px 46px 46px 46px}
 .pdfx-rank-head span.num{text-align:center}
 .pdfx-rank-body{margin-top:2px}
 .pdfx-rank-row{display:grid;grid-template-columns:26px 28px 1.5fr 46px 44px 74px 66px;gap:4px;align-items:center;padding:5px 8px;font-size:11px;color:var(--c-text);border-bottom:1px solid var(--c-border)}
 .pdfx-rank-row:nth-child(even){background:var(--c-surface-2)}
 .pdfx-rank-row:last-child{border-bottom:none}
-.pdfx-rank-row .pos{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;color:var(--c-muted);text-align:center}
+.pdfx-rank-row .pos{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;color:var(--c-muted);text-align:center;font-variant-numeric:tabular-nums}
 .pdfx-rank-row .av{width:20px;height:20px;border-radius:50%;overflow:hidden;background:var(--c-bg);border:1px solid var(--c-border)}
 .pdfx-rank-row .av img{width:100%;height:100%;object-fit:cover;display:block}
 .pdfx-rank-row .name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pdfx-rank-row .kart{color:var(--c-muted);font-size:10px;text-align:center}
-.pdfx-rank-row .laps{color:var(--c-muted);font-size:10px;text-align:center}
-.pdfx-rank-row .best{font-weight:700;font-size:10.5px;text-align:center}
-.pdfx-rank-row .gap{color:var(--c-muted);font-size:10px;text-align:center}
+.pdfx-rank-row .kart{color:var(--c-muted);font-size:10px;text-align:center;font-variant-numeric:tabular-nums}
+.pdfx-rank-row .laps{color:var(--c-muted);font-size:10px;text-align:center;font-variant-numeric:tabular-nums}
+.pdfx-rank-row .best{font-weight:700;font-size:10.5px;text-align:center;font-variant-numeric:tabular-nums}
+.pdfx-rank-row .gap{color:var(--c-muted);font-size:10px;text-align:center;font-variant-numeric:tabular-nums}
 .pdfx-rank-row.top3 .pos{color:var(--c-accent)}
-.pdfx-rank-row .sec{color:var(--c-muted);font-size:9.5px;text-align:center}
-.pdfx-sheet-footer{display:flex;justify-content:space-between;align-items:center;padding:9px 24px 14px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted);font-family:var(--font-body)}
+.pdfx-rank-row .sec{color:var(--c-muted);font-size:9.5px;text-align:center;font-variant-numeric:tabular-nums}
+.pdfx-rank-head.with-sec,.pdfx-rank-row.with-sec{grid-template-columns:22px 24px minmax(60px,1fr) 34px 34px 60px 50px 46px 46px 46px}
+.pdfx-page.landscape .pdfx-rank-head.with-sec,.pdfx-page.landscape .pdfx-rank-row.with-sec{grid-template-columns:24px 26px minmax(80px,1fr) 34px 34px 62px 50px 46px 46px 46px}
+
+/* ---------- Pied de page ---------- */
+.pdfx-sheet-footer{display:flex;justify-content:space-between;align-items:center;padding:9px 24px 14px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
+.pdfx-page.landscape .pdfx-sheet-footer{padding:9px 28px 14px}
 .pdfx-sheet-footer b{color:var(--c-text)}
-.pdfx-header-mini{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 24px;border-bottom:1px solid var(--c-border)}
-.pdfx-header-mini .mini-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:16px;text-transform:uppercase;color:var(--c-text);transform:skewX(-6deg)}
-.pdfx-header-mini .mini-tag{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
-.pdfx-header-mini .mini-page{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-accent)}
+
+/* ---------- Bandeau allégé des pages 2+ (classement) ---------- */
+.pdfx-rank-header-mini{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 24px;border-bottom:1px solid var(--c-border)}
+.pdfx-page.landscape .pdfx-rank-header-mini{padding:12px 28px}
+.pdfx-rank-header-mini .mini-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:16px;text-transform:uppercase;color:var(--c-text);transform:skewX(-6deg)}
+.pdfx-rank-header-mini .mini-tag{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
+.pdfx-rank-header-mini .mini-page{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-accent)}
+
+/* ================= FICHE PILOTE ================= */
 .pdfx-topbar{height:5px;width:100%;background:linear-gradient(90deg,var(--c-accent),transparent 140%)}
-.pdfx-fp-header{position:relative;padding:16px 18px;display:flex;align-items:center;gap:14px;flex-wrap:nowrap;border-bottom:1px solid var(--c-border)}
+.pdfx-fp-header{position:relative;padding:16px 18px;display:flex;flex-direction:row;align-items:center;gap:10px;flex-wrap:nowrap;border-bottom:1px solid var(--c-border)}
 .pdfx-fp-header::after{content:'';position:absolute;top:8px;right:8px;width:22px;height:22px;border-top:2px solid var(--c-accent);border-right:2px solid var(--c-accent);opacity:.5}
-.pdfx-fp-avatar{width:66px;height:66px;border-radius:12px;overflow:hidden;background:var(--c-surface-2);border:1px solid var(--c-border);flex-shrink:0}
-.pdfx-fp-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-.pdfx-fp-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:22px;text-transform:uppercase;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pdfx-fp-meta{font-size:12px;font-weight:700;color:var(--c-muted);margin-top:3px;letter-spacing:.04em;text-transform:uppercase}
-.pdfx-stats-row{padding:16px 18px 8px;display:flex;gap:8px}
-.pdfx-stat{flex:1;min-width:0;background:var(--c-surface);border:1px solid var(--c-border);border-radius:8px;padding:9px 8px}
-.pdfx-stat .k{font-size:9px;font-weight:800;color:var(--c-muted);text-transform:uppercase;letter-spacing:.05em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-body)}
-.pdfx-stat .v{font-family:var(--font-display);font-size:19px;font-weight:700;margin-top:3px;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pdfx-stat .v.hl{color:var(--c-accent)}
-.pdfx-tbl-wrap{padding:10px 18px 16px}
-.pdfx-tbl-head{display:grid;grid-template-columns:.7fr 1.1fr 1fr 1fr 1fr 1fr;padding:0 10px 8px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted);border-bottom:1px solid var(--c-border);font-family:var(--font-body)}
-.pdfx-tbl-wrap.no-sec .pdfx-tbl-head,.pdfx-tbl-wrap.no-sec .pdfx-tbl-row{grid-template-columns:.5fr 1fr 1fr}
-.pdfx-tbl-body{margin-top:2px}
+.pdfx-photo-wrap{position:relative;width:56px;height:56px;flex-shrink:0}
+.pdfx-photo{width:56px;height:56px;border-radius:12px;overflow:hidden;border:1px solid var(--c-border);background:var(--c-surface-2);display:flex;align-items:center;justify-content:center}
+.pdfx-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.pdfx-photo svg{width:28px;height:28px;stroke:var(--c-muted);opacity:.6}
+.pdfx-kart-badge{position:absolute;right:-10px;bottom:-10px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--c-surface);box-shadow:0 2px 8px rgba(0,0,0,.5);background:var(--c-bg);overflow:hidden}
+.pdfx-kart-badge img{width:100%;height:100%;object-fit:cover;display:block}
+.pdfx-id-block{min-width:76px;flex:1 1 76px}
+.pdfx-pilot-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text);transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pdfx-id-meta{display:flex;gap:7px;margin-top:3px;flex-wrap:nowrap}
+.pdfx-id-meta .item{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
+.pdfx-id-meta .item b{color:var(--c-accent);font-size:1.05em}
+.pdfx-summary-card{background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:9px;padding:6px 9px;display:flex;flex-direction:row;gap:8px;align-items:center;flex-shrink:0}
+.pdfx-summary-row{display:flex;align-items:center;gap:6px}
+.pdfx-summary-row svg{width:12px;height:12px;stroke:var(--c-accent);flex-shrink:0}
+.pdfx-summary-row .txt{display:flex;flex-direction:column;line-height:1.1}
+.pdfx-summary-row .txt .k{font-size:7.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
+.pdfx-summary-row .txt .v{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--c-text);white-space:nowrap}
+.pdfx-summary-row.best .txt .v{color:var(--c-accent)}
+.pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
+.pdfx-circuit-text{text-align:right}
+.pdfx-circuit-block .pdfx-c-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12.5px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;white-space:nowrap}
+.pdfx-circuit-meta{display:flex;flex-direction:column;gap:2px;margin-top:2px;align-items:flex-end}
+.pdfx-circuit-meta .item{display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
+.pdfx-circuit-meta .item svg{width:10px;height:10px;stroke:var(--c-accent);flex-shrink:0}
+.pdfx-circuit-logo{flex-shrink:0;width:30px;height:30px;border-radius:8px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--c-gap-text,#fff)}
+
+/* Tableau des tours */
+.pdfx-tbl-wrap{padding:16px 24px 20px}
+.pdfx-tbl-head{display:grid;grid-template-columns:.7fr 1.1fr 1fr 1fr 1fr 1fr;padding:0 10px 8px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted);border-bottom:1px solid var(--c-border)}
+.pdfx-tbl-head span:first-child{text-align:center}
+.pdfx-tbl-body{border-radius:8px;margin-top:2px}
 .pdfx-tbl-row{display:grid;grid-template-columns:.7fr 1.1fr 1fr 1fr 1fr 1fr;align-items:center;padding:9px 10px;font-size:13px;color:var(--c-text);border-bottom:1px solid var(--c-border)}
 .pdfx-tbl-row:nth-child(even){background:var(--c-surface-2)}
 .pdfx-tbl-row:last-child{border-bottom:none}
 .pdfx-tbl-row .pos{text-align:center;font-family:var(--font-display);font-weight:700;font-style:italic;font-size:16px;color:var(--c-muted)}
-.pdfx-tbl-row .time{font-weight:700;text-align:center}
-.pdfx-tbl-row .gap{color:var(--c-muted);text-align:center}
-.pdfx-tbl-row .sec{color:var(--c-muted);text-align:center}
-.pdfx-tbl-row.best{background:var(--c-accent) !important}
-.pdfx-tbl-row.best .pos,.pdfx-tbl-row.best .time,.pdfx-tbl-row.best .gap,.pdfx-tbl-row.best .sec{color:var(--c-gap-text, #fff)}
+.pdfx-tbl-row .time{font-weight:700}
+.pdfx-tbl-row .gap{color:var(--c-muted)}
+.pdfx-tbl-row .sec{color:var(--c-muted);text-align:left}
+.pdfx-tbl-wrap.sec-0 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-0 .pdfx-tbl-row{grid-template-columns:.5fr 1fr 1fr}
+.pdfx-tbl-wrap.sec-1 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-1 .pdfx-tbl-row{grid-template-columns:.6fr 1.1fr 1fr 1fr}
+.pdfx-tbl-wrap.sec-2 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-2 .pdfx-tbl-row{grid-template-columns:.65fr 1.1fr 1fr 1fr 1fr}
+.pdfx-tbl-row.best{background:var(--c-accent) !important;position:relative}
+.pdfx-tbl-row.best .pos,.pdfx-tbl-row.best .time,.pdfx-tbl-row.best .gap,.pdfx-tbl-row.best .sec{color:var(--c-gap-text,#fff)}
+.pdfx-best-pill{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.05em;white-space:nowrap;background:rgba(255,255,255,.22);padding:3px 8px;border-radius:5px;line-height:1.15}
+.pdfx-dark-pill .pdfx-best-pill{background:rgba(0,0,0,.16)}
+
+/* Bandeau allégé des pages 2+ (fiche pilote) */
+.pdfx-sheet-header-mini{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 20px;border-bottom:1px solid var(--c-border)}
+.pdfx-page.landscape .pdfx-sheet-header-mini{padding:14px 30px}
+.pdfx-sheet-header-mini .mini-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:18px;text-transform:uppercase;color:var(--c-text);transform:skewX(-6deg)}
+.pdfx-sheet-header-mini .mini-tag{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
+.pdfx-sheet-header-mini .mini-page{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-accent)}
+
+/* Ajustements paysage de la fiche pilote : plus de largeur disponible */
+.pdfx-page.landscape .pdfx-fp-header{padding:20px 30px;gap:24px}
+.pdfx-page.landscape .pdfx-photo-wrap{width:72px;height:72px}
+.pdfx-page.landscape .pdfx-photo{width:72px;height:72px;border-radius:14px}
+.pdfx-page.landscape .pdfx-photo svg{width:34px;height:34px}
+.pdfx-page.landscape .pdfx-kart-badge{width:36px;height:36px}
+.pdfx-page.landscape .pdfx-pilot-name{font-size:28px}
+.pdfx-page.landscape .pdfx-id-meta{gap:16px;margin-top:5px}
+.pdfx-page.landscape .pdfx-id-meta .item{font-size:12px}
+.pdfx-page.landscape .pdfx-summary-card{padding:9px 20px;gap:22px;border-radius:10px}
+.pdfx-page.landscape .pdfx-summary-row svg{width:15px;height:15px}
+.pdfx-page.landscape .pdfx-summary-row .txt .k{font-size:9px}
+.pdfx-page.landscape .pdfx-summary-row .txt .v{font-size:19px}
+.pdfx-page.landscape .pdfx-circuit-block{gap:12px}
+.pdfx-page.landscape .pdfx-circuit-block .pdfx-c-name{font-size:17px}
+.pdfx-page.landscape .pdfx-circuit-meta{gap:3px;margin-top:4px}
+.pdfx-page.landscape .pdfx-circuit-meta .item{font-size:10.5px;gap:5px}
+.pdfx-page.landscape .pdfx-circuit-meta .item svg{width:12px;height:12px}
+.pdfx-page.landscape .pdfx-circuit-logo{width:38px;height:38px;border-radius:9px;font-size:16px}
+.pdfx-page.landscape .pdfx-tbl-wrap{padding:10px 30px 12px}
+.pdfx-page.landscape .pdfx-tbl-row,.pdfx-page.landscape .pdfx-tbl-head{padding-left:14px;padding-right:14px}
+.pdfx-page.landscape .pdfx-tbl-row{padding-top:4.5px;padding-bottom:4.5px;font-size:11.5px}
+.pdfx-page.landscape .pdfx-tbl-head{padding-bottom:5px}
 `;
-document.head.appendChild(style);
-PDF_STYLES_INJECTED = true;
+  document.head.appendChild(style);
+  PDF_STYLES_INJECTED = true;
 }
 
+/* Écart formaté « à la maquette » : +0.123 sous la minute, +1:02.345 au-delà. */
+function fmtPdfDelta(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n)) return '--';
+  if (n < 60) return '+' + n.toFixed(3);
+  const m = Math.floor(n / 60);
+  return '+' + m + ':' + (n % 60).toFixed(3).padStart(6, '0');
+}
+
+/* Initiale du circuit pour la pastille logo de la fiche pilote
+   (« Circuit de Trinisette » -> « T »). */
+function pdfxInitial(name) {
+  const cleaned = String(name || '').replace(/^\s*circuit\s+(de\s+la|de\s+l'|des|du|de|d'|le|la|les)?\s*/i, '').trim();
+  const src = cleaned || String(name || 'T');
+  return (src[0] || 'T').toUpperCase();
+}
+
+const PDFX_SVG_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
+const PDFX_SVG_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
+const PDFX_SVG_TAG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>';
+const PDFX_SVG_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>';
+
+/* ---------- Fragments de markup — classement ---------- */
 function pdfxPodiumHTML(field) {
-const cls = { 1: 'p1', 2: 'p2', 3: 'p3' };
-const order = [field[1], field[0], field[2]].filter(Boolean);
-return `<div class="pdfx-podium">${order.map(d => `
-<div class="pdfx-p-card ${cls[d.pos]}">
+  const cls = { 1: 'p1', 2: 'p2', 3: 'p3' };
+  const order = [field[1], field[0], field[2]].filter(Boolean);
+  return `<div class="pdfx-podium">${order.map(d => `
+<div class="pdfx-p-card ${cls[d.pos] || ''}">
 <div class="pdfx-p-rank">${d.pos}</div>
-<div class="pdfx-p-avatar"><img src="${kartAvatarDataURL(d.kart)}" alt=""></div>
-<div class="pdfx-p-name">${flagOf(d.nat)} ${escapeHTML(d.name)}</div>
-<div class="pdfx-p-kart">KART ${d.kart ?? '-'}</div>
+<div class="pdfx-p-avatar"><img src="${d.photo || kartAvatarDataURL(d.kart)}" alt=""></div>
+<div class="pdfx-p-name">${escapeHTML(d.name)}</div>
+<div class="pdfx-p-kart">Kart ${d.kart ?? '-'}</div>
 <div class="pdfx-p-stats">
 <div class="pdfx-p-stat"><span class="k">Meill. tour</span><span class="v best">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span></div>
-<div class="pdfx-p-stat"><span class="k">Tours</span><span class="v">${d.lapsCount}</span></div>
+<div class="pdfx-p-stat"><span class="k">Tours</span><span class="v">${d.hasTime ? d.lapsCount : '--'}</span></div>
 </div>
 </div>`).join('')}</div>`;
 }
+
+function pdfxPodiumColHTML(field) {
+  const cls = { 1: 'pv1', 2: 'pv2', 3: 'pv3' };
+  const order = [field[0], field[1], field[2]].filter(Boolean);
+  return `<div class="pdfx-podium-col">
+<div class="pdfx-podium-col-title">Podium</div>
+${order.map(d => `
+<div class="pdfx-pv-card ${cls[d.pos] || ''}">
+<div class="pdfx-pv-rank">${d.pos}</div>
+<div class="pdfx-pv-avatar"><img src="${d.photo || kartAvatarDataURL(d.kart)}" alt=""></div>
+<div class="pdfx-pv-info">
+<div class="pdfx-pv-name">${escapeHTML(d.name)}</div>
+<div class="pdfx-pv-meta"><span>Kart <b>${d.kart ?? '-'}</b></span><span>Tours <b>${d.hasTime ? d.lapsCount : '--'}</b></span><span>Meill. <b>${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</b></span></div>
+</div>
+</div>`).join('')}
+</div>`;
+}
+
 function pdfxRankHeadHTML(showSec) {
-const secCols = showSec ? '<span class="num">S1</span><span class="num">S2</span><span class="num">S3</span>' : '';
-return `<div class="pdfx-rank-head${showSec ? ' with-sec' : ''}"><span class="num"></span><span></span><span>Pilote</span><span class="num">Kart</span><span class="num">Tours</span><span class="num">Meill. tour</span><span class="num">Écart</span>${secCols}</div>`;
+  const secCols = showSec ? '<span class="num">S1</span><span class="num">S2</span><span class="num">S3</span>' : '';
+  return `<div class="pdfx-rank-head${showSec ? ' with-sec' : ''}"><span class="num"></span><span></span><span>Pilote</span><span class="num">Kart</span><span class="num">Tours</span><span class="num">Meill. tour</span><span class="num">Écart</span>${secCols}</div>`;
 }
+
 function pdfxBestSec(d, si) {
-let m = Infinity;
-for (const l of (d.lapsArr || [])) { const v = l.sectors && l.sectors[si]; if (Number.isFinite(v)) m = Math.min(m, v); }
-return Number.isFinite(m) ? m : null;
+  let m = Infinity;
+  for (const l of (d.lapsArr || [])) { const v = l.sectors && l.sectors[si]; if (Number.isFinite(v)) m = Math.min(m, v); }
+  return Number.isFinite(m) ? m : null;
 }
+
+function pdfxRankGap(d) {
+  if (!d.hasTime) return '--';
+  if (d.gap === 0) return fmtPdfTime(d.total);
+  return fmtPdfDelta(d.gap);
+}
+
 function pdfxRankRowsHTML(chunk, showSec) {
-return chunk.map(d => `
+  return chunk.map(d => `
 <div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}">
 <span class="pos">${d.pos}</span>
-<span class="av"><img src="${kartAvatarDataURL(d.kart)}" alt=""></span>
-<span class="name">${flagOf(d.nat)} ${escapeHTML(d.name)}</span>
+<span class="av"><img src="${d.photo || kartAvatarDataURL(d.kart)}" alt=""></span>
+<span class="name">${escapeHTML(d.name)}</span>
 <span class="kart">#${d.kart ?? '-'}</span>
 <span class="laps">${d.hasTime ? d.lapsCount : '--'}</span>
 <span class="best">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span>
-<span class="gap">${d.hasTime ? escapeHTML(gapBadge(d)) : '--'}</span>
-${showSec ? [0, 1, 2].map(si => { const v = pdfxBestSec(d, si); return `<span class="sec">${v != null ? fmtPdfTime(v) : '--'}</span>`; }).join('') : ''}
+<span class="gap">${pdfxRankGap(d)}</span>
+${showSec ? [0, 1, 2].map(si => { const v = pdfxBestSec(d, si); return `<span class="sec">${v != null ? v.toFixed(3) : '--'}</span>`; }).join('') : ''}
 </div>`).join('');
 }
-function pdfxStatHTML(lbl, val, hl) {
-return `<div class="pdfx-stat"><div class="k">${lbl}</div><div class="v${hl ? ' hl' : ''}">${val}</div></div>`;
-}
+
+/* ---------- Fragments de markup — fiche pilote ---------- */
 function pdfxTblHeadHTML(secCount) {
-const secHead = Array.from({ length: secCount }, (_, n) => `<span style="text-align:center">S${n + 1}</span>`).join('');
-return `<div class="pdfx-tbl-head"><span style="text-align:center">Tour</span><span style="text-align:center">Temps</span><span style="text-align:center">Écart</span>${secHead}</div>`;
+  const secHead = Array.from({ length: secCount }, (_, n) => `<span class="sec">Inter ${n + 1}</span>`).join('');
+  return `<div class="pdfx-tbl-head"><span>Tour</span><span>Temps</span><span>Écart</span>${secHead}</div>`;
 }
+
 function pdfxTblRowsHTML(laps, bestLap, sectorsPresent) {
-return laps.map(l => {
-const isBest = bestLap != null && l.time === bestLap;
-const delta = bestLap != null ? l.time - bestLap : null;
-const secCells = sectorsPresent.map(i => `<span class="sec">${Number.isFinite(l.sectors?.[i]) ? fmtPdfTime(l.sectors[i]) : '--'}</span>`).join('');
-return `<div class="pdfx-tbl-row${isBest ? ' best' : ''}">
+  return laps.map(l => {
+    const isBest = bestLap != null && l.time === bestLap;
+    const delta = bestLap != null ? l.time - bestLap : null;
+    const secCells = sectorsPresent.map(i => `<span class="sec">${Number.isFinite(l.sectors && l.sectors[i]) ? l.sectors[i].toFixed(3) : '--'}</span>`).join('');
+    const gapCell = isBest ? '<span class="pdfx-best-pill">MEILLEUR</span>' : (delta == null ? '--' : fmtPdfDelta(delta));
+    return `<div class="pdfx-tbl-row${isBest ? ' best' : ''}">
 <span class="pos">${l.idx}</span>
 <span class="time">${fmtPdfTime(l.time)}</span>
-<span class="gap">${delta == null ? '--' : (delta === 0 ? 'MEILLEUR' : '+' + fmtPdfTime(delta))}</span>
+<span class="gap">${gapCell}</span>
 ${secCells}
 </div>`;
-}).join('');
+  }).join('');
 }
 
-/* PDF CLASSEMENT COMPLET — pagination réelle par mesure DOM (comme la page
-publique) : autant de pages A4 que nécessaire pour ne jamais faire déborder
-un pilote, avec le style visuel de la page résultats (podium sur la 1re
-page, bandeau allégé sur les suivantes). */
+/* Mesure hors écran : on ajoute les lignes une par une jusqu'à ce que la
+   feuille dépasse la hauteur utile d'une page A4, puis on bascule. */
+function pdfxMeasureFill(page, bodySel, sheetSel, budgetPx, remaining, rowsHTML, emptyHTML) {
+  page.style.position = 'fixed';
+  page.style.left = '-99999px';
+  page.style.top = '0';
+  document.body.appendChild(page);
+  const sheet = page.querySelector(sheetSel);
+  const body = page.querySelector(bodySel);
+  let placed = 0;
+  if (!remaining.length && emptyHTML) body.innerHTML = emptyHTML;
+  while (remaining.length) {
+    body.insertAdjacentHTML('beforeend', rowsHTML([remaining[0]]));
+    if (sheet.getBoundingClientRect().height > budgetPx && placed > 0) { body.lastElementChild.remove(); break; }
+    placed++; remaining.shift();
+  }
+  document.body.removeChild(page);
+  // IMPORTANT : retirer le positionnement de mesure, sinon html2canvas
+  // capture une page vide (position:fixed sort du flux du conteneur).
+  page.style.position = '';
+  page.style.left = '';
+  page.style.top = '';
+  return placed;
+}
+
+/* Pose la capture sur la page PDF, à l'échelle 1:1 (595px = 210mm). */
+function pdfxPlace(pdf, canvas, g, isFirst, t) {
+  if (!isFirst) pdf.addPage(g.landscape ? [g.pageW, g.pageH] : undefined, g.landscape ? 'l' : 'p');
+  pdfRGB(pdf, t.bg, 'setFillColor');
+  pdf.rect(0, 0, g.pageW, g.pageH, 'F');
+  const imgH = canvas.height * g.pageW / canvas.width;
+  const scale = imgH > g.pageH ? g.pageH / imgH : 1;
+  const dw = g.pageW * scale, dh = imgH * scale;
+  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (g.pageW - dw) / 2, 0, dw, dh);
+}
+
+/* ==================================================================
+   PDF CLASSEMENT COMPLET
+   ================================================================== */
 export async function downloadFullPDF(btn) {
-const original = btn.innerHTML;
-btn.disabled = true;
-btn.innerHTML = `${SPIN_ICON} Génération…`;
-try {
-ensurePdfStyles();
-const { jsPDF } = window.jspdf;
-const pdf = new jsPDF('p', 'mm', 'a4');
-const t = themeColors();
-const showSec = sectorsEnabled();
-const results = allResults;
-const title = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
-const label = escapeHTML((sessionInfo && sessionInfo.title) || 'Classement');
-const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `${SPIN_ICON} Génération…`;
+  try {
+    ensurePdfStyles();
+    const { jsPDF } = window.jspdf;
+    const g = pdfxGeom(PDF_ORIENT);
+    const pdf = new jsPDF(g.landscape ? 'l' : 'p', 'mm', 'a4');
+    const t = themeColors();
+    const showSec = sectorsEnabled();
+    const results = allResults;
+    const title = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+    const label = escapeHTML((sessionInfo && sessionInfo.title) || 'Classement');
+    const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+    const dateShort = escapeHTML(sessionInfo && sessionInfo.session_date
+      ? new Date(sessionInfo.session_date + 'T12:00:00').toLocaleDateString('fr-FR')
+      : '--');
 
-const pageW = 210, pageH = 297, margin = 8;
-const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
-const budgetPx = Math.round(usableH * 760 / usableW) - 12;
-
-const headBand = `
+    const headBand = `
 <div class="pdfx-head-band">
-<div><div class="pdfx-circuit-name">${title}</div><div class="pdfx-session-lbl">Classement complet — ${label}</div></div>
-<div><div class="pdfx-date">${date}</div><div class="pdfx-count">${results.length} pilotes</div></div>
+<div class="pdfx-head-left">
+<div class="pdfx-circuit-name">${title}</div>
+<div class="pdfx-session-lbl">Classement complet — ${label}</div>
+</div>
+<div class="pdfx-head-right">
+<div class="pdfx-date">${dateShort}</div>
+<div class="pdfx-count">${results.length} pilotes</div>
+</div>
 </div>`;
-const footer = `<div class="pdfx-sheet-footer"><span>${title} · <b>${date}</b></span><span><b>Trinisette</b> Karting</span></div>`;
+    const footer = `<div class="pdfx-sheet-footer"><span>${title} · <b>${date}</b></span><span><b>Trinisette</b> Karting</span></div>`;
 
-let remaining = results.slice();
-let pageIndex = 0;
-while ((remaining.length || pageIndex === 0) && pageIndex < 60) {
-const isFirst = pageIndex === 0;
-const headMini = `<div class="pdfx-header-mini"><span class="mini-name">${title}</span><span class="mini-tag">Suite du classement</span><span class="mini-page">Page ${pageIndex + 1}</span></div>`;
-const page = document.createElement('div');
-page.className = 'pdfx-page';
-page.style.cssText = `width:760px;background:${t.bg};position:fixed;left:-99999px;top:0`;
-const rankWrap = `<div class="pdfx-rank-wrap">${isFirst ? '<div class="pdfx-rank-title">Classement complet</div>' : ''}${pdfxRankHeadHTML(showSec)}<div class="pdfx-rank-body"></div></div>`;
-page.innerHTML = `<div class="pdfx-sheet">${isFirst ? headBand + pdfxPodiumHTML(results.slice(0, 3)) : headMini}${rankWrap}${footer}</div>`;
-document.body.appendChild(page);
-const sheet = page.querySelector('.pdfx-sheet');
-const body = page.querySelector('.pdfx-rank-body');
-let placed = 0;
-if (!remaining.length) body.innerHTML = `<div style="padding:16px;text-align:center;color:${t.muted}">Aucun résultat.</div>`;
-while (remaining.length) {
-body.insertAdjacentHTML('beforeend', pdfxRankRowsHTML([remaining[0]], showSec));
-if (sheet.getBoundingClientRect().height > budgetPx && placed > 0) { body.lastElementChild.remove(); break; }
-placed++; remaining.shift();
-}
-document.body.removeChild(page);
-page.style.cssText = `width:760px;background:${t.bg};`;
+    const remaining = results.slice();
+    const pages = [];
+    let pageIndex = 0;
+    while ((remaining.length || pageIndex === 0) && pageIndex < 60) {
+      const isFirst = pageIndex === 0;
+      const headMini = `<div class="pdfx-rank-header-mini"><span class="mini-name">${title}</span><span class="mini-tag">Suite du classement</span><span class="mini-page" data-pdfx-pageno></span></div>`;
+      const page = document.createElement('div');
+      page.className = 'pdfx-page ' + (g.landscape ? 'landscape' : 'portrait');
+      const rankWrap = `<div class="pdfx-rank-wrap">${isFirst ? '<div class="pdfx-rank-title">Classement complet</div>' : ''}${pdfxRankHeadHTML(showSec)}<div class="pdfx-rank-body"></div></div>`;
+      const bodyInner = (g.landscape && isFirst) ? pdfxPodiumColHTML(results.slice(0, 3)) + rankWrap : rankWrap;
+      page.innerHTML = `<div class="pdfx-sheet">${isFirst ? headBand + (!g.landscape ? pdfxPodiumHTML(results.slice(0, 3)) : '') : headMini}<div class="pdfx-body-wrap">${bodyInner}</div>${footer}</div>`;
+      pdfxMeasureFill(page, '.pdfx-rank-body', '.pdfx-sheet', g.budgetPx, remaining,
+        chunk => pdfxRankRowsHTML(chunk, showSec),
+        `<div style="padding:16px;text-align:center;color:${t.muted}">Aucun résultat.</div>`);
+      pages.push(page);
+      pageIndex++;
+      if (pageIndex === 1 && !remaining.length) break;
+    }
+    // Numérotation « Page x / total » sur les bandeaux allégés
+    pages.forEach((p, i) => {
+      const el = p.querySelector('[data-pdfx-pageno]');
+      if (el) el.textContent = `Page ${i + 1} / ${pages.length}`;
+    });
 
-if (!isFirst) pdf.addPage();
-const canvas = await sectionToCanvas(page, 760, t.bg);
-const imgH = canvasHeightMm(canvas, usableW);
-pdfRGB(pdf, t.bg, 'setFillColor');
-pdf.rect(0, 0, pageW, pageH, 'F');
-const scale = imgH > usableH ? usableH / imgH : 1;
-const dw = usableW * scale, dh = imgH * scale;
-pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (usableW - dw) / 2, margin, dw, dh);
-pageIndex++;
-if (pageIndex === 1 && !remaining.length) break;
-}
-pdf.save('classement_karting.pdf');
-} catch (e) {
-alert('Erreur PDF : ' + e.message);
-}
-btn.disabled = false;
-btn.innerHTML = original;
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await sectionToCanvas(pages[i], g.renderW, t.bg);
+      pdfxPlace(pdf, canvas, g, i === 0, t);
+    }
+    pdf.save(`classement_karting_${g.landscape ? 'paysage' : 'portrait'}.pdf`);
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = original;
 }
 
-/* PDF FICHE PILOTE — même identité graphique que la page résultats, avec
-pagination réelle : tous les tours sont inclus (plus de plafond à 20),
-sur autant de pages A4 que nécessaire. */
+/* ==================================================================
+   PDF FICHE PILOTE
+   ================================================================== */
 export async function downloadPilotPDF(pilot, btn) {
-btn.classList.add('loading');
-btn.innerHTML = SPIN_ICON;
-try {
-ensurePdfStyles();
-const { jsPDF } = window.jspdf;
-const pdf = new jsPDF('p', 'mm', 'a4');
-const t = themeColors();
-const showSec = sectorsEnabled();
-const sectorsPresent = showSec ? [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))) : [];
-const avg = pilot.hasTime && pilot.lapsCount ? pilot.total / pilot.lapsCount : null;
-const gapTxt = pilot.pos === 1 ? 'Leader' : (Number.isFinite(pilot.gap) ? '+' + fmtPdfTime(pilot.gap) : '--');
-const circuitTxt = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
-const dateTxt = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  btn.classList.add('loading');
+  btn.innerHTML = SPIN_ICON;
+  try {
+    ensurePdfStyles();
+    const { jsPDF } = window.jspdf;
+    const g = pdfxGeom(PDF_ORIENT);
+    const pdf = new jsPDF(g.landscape ? 'l' : 'p', 'mm', 'a4');
+    const t = themeColors();
+    const showSec = sectorsEnabled();
+    const sectorsPresent = showSec ? [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))) : [];
+    const circuitTxt = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+    const sessionTxt = escapeHTML((sessionInfo && sessionInfo.title) || 'Session');
+    const dateTxt = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+    const dateShort = escapeHTML(sessionInfo && sessionInfo.session_date
+      ? new Date(sessionInfo.session_date + 'T12:00:00').toLocaleDateString('fr-FR')
+      : '--');
+    const photoInner = pilot.photo
+      ? `<img src="${pilot.photo}" alt="">`
+      : PDFX_SVG_USER;
 
-const pageW = 210, pageH = 297, margin = 10;
-const usableW = pageW - margin * 2, usableH = pageH - margin * 2;
-const budgetPx = Math.round(usableH * 760 / usableW) - 12;
-
-const headHTML = `
-<div class="pdfx-topbar"></div>
+    const headHTML = `
 <div class="pdfx-fp-header">
-<div class="pdfx-fp-avatar"><img src="${kartAvatarDataURL(pilot.kart)}" alt=""></div>
-<div style="min-width:0;flex:1">
-<div class="pdfx-fp-name">${flagOf(pilot.nat)} ${escapeHTML(pilot.name)}</div>
-<div class="pdfx-fp-meta">POSITION ${pilot.pos} · KART ${pilot.kart ?? '-'}</div>
+<div class="pdfx-photo-wrap">
+<div class="pdfx-photo">${photoInner}</div>
+<div class="pdfx-kart-badge"><img src="${kartAvatarDataURL(pilot.kart)}" alt=""></div>
+</div>
+<div class="pdfx-id-block">
+<div class="pdfx-pilot-name">${escapeHTML(pilot.name)}</div>
+<div class="pdfx-id-meta">
+<div class="item">Pos <b>${pilot.pos}</b></div>
+<div class="item">Kart <b>${pilot.kart ?? '-'}</b></div>
+<div class="item">Tours <b>${pilot.lapsCount}</b></div>
 </div>
 </div>
-<div class="pdfx-stats-row">
-${pdfxStatHTML('Meilleur tour', pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--', true)}
-${pdfxStatHTML('Temps total', pilot.hasTime ? fmtPdfTime(pilot.total) : '--')}
-${pdfxStatHTML('Tours', pilot.lapsCount)}
-${pdfxStatHTML('Moyenne', avg != null ? fmtPdfTime(avg) : '--')}
-${pdfxStatHTML('Écart 1er', gapTxt)}
+<div class="pdfx-summary-card">
+<div class="pdfx-summary-row best">
+${PDFX_SVG_CLOCK}
+<div class="txt"><span class="k">Meilleur tour</span><span class="v">${pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--'}</span></div>
+</div>
+</div>
+<div class="pdfx-circuit-block">
+<div class="pdfx-circuit-text">
+<div class="pdfx-c-name">${circuitTxt}</div>
+<div class="pdfx-circuit-meta">
+<div class="item">${PDFX_SVG_CAL}${dateShort}</div>
+<div class="item">${PDFX_SVG_TAG}${sessionTxt}</div>
+</div>
+</div>
+<div class="pdfx-circuit-logo">${pdfxInitial((sessionInfo && sessionInfo.circuit_name) || 'Trinisette')}</div>
+</div>
 </div>`;
-const footer = `<div class="pdfx-sheet-footer"><span>${circuitTxt} · <b>${dateTxt}</b></span><span>Trinisette Karting</span></div>`;
+    const footer = `<div class="pdfx-sheet-footer"><span>${circuitTxt} · <b>${dateTxt}</b></span><span><b>Trinisette</b> Karting</span></div>`;
 
-let remaining = pilot.lapsArr.slice();
-let pageIndex = 0;
-while ((remaining.length || pageIndex === 0) && pageIndex < 60) {
-const isFirst = pageIndex === 0;
-const headMini = `<div class="pdfx-header-mini"><span class="mini-name">${escapeHTML(pilot.name)}</span><span class="mini-tag">Suite du détail des tours</span><span class="mini-page">Page ${pageIndex + 1}</span></div>`;
-const page = document.createElement('div');
-page.style.cssText = `width:760px;background:${t.bg};position:fixed;left:-99999px;top:0`;
-const tblWrap = `<div class="pdfx-tbl-wrap${sectorsPresent.length ? '' : ' no-sec'}">${pdfxTblHeadHTML(sectorsPresent.length)}<div class="pdfx-tbl-body"></div></div>`;
-page.innerHTML = `<div class="pdfx-sheet">${isFirst ? headHTML : headMini}${tblWrap}${footer}</div>`;
-document.body.appendChild(page);
-const sheet = page.querySelector('.pdfx-sheet');
-const body = page.querySelector('.pdfx-tbl-body');
-let placed = 0;
-if (!remaining.length) body.innerHTML = `<div style="padding:16px;text-align:center;color:${t.muted}">Aucun tour enregistré.</div>`;
-while (remaining.length) {
-body.insertAdjacentHTML('beforeend', pdfxTblRowsHTML([remaining[0]], pilot.bestLap, sectorsPresent));
-if (sheet.getBoundingClientRect().height > budgetPx && placed > 0) { body.lastElementChild.remove(); break; }
-placed++; remaining.shift();
-}
-document.body.removeChild(page);
-page.style.cssText = `width:760px;background:${t.bg};`;
+    const remaining = pilot.lapsArr.slice();
+    const pages = [];
+    let pageIndex = 0;
+    while ((remaining.length || pageIndex === 0) && pageIndex < 60) {
+      const isFirst = pageIndex === 0;
+      const headMini = `<div class="pdfx-sheet-header-mini"><span class="mini-name">${escapeHTML(pilot.name)} — Kart ${pilot.kart ?? '-'}</span><span class="mini-tag">Suite du tableau des tours</span><span class="mini-page" data-pdfx-pageno></span></div>`;
+      const page = document.createElement('div');
+      page.className = 'pdfx-page ' + (g.landscape ? 'landscape' : 'portrait');
+      const tblWrap = `<div class="pdfx-tbl-wrap sec-${sectorsPresent.length}">${pdfxTblHeadHTML(sectorsPresent.length)}<div class="pdfx-tbl-body"></div></div>`;
+      page.innerHTML = `<div class="pdfx-sheet"><div class="pdfx-topbar"></div>${isFirst ? headHTML : headMini}${tblWrap}${footer}</div>`;
+      pdfxMeasureFill(page, '.pdfx-tbl-body', '.pdfx-sheet', g.budgetPx, remaining,
+        chunk => pdfxTblRowsHTML(chunk, pilot.bestLap, sectorsPresent),
+        `<div style="padding:16px;text-align:center;color:${t.muted}">Aucun tour enregistré.</div>`);
+      pages.push(page);
+      pageIndex++;
+      if (pageIndex === 1 && !remaining.length) break;
+    }
+    pages.forEach((p, i) => {
+      const el = p.querySelector('[data-pdfx-pageno]');
+      if (el) el.textContent = `Page ${i + 1} / ${pages.length}`;
+    });
 
-if (!isFirst) pdf.addPage();
-const canvas = await sectionToCanvas(page, 760, t.bg);
-pdfRGB(pdf, t.bg, 'setFillColor');
-pdf.rect(0, 0, pageW, pageH, 'F');
-const imgH = canvasHeightMm(canvas, usableW);
-const scale = imgH > usableH ? usableH / imgH : 1;
-const drawW = usableW * scale, drawH = imgH * scale;
-pdf.addImage(canvas.toDataURL('image/png'), 'PNG', margin + (usableW - drawW) / 2, margin, drawW, drawH);
-pageIndex++;
-if (pageIndex === 1 && !remaining.length) break;
+    for (let i = 0; i < pages.length; i++) {
+      const canvas = await sectionToCanvas(pages[i], g.renderW, t.bg);
+      pdfxPlace(pdf, canvas, g, i === 0, t);
+    }
+    pdf.save(`Fiche_Pilote_${pilot.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.classList.remove('loading');
+  btn.innerHTML = PDF_ICON;
 }
-pdf.save(`Fiche_Pilote_${pilot.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
-} catch (e) {
-alert('Erreur PDF : ' + e.message);
-}
-btn.classList.remove('loading');
-btn.innerHTML = PDF_ICON;
+
+/* ==================================================================
+   Sélecteur de format Portrait / Paysage, injecté à côté du bouton
+   « PDF complet » — s'applique aux deux PDF (classement + fiche).
+   ================================================================== */
+function initPdfOrientControl(btn) {
+  if (!btn || !btn.parentElement || document.getElementById('pdfx-orient')) return;
+  const wrap = document.createElement('div');
+  wrap.id = 'pdfx-orient';
+  wrap.setAttribute('role', 'group');
+  wrap.setAttribute('aria-label', 'Format des PDF');
+  wrap.style.cssText = 'display:inline-flex;align-items:center;gap:4px;margin-left:10px;padding:4px;border:1px solid var(--c-border);border-radius:10px;background:var(--c-surface-2);vertical-align:middle;font-family:var(--font-body)';
+  const opts = [['portrait', 'Portrait'], ['landscape', 'Paysage']];
+  const buttons = opts.map(([value, lbl]) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = lbl;
+    b.dataset.pdfxOrient = value;
+    b.style.cssText = 'font-family:inherit;font-weight:700;letter-spacing:.04em;text-transform:uppercase;font-size:11px;padding:5px 12px;border:none;border-radius:7px;cursor:pointer;background:transparent;color:var(--c-muted)';
+    b.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); PDF_ORIENT = value; sync(); });
+    wrap.appendChild(b);
+    return b;
+  });
+  function sync() {
+    buttons.forEach(b => {
+      const on = b.dataset.pdfxOrient === PDF_ORIENT;
+      b.style.background = on ? 'var(--c-accent)' : 'transparent';
+      b.style.color = on ? 'var(--c-gap-text, #fff)' : 'var(--c-muted)';
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  sync();
+  btn.insertAdjacentElement('afterend', wrap);
 }
 
 export function initPdfFullButton() {
-const btn = document.getElementById('btn-pdf-full');
-if (btn) btn.addEventListener('click', (e) => downloadFullPDF(e.currentTarget));
+  const btn = document.getElementById('btn-pdf-full');
+  if (!btn) return;
+  btn.addEventListener('click', (e) => downloadFullPDF(e.currentTarget));
+  initPdfOrientControl(btn);
 }
