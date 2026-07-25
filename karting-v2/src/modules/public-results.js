@@ -526,6 +526,9 @@ function ensurePdfStyles() {
 .pdfx-rank-title{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-muted);border-left:3px solid var(--c-accent);padding-left:8px;margin-bottom:6px}
 .pdfx-rank-head{display:grid;grid-template-columns:26px 28px 1.5fr 46px 44px 74px 66px;gap:4px;padding:0 8px 6px;font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted);border-bottom:1px solid var(--c-border)}
 .pdfx-rank-head span.num{text-align:center}
+/* Les libellés d'en-tête ne doivent jamais passer sur 2 lignes : « MEILL. TOUR »
+   se cassait en « MEILL. / TOUR » et décalait la hauteur de la ligne d'en-tête. */
+.pdfx-rank-head span{white-space:nowrap}
 .pdfx-rank-body{margin-top:2px}
 .pdfx-rank-row{display:grid;grid-template-columns:26px 28px 1.5fr 46px 44px 74px 66px;gap:4px;align-items:center;padding:5px 8px;font-size:11px;color:var(--c-text);border-bottom:1px solid var(--c-border)}
 .pdfx-rank-row:nth-child(even){background:var(--c-surface-2)}
@@ -540,8 +543,14 @@ function ensurePdfStyles() {
 .pdfx-rank-row .gap{color:var(--c-muted);font-size:10px;text-align:center;font-variant-numeric:tabular-nums}
 .pdfx-rank-row.top3 .pos{color:var(--c-accent)}
 .pdfx-rank-row .sec{color:var(--c-muted);font-size:9.5px;text-align:center;font-variant-numeric:tabular-nums}
-.pdfx-rank-head.with-sec,.pdfx-rank-row.with-sec{grid-template-columns:22px 24px minmax(60px,1fr) 34px 34px 60px 50px 46px 46px 46px}
-.pdfx-page.landscape .pdfx-rank-head.with-sec,.pdfx-page.landscape .pdfx-rank-row.with-sec{grid-template-columns:24px 26px minmax(80px,1fr) 34px 34px 62px 50px 46px 46px 46px}
+/* Colonnes resserrées quand les secteurs sont affichés : sans ça la colonne PILOTE
+   tombait sous ~95pt en portrait et les noms longs (« Emma BERNARD ») étaient coupés
+   en plein glyphe — html2canvas ne dessine pas les « … » de text-overflow. */
+.pdfx-rank-head.with-sec,.pdfx-rank-row.with-sec{grid-template-columns:22px 24px minmax(92px,1fr) 30px 30px 62px 50px 42px 42px 42px;gap:3px}
+/* Libellés d'en-tête resserrés en mode secteurs : « TOURS » débordait de sa
+   colonne de 30px et se collait à « MEILL. TOUR ». */
+.pdfx-rank-head.with-sec{font-size:8px;letter-spacing:.02em}
+.pdfx-page.landscape .pdfx-rank-head.with-sec,.pdfx-page.landscape .pdfx-rank-row.with-sec{grid-template-columns:24px 26px minmax(108px,1fr) 34px 34px 62px 50px 43px 43px 43px;gap:3px}
 
 /* ---------- Pied de page ---------- */
 .pdfx-sheet-footer{display:flex;justify-content:space-between;align-items:center;padding:9px 24px 14px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
@@ -748,6 +757,37 @@ ${secCells}
   }).join('');
 }
 
+/* html2canvas ne dessine pas les « … » de text-overflow : il coupe le texte en
+   plein glyphe (« NATHAN PETIT » devenait « NATHAN PETI »). On réduit donc la
+   taille de police des libellés à risque jusqu'à ce qu'ils tiennent vraiment.
+   Appelé pendant que la page est encore dans le DOM, donc mesurable. */
+const PDFX_FIT_SEL = '.pdfx-pilot-name,.pdfx-p-name,.pdfx-pv-name,.pdfx-rank-row .name,.pdfx-sheet-header-mini .mini-name,.pdfx-rank-header-mini .mini-name';
+function pdfxFitTexts(page) {
+  page.querySelectorAll(PDFX_FIT_SEL).forEach(el => {
+    const start = parseFloat(getComputedStyle(el).fontSize);
+    if (!Number.isFinite(start) || start <= 0) return;
+    const floor = Math.max(7, start * 0.6);
+    let size = start;
+    let guard = 40;
+    while (guard-- > 0 && size > floor && el.scrollWidth > el.clientWidth + 0.5) {
+      size -= 0.5;
+      el.style.fontSize = size + 'px';
+    }
+    // Si même à la taille plancher le nom déborde encore (noms à rallonge),
+    // on tronque le texte avec un vrai caractère « … » : html2canvas dessine
+    // celui-là, contrairement à l'ellipse CSS.
+    if (el.scrollWidth > el.clientWidth + 0.5) {
+      const full = el.textContent;
+      let cut = full.length;
+      let g2 = 200;
+      while (g2-- > 0 && cut > 1 && el.scrollWidth > el.clientWidth + 0.5) {
+        cut -= 1;
+        el.textContent = full.slice(0, cut).replace(/[\s\-]+$/, '') + '\u2026';
+      }
+    }
+  });
+}
+
 /* Mesure hors écran : on ajoute les lignes une par une jusqu'à ce que la
    feuille dépasse la hauteur utile d'une page A4, puis on bascule. */
 function pdfxMeasureFill(page, bodySel, sheetSel, budgetPx, remaining, rowsHTML, emptyHTML) {
@@ -764,6 +804,7 @@ function pdfxMeasureFill(page, bodySel, sheetSel, budgetPx, remaining, rowsHTML,
     if (sheet.getBoundingClientRect().height > budgetPx && placed > 0) { body.lastElementChild.remove(); break; }
     placed++; remaining.shift();
   }
+  pdfxFitTexts(page);
   document.body.removeChild(page);
   // IMPORTANT : retirer le positionnement de mesure, sinon html2canvas
   // capture une page vide (position:fixed sort du flux du conteneur).
@@ -781,7 +822,10 @@ function pdfxPlace(pdf, canvas, g, isFirst, t) {
   const imgH = canvas.height * g.pageW / canvas.width;
   const scale = imgH > g.pageH ? g.pageH / imgH : 1;
   const dw = g.pageW * scale, dh = imgH * scale;
-  pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (g.pageW - dw) / 2, 0, dw, dh);
+  // JPEG plutôt que PNG : le fond est opaque (pas de transparence à préserver) et
+  // le PNG produisait des fichiers de ~12 Mo par page — impossibles à partager.
+  // À qualité 0.94 et scale 2.5, le texte reste net pour ~1/10e du poids.
+  pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', (g.pageW - dw) / 2, 0, dw, dh);
 }
 
 /* ==================================================================
