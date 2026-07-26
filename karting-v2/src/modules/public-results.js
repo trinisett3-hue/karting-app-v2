@@ -739,15 +739,19 @@ function ensurePdfStyles() {
 /* Tableau des tours */
 .pdfx-tbl-wrap{padding:16px 24px 20px}
 .pdfx-tbl-head{display:grid;grid-template-columns:.7fr 1.1fr 1fr 1fr 1fr 1fr;padding:0 10px 8px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted);border-bottom:1px solid var(--c-border)}
-.pdfx-tbl-head span:first-child{text-align:center}
+/* Toutes les colonnes de métriques (Tour/Temps/Écart/Inter N) centrées : avant,
+   seule la 1re (Tour) l'était, ce qui décalait visuellement l'en-tête par
+   rapport aux valeurs et laissait la pastille « MEILLEUR » collée à gauche
+   de sa colonne plutôt que centrée dans son cadre. */
+.pdfx-tbl-head span{text-align:center}
 .pdfx-tbl-body{border-radius:8px;margin-top:2px}
 .pdfx-tbl-row{display:grid;grid-template-columns:.7fr 1.1fr 1fr 1fr 1fr 1fr;align-items:center;padding:9px 10px;font-size:13px;color:var(--c-text);border-bottom:1px solid var(--c-border)}
 .pdfx-tbl-row:nth-child(even){background:var(--c-surface-2)}
 .pdfx-tbl-row:last-child{border-bottom:none}
 .pdfx-tbl-row .pos{text-align:center;font-family:var(--font-display);font-weight:700;font-style:italic;font-size:16px;color:var(--c-muted)}
-.pdfx-tbl-row .time{font-weight:700}
-.pdfx-tbl-row .gap{color:var(--c-muted)}
-.pdfx-tbl-row .sec{color:var(--c-muted);text-align:left}
+.pdfx-tbl-row .time{font-weight:700;text-align:center}
+.pdfx-tbl-row .gap{color:var(--c-muted);text-align:center}
+.pdfx-tbl-row .sec{color:var(--c-muted);text-align:center}
 .pdfx-tbl-wrap.sec-0 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-0 .pdfx-tbl-row{grid-template-columns:.5fr 1fr 1fr}
 .pdfx-tbl-wrap.sec-1 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-1 .pdfx-tbl-row{grid-template-columns:.6fr 1.1fr 1fr 1fr}
 .pdfx-tbl-wrap.sec-2 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-2 .pdfx-tbl-row{grid-template-columns:.65fr 1.1fr 1fr 1fr 1fr}
