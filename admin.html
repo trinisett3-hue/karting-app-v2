@@ -417,7 +417,7 @@ updateThemeToggleUI();
 <div class="field"><label>Apparence &amp; personnalisation</label>
 <div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--bord);padding-bottom:8px">
 <button type="button" class="subtab-btn active" data-subtab="theme" onclick="switchAppearanceSubtab('theme')" style="background:none;border:none;color:var(--txt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid var(--acc)">Thème</button>
-<button type="button" class="subtab-btn" data-subtab="avatars" onclick="switchAppearanceSubtab('avatars')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Avatars karts</button>
+<button type="button" class="subtab-btn" data-subtab="avatars" onclick="switchAppearanceSubtab('avatars')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Avatars</button>
 </div>
 <div id="appearance-subtab-theme">
 <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
@@ -468,7 +468,7 @@ Le plan du circuit est reserve au plan <strong>Premium</strong>. Passe au plan s
 </div>
 </div>
 <div id="appearance-subtab-avatars" style="display:none">
-<div style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px">Chaque pilote reçoit automatiquement l'avatar de son kart : le <b style="color:var(--txt)">numéro affiché est celui du kart</b>, et la couleur est propre à chaque numéro (identique d'une session à l'autre). Voici les avatars de ta flotte :</div>
+<div id="kart-avatars-intro" style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px"></div>
 <div id="kart-avatars-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:10px"></div>
 </div>
 </div>
