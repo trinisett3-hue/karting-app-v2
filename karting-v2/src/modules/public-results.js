@@ -485,8 +485,82 @@ function pdfxGeom(orient) {
   };
 }
 
+/* ------------------------------------------------------------------
+   Encre lisible sur fond --c-accent.
+
+   Certains thèmes définissent --c-gap-text (l'encre du badge d'écart)
+   avec la même valeur que --c-accent : sur le thème « carbon », les
+   deux valent #c9a84c. Tout élément qui peignait --c-gap-text sur un
+   fond --c-accent sortait donc doré sur doré, donc illisible (ligne du
+   meilleur tour de la fiche pilote, carré d'initiale du circuit,
+   sélecteur Portrait/Paysage actif).
+
+   On ne se repose plus sur une variable de thème : on calcule l'encre
+   à partir de la luminance réelle de l'accent, ce qui reste juste quel
+   que soit le thème, présent ou futur.
+   ------------------------------------------------------------------ */
+let PDX_ACCENT_IS_LIGHT = false;
+
+function pdxParseColor(str) {
+  const s = String(str || '').trim();
+  let m = /^#([0-9a-f]{3})$/i.exec(s);
+  if (m) return [0, 1, 2].map(i => parseInt(m[1][i] + m[1][i], 16));
+  m = /^#([0-9a-f]{6})$/i.exec(s);
+  if (m) return [0, 2, 4].map(i => parseInt(m[1].substr(i, 2), 16));
+  m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(s);
+  if (m) return [1, 2, 3].map(i => Math.round(parseFloat(m[i])));
+  return null;
+}
+
+function pdxRelLuminance(rgb) {
+  const lin = rgb.map(v => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  });
+  return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+}
+
+const PDX_INK_DARK = '#141414';
+const PDX_INK_LIGHT = '#ffffff';
+/* Seuil WCAG AA pour du texte gras / grande taille — c'est exactement la
+   nature des éléments concernés (13 à 16 px en gras, pastille en 800). */
+const PDX_MIN_RATIO = 3;
+
+function pdxContrast(l1, l2) {
+  return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+}
+
+/* Recalcule --pdx-on-accent. Appelé avant chaque construction de PDF et
+   à l'initialisation du sélecteur de format : le thème peut changer en
+   cours de session sans rechargement.
+
+   Règle : on garde le blanc dès qu'il est suffisamment lisible — c'est le
+   rendu actuel sur « classic », il n'y a aucune raison de le changer — et
+   on ne bascule sur une encre sombre que lorsque le blanc ne passe plus,
+   ce qui est le cas de l'or de « carbon » (rapport 2,3) et du cyan de
+   « neon » (rapport 1,8, déjà traité en sombre aujourd'hui). */
+function syncPdfOnAccentInk() {
+  try {
+    const root = document.documentElement;
+    const cs = getComputedStyle(root);
+    const rgb = pdxParseColor(cs.getPropertyValue('--c-accent')) || [255, 213, 74];
+    const la = pdxRelLuminance(rgb);
+    const useLight = pdxContrast(la, pdxRelLuminance([255, 255, 255])) >= PDX_MIN_RATIO;
+    PDX_ACCENT_IS_LIGHT = !useLight;
+    root.style.setProperty('--pdx-on-accent', useLight ? PDX_INK_LIGHT : PDX_INK_DARK);
+  } catch (_) { /* pas de DOM : rien à synchroniser */ }
+}
+
+/* Sur accent clair, la pastille « MEILLEUR » doit être assombrie et non
+   éclaircie, sinon elle disparaît elle aussi dans le fond. */
+function pdxPageClass(landscape) {
+  return 'pdfx-page ' + (landscape ? 'landscape' : 'portrait') +
+    (PDX_ACCENT_IS_LIGHT ? ' pdfx-dark-pill' : '');
+}
+
 let PDF_STYLES_INJECTED = false;
 function ensurePdfStyles() {
+  syncPdfOnAccentInk();
   if (PDF_STYLES_INJECTED) return;
   const style = document.createElement('style');
   style.id = 'pdfx-styles';
@@ -631,7 +705,7 @@ function ensurePdfStyles() {
 .pdfx-circuit-meta{display:flex;flex-direction:column;gap:2px;margin-top:2px;align-items:flex-end}
 .pdfx-circuit-meta .item{display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-circuit-meta .item svg{width:10px;height:10px;stroke:var(--c-accent);flex-shrink:0}
-.pdfx-circuit-logo{flex-shrink:0;width:30px;height:30px;border-radius:8px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--c-gap-text,#fff)}
+.pdfx-circuit-logo{flex-shrink:0;width:30px;height:30px;border-radius:8px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--pdx-on-accent,#fff)}
 
 /* Tableau des tours */
 .pdfx-tbl-wrap{padding:16px 24px 20px}
@@ -649,7 +723,7 @@ function ensurePdfStyles() {
 .pdfx-tbl-wrap.sec-1 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-1 .pdfx-tbl-row{grid-template-columns:.6fr 1.1fr 1fr 1fr}
 .pdfx-tbl-wrap.sec-2 .pdfx-tbl-head,.pdfx-tbl-wrap.sec-2 .pdfx-tbl-row{grid-template-columns:.65fr 1.1fr 1fr 1fr 1fr}
 .pdfx-tbl-row.best{background:var(--c-accent) !important;position:relative}
-.pdfx-tbl-row.best .pos,.pdfx-tbl-row.best .time,.pdfx-tbl-row.best .gap,.pdfx-tbl-row.best .sec{color:var(--c-gap-text,#fff)}
+.pdfx-tbl-row.best .pos,.pdfx-tbl-row.best .time,.pdfx-tbl-row.best .gap,.pdfx-tbl-row.best .sec{color:var(--pdx-on-accent,#fff)}
 .pdfx-best-pill{display:inline-block;font-size:9.5px;font-weight:800;letter-spacing:.05em;white-space:nowrap;background:rgba(255,255,255,.22);padding:3px 8px;border-radius:5px;line-height:1.15}
 .pdfx-dark-pill .pdfx-best-pill{background:rgba(0,0,0,.16)}
 
@@ -932,7 +1006,7 @@ export async function downloadFullPDF(btn) {
       const isFirst = pageIndex === 0;
       const headMini = `<div class="pdfx-rank-header-mini"><span class="mini-name">${title}</span><span class="mini-tag">Suite du classement</span><span class="mini-page" data-pdfx-pageno></span></div>`;
       const page = document.createElement('div');
-      page.className = 'pdfx-page ' + (g.landscape ? 'landscape' : 'portrait');
+      page.className = pdxPageClass(g.landscape);
       const rankWrap = `<div class="pdfx-rank-wrap">${isFirst ? '<div class="pdfx-rank-title">Classement complet</div>' : ''}${pdfxRankHeadHTML(showSec)}<div class="pdfx-rank-body"></div></div>`;
       const bodyInner = (g.landscape && isFirst) ? pdfxPodiumColHTML(results.slice(0, 3)) + rankWrap : rankWrap;
       page.innerHTML = `<div class="pdfx-sheet">${isFirst ? headBand + (!g.landscape ? pdfxPodiumHTML(results.slice(0, 3)) : '') : headMini}<div class="pdfx-body-wrap">${bodyInner}</div>${footer}</div>`;
@@ -1034,7 +1108,7 @@ ${PDFX_SVG_CLOCK}
       const isFirst = pageIndex === 0;
       const headMini = `<div class="pdfx-sheet-header-mini"><span class="mini-name">${escapeHTML(pilot.name)} — Kart ${pilot.kart ?? '-'}</span><span class="mini-tag">Suite du tableau des tours</span><span class="mini-page" data-pdfx-pageno></span></div>`;
       const page = document.createElement('div');
-      page.className = 'pdfx-page ' + (g.landscape ? 'landscape' : 'portrait');
+      page.className = pdxPageClass(g.landscape);
       const tblWrap = `<div class="pdfx-tbl-wrap sec-${sectorsPresent.length}">${pdfxTblHeadHTML(sectorsPresent.length)}<div class="pdfx-tbl-body"></div></div>`;
       page.innerHTML = `<div class="pdfx-sheet"><div class="pdfx-topbar"></div>${isFirst ? headHTML : headMini}${tblWrap}${footer}</div>`;
       pdfxMeasureFill(page, '.pdfx-tbl-body', '.pdfx-sheet', g.budgetPx, remaining,
@@ -1067,6 +1141,7 @@ ${PDFX_SVG_CLOCK}
    ================================================================== */
 function initPdfOrientControl(btn) {
   if (!btn || !btn.parentElement || document.getElementById('pdfx-orient')) return;
+  syncPdfOnAccentInk();
   const wrap = document.createElement('div');
   wrap.id = 'pdfx-orient';
   wrap.setAttribute('role', 'group');
@@ -1087,7 +1162,7 @@ function initPdfOrientControl(btn) {
     buttons.forEach(b => {
       const on = b.dataset.pdfxOrient === PDF_ORIENT;
       b.style.background = on ? 'var(--c-accent)' : 'transparent';
-      b.style.color = on ? 'var(--c-gap-text, #fff)' : 'var(--c-muted)';
+      b.style.color = on ? 'var(--pdx-on-accent, #fff)' : 'var(--c-muted)';
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   }
