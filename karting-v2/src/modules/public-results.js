@@ -548,8 +548,37 @@ function syncPdfOnAccentInk() {
     const useLight = pdxContrast(la, pdxRelLuminance([255, 255, 255])) >= PDX_MIN_RATIO;
     PDX_ACCENT_IS_LIGHT = !useLight;
     root.style.setProperty('--pdx-on-accent', useLight ? PDX_INK_LIGHT : PDX_INK_DARK);
+    pdxObserveTheme();
   } catch (_) { /* pas de DOM : rien à synchroniser */ }
 }
+
+/* Le thème n'est PAS connu au chargement : results.html part sur
+   data-theme="classic" et initTheme() ne remplace l'attribut qu'après la
+   lecture de app_settings, donc bien après l'initialisation du sélecteur de
+   format. Une synchronisation unique à l'init lisait donc le rouge de
+   « classic » (contraste 3,74 sur blanc, le blanc passe) et figeait l'encre
+   sur blanc — puis « carbon » arrivait et le bouton actif du sélecteur
+   redevenait doré sur doré. Les PDF eux-mêmes étaient corrects, parce que
+   ensurePdfStyles() resynchronise avant chaque export.
+
+   On surveille donc data-theme et on resynchronise à chaque changement. Comme
+   les règles concernées pointent var(--pdx-on-accent), la correction de la
+   variable suffit : le navigateur repeint tout seul. */
+let PDX_THEME_OBSERVED = false;
+
+function pdxObserveTheme() {
+  if (PDX_THEME_OBSERVED || typeof MutationObserver !== 'function') return;
+  PDX_THEME_OBSERVED = true;
+  new MutationObserver(syncPdfOnAccentInk).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+}
+
+/* On amorce dès le chargement du module, sans attendre ni le sélecteur de
+   format ni un premier export : l'observateur est ainsi en place quel que soit
+   le chemin d'entrée, y compris sur une page qui n'a pas de bouton PDF. */
+if (typeof document !== 'undefined' && document.documentElement) syncPdfOnAccentInk();
 
 /* Sur accent clair, la pastille « MEILLEUR » doit être assombrie et non
    éclaircie, sinon elle disparaît elle aussi dans le fond. */

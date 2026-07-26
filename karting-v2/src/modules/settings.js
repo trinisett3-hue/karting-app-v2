@@ -26,11 +26,26 @@ return kartAvatarSVG(kart);
 
 // Couleurs des 3 thèmes (identiques à results.html) — pour l'aperçu en direct, l'admin
 // n'étant pas lui-même thémé.
+//
+// gapBg / gapText sont les valeurs réelles de --c-gap-bg / --c-gap-text de
+// results.html. L'aperçu peignait auparavant le badge d'écart en blanc sur un
+// fond accent en dur : sur « carbon » cela donnait du blanc sur or (contraste
+// 2,3) et surtout une pastille pleine, alors que la vraie page affiche une
+// pastille transparente bordée d'or. L'aperçu est maintenant fidèle.
 const THEME_COLORS = {
-classic: { bg: '#050608', surf: '#0d0f14', mut: '#7a7d8a', acc: '#ff2a2a', text: '#f4f5f8', p2: 'rgba(255,255,255,.28)', p3: 'rgba(184,134,90,.6)' },
-neon: { bg: '#060810', surf: '#0b0e18', mut: '#6a7a9a', acc: '#00d4ff', text: '#f0f4ff', p2: 'rgba(255,0,128,.5)', p3: 'rgba(255,0,128,.3)' },
-carbon: { bg: '#111214', surf: '#181a1e', mut: '#8a8880', acc: '#c9a84c', text: '#f5f0e8', p2: 'rgba(180,180,180,.35)', p3: 'rgba(150,110,70,.5)' },
+classic: { bg: '#050608', surf: '#0d0f14', mut: '#7a7d8a', acc: '#ff2a2a', text: '#f4f5f8', p2: 'rgba(255,255,255,.28)', p3: 'rgba(184,134,90,.6)', gapBg: '#ff2a2a', gapText: '#fff' },
+neon: { bg: '#060810', surf: '#0b0e18', mut: '#6a7a9a', acc: '#00d4ff', text: '#f0f4ff', p2: 'rgba(255,0,128,.5)', p3: 'rgba(255,0,128,.3)', gapBg: '#00d4ff', gapText: '#060810' },
+carbon: { bg: '#111214', surf: '#181a1e', mut: '#8a8880', acc: '#c9a84c', text: '#f5f0e8', p2: 'rgba(180,180,180,.35)', p3: 'rgba(150,110,70,.5)', gapBg: 'transparent', gapText: '#c9a84c' },
 };
+
+// Libellé du style d'avatar courant, utilisé dans les textes explicatifs pour
+// qu'ils ne parlent plus systématiquement du kart.
+function avatarModeLabel() {
+const mode = document.getElementById('pref-avatar-mode')?.value || state.prefs.avatar_mode || 'kart';
+if (mode === 'pilot_kart') return { gal: 'le buste du pilote avec le numéro de son kart', apercu: 'le buste pilote avec son numéro de kart' };
+if (mode === 'pilot') return { gal: 'le buste du pilote, sans numéro', apercu: 'le buste pilote, sans numéro' };
+return { gal: "l'avatar de son kart, coloré selon le numéro", apercu: "l'avatar de son kart" };
+}
 
 export function updateDefaultsInfo() {
 const el = document.getElementById('s-defaults-info');
@@ -364,7 +379,7 @@ ${av(d.kart)}
 <div style="font-weight:900;font-style:italic;font-size:11px;color:${t.text}">${d.name}</div>
 <div style="display:flex;justify-content:space-between;align-items:center;margin-top:2px">
 <span style="font-size:8px;color:${t.mut}">KART ${d.kart}</span>
-<span style="font-size:8px;font-weight:800;color:#fff;background:${t.acc};padding:1px 5px;border-radius:4px">${d.gap}</span>
+<span style="font-size:8px;font-weight:800;color:${t.gapText};background:${t.gapBg};border:1px solid ${t.acc};padding:1px 5px;border-radius:4px">${d.gap}</span>
 </div>
 </div>
 </div>`).join('');
@@ -373,7 +388,7 @@ const rowsHTML = rows.map((d) => `
 <span style="font-weight:900;font-style:italic;font-size:13px;color:${t.mut}">${d.pos}</span>
 <div style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:${t.bg};display:flex;align-items:center;justify-content:center">${previewAvatarSVG(d.kart)}</div>
 <div><div style="font-weight:800;font-style:italic;font-size:11px;color:${t.text}">${d.name}</div><div style="font-size:8px;color:${t.mut}">KART ${d.kart}</div></div>
-<span style="font-size:9px;font-weight:800;color:${t.text};background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px">${d.gap}</span>
+<span style="font-size:9px;font-weight:800;color:${t.gapText};background:${t.gapBg};border:1px solid ${t.acc};padding:2px 6px;border-radius:4px">${d.gap}</span>
 </div>`).join('');
 box.style.cssText = `background:${t.bg};border:1px solid ${t.acc}44;border-radius:12px;padding:12px;box-shadow:inset 0 0 40px ${t.acc}14`;
 box.innerHTML = `
@@ -383,13 +398,23 @@ box.innerHTML = `
 </div>
 <div style="display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:6px;align-items:end;margin-bottom:10px">${podHTML}</div>
 <div style="background:${t.surf};border:1px solid rgba(255,255,255,.08);border-radius:6px;overflow:hidden">${rowsHTML}</div>
-<div style="margin-top:8px;font-size:8px;color:${t.mut};text-transform:uppercase;letter-spacing:.08em">Aperçu fidèle — chaque pilote affiche l'avatar de son kart</div>`;
+<div style="margin-top:8px;font-size:8px;color:${t.mut};text-transform:uppercase;letter-spacing:.08em">Aperçu fidèle — chaque pilote affiche ${avatarModeLabel().apercu}</div>`;
 }
 
 // Galerie des avatars de la flotte (numéros de karts configurés, sinon 1→défaut).
 export function renderKartAvatarGallery() {
 const wrap = document.getElementById('kart-avatars-gallery');
 if (!wrap) return;
+// Le texte d'intro dépend du style d'avatar choisi dans l'onglet Thème : il
+// parlait toujours du kart, même en mode « Pilote seul » où aucun numéro
+// n'est affiché.
+const intro = document.getElementById('kart-avatars-intro');
+if (intro) {
+intro.innerHTML = 'Chaque pilote reçoit automatiquement son avatar selon le ' +
+'<b style="color:var(--txt)">style choisi dans l\'onglet Thème</b> — actuellement ' +
+avatarModeLabel().gal + ' (identique d\'une session à l\'autre). ' +
+'Voici le rendu pour les numéros de ta flotte :';
+}
 let nums = (state.prefs.kart_numbers || []).slice().sort((a, b) => a - b);
 if (!nums.length) {
 const max = Math.min(24, Number(state.prefs.default_karts) || 12);
