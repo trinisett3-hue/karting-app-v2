@@ -12,7 +12,17 @@ import { state, setPrefs, markPrefsDirty } from '../state.js';
 import { showMsg } from './ui.js';
 import { toggleSectorsField } from './results.js';
 import { kartAvatarSVG } from './kart-avatar.js';
+import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature } from './plan.js';
+
+// Génère l'avatar (kart ou pilote) utilisé dans les aperçus Paramètres, selon le style
+// actuellement sélectionné (même logique que public-results.js > genAvatarSVG).
+function previewAvatarSVG(kart) {
+const mode = document.getElementById('pref-avatar-mode')?.value || state.prefs.avatar_mode || 'kart';
+if (mode === 'pilot_kart') return pilotAvatarSVG(kart, kart);
+if (mode === 'pilot') return pilotAvatarSVG(kart, null, { hidePlate: true });
+return kartAvatarSVG(kart);
+}
 
 // Couleurs des 3 thèmes (identiques à results.html) — pour l'aperçu en direct, l'admin
 // n'étant pas lui-même thémé.
@@ -50,6 +60,7 @@ if (!Array.isArray(state.prefs.kart_numbers)) state.prefs.kart_numbers = [];
 state.prefs.sectors_enabled = !!state.prefs.sectors_enabled;
 state.prefs.sector_count = Number(state.prefs.sector_count || 3);
 state.prefs.results_theme = state.prefs.results_theme || 'classic';
+state.prefs.avatar_mode = state.prefs.avatar_mode || 'kart';
 
 renderLogoPreview();
 renderTrackMapPreview();
@@ -67,6 +78,11 @@ const sel = document.getElementById('pref-results-theme');
 if (sel) sel.value = state.prefs.results_theme;
 document.querySelectorAll('.theme-option-row').forEach((r) => {
 r.style.borderColor = r.dataset.themeVal === state.prefs.results_theme ? 'var(--acc)' : 'var(--bord)';
+});
+const avSel = document.getElementById('pref-avatar-mode');
+if (avSel) avSel.value = state.prefs.avatar_mode;
+document.querySelectorAll('.avatar-mode-row').forEach((r) => {
+r.style.borderColor = r.dataset.avatarVal === state.prefs.avatar_mode ? 'var(--acc)' : 'var(--bord)';
 });
 renderResultsPreview();
 renderKartAvatarGallery();
@@ -309,6 +325,19 @@ renderResultsPreview(val);
 markPrefsDirty();
 }
 
+// Style d'avatar : 'kart' (dessin par numéro de kart, actuel), 'pilot_kart' (buste pilote
+// illustré + numéro de kart affiché) ou 'pilot' (même buste, sans numéro).
+export function selectAvatarMode(val) {
+const sel = document.getElementById('pref-avatar-mode');
+if (sel) sel.value = val;
+document.querySelectorAll('.avatar-mode-row').forEach((r) => {
+r.style.borderColor = r.dataset.avatarVal === val ? 'var(--acc)' : 'var(--bord)';
+});
+renderResultsPreview();
+renderKartAvatarGallery();
+markPrefsDirty();
+}
+
 // Aperçu en direct de la PAGE 1 des résultats (podium + top) avec le thème choisi et les
 // vrais avatars kart — rendu dans la zone de droite des Paramètres.
 export function renderResultsPreview(theme) {
@@ -324,7 +353,7 @@ const rows = [
 { pos: 4, kart: 9, name: 'PILOTE 4', gap: '+9.4' },
 { pos: 5, kart: 2, name: 'PILOTE 5', gap: '+12.1' },
 ];
-const av = (k) => `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${kartAvatarSVG(k)}</div>`;
+const av = (k) => `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${previewAvatarSVG(k)}</div>`;
 const podHTML = podium.map((d) => `
 <div style="display:flex;flex-direction:column;background:${t.surf};border:1px solid ${d.border};border-radius:8px;overflow:hidden;${d.first ? 'box-shadow:0 0 16px ' + t.acc + '55;' : 'margin-top:14px;'}">
 <div style="position:relative;flex:1;min-height:${d.first ? '92' : '74'}px;display:flex;align-items:center;justify-content:center;padding:6px">
@@ -342,7 +371,7 @@ ${av(d.kart)}
 const rowsHTML = rows.map((d) => `
 <div style="display:grid;grid-template-columns:20px 26px 1fr auto;gap:7px;align-items:center;padding:5px 8px;border-top:1px solid rgba(255,255,255,.06)">
 <span style="font-weight:900;font-style:italic;font-size:13px;color:${t.mut}">${d.pos}</span>
-<div style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:${t.bg};display:flex;align-items:center;justify-content:center">${kartAvatarSVG(d.kart)}</div>
+<div style="width:26px;height:26px;border-radius:50%;overflow:hidden;background:${t.bg};display:flex;align-items:center;justify-content:center">${previewAvatarSVG(d.kart)}</div>
 <div><div style="font-weight:800;font-style:italic;font-size:11px;color:${t.text}">${d.name}</div><div style="font-size:8px;color:${t.mut}">KART ${d.kart}</div></div>
 <span style="font-size:9px;font-weight:800;color:${t.text};background:rgba(255,255,255,.08);padding:2px 6px;border-radius:4px">${d.gap}</span>
 </div>`).join('');
@@ -368,7 +397,7 @@ nums = Array.from({ length: max }, (_, i) => i + 1);
 }
 wrap.innerHTML = nums.map((n) => `
 <div style="background:var(--surf2);border:1px solid var(--bord);border-radius:10px;padding:8px 4px;text-align:center">
-<div style="width:52px;height:54px;margin:0 auto">${kartAvatarSVG(n)}</div>
+<div style="width:52px;height:54px;margin:0 auto">${previewAvatarSVG(n)}</div>
 <div style="font-size:10px;font-weight:700;color:var(--mut);margin-top:4px">KART ${n}</div>
 </div>`).join('');
 }
@@ -389,6 +418,7 @@ kart_numbers: state.prefs.kart_numbers || [],
 sectors_enabled: !!document.getElementById('pref-sectors-enabled')?.checked,
 sector_count: Number(document.getElementById('pref-sector-count')?.value || 3),
 results_theme: document.getElementById('pref-results-theme')?.value || 'classic',
+avatar_mode: document.getElementById('pref-avatar-mode')?.value || 'kart',
 logo_url: state.prefs.logo_url || null,
 track_map_url: state.prefs.track_map_url || null,
 });

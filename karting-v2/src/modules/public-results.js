@@ -4,6 +4,7 @@
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
 import { kartAvatarSVG, kartAvatarDataURL } from './kart-avatar.js';
+import { pilotAvatarSVG, pilotAvatarDataURL } from './pilot-avatar.js';
 
 const FLAGS = { FR: '🇫🇷', BE: '🇧🇪', LU: '🇱🇺', DE: '🇩🇪', CH: '🇨🇭', NL: '🇳🇱', IT: '🇮🇹', ES: '🇪🇸', GB: '🇬🇧', US: '🇺🇸', OTHER: '🏁' };
 const PAGE1MAX = 10;
@@ -18,6 +19,26 @@ let currentPage = 1;
 let PDF_SHOW_SECTORS = false;
 function sectorsEnabled() { return PDF_SHOW_SECTORS !== false; }
 
+// Réglage « Apparence des avatars » (Paramètres › Apparence), lu depuis app_settings.global.
+//   'kart'       (défaut) : avatar kart existant, un dessin par numéro de kart.
+//   'pilot_kart' : nouveau jeu de bustes pilote illustrés, numéro de kart affiché dessus.
+//   'pilot'      : même jeu de bustes pilote, sans numéro affiché (combinaison neutre).
+let PDF_AVATAR_MODE = 'kart';
+
+// Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
+// <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
+function genAvatarDataURL(kart) {
+  if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarDataURL(kart, kart);
+  if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarDataURL(kart, null, { hidePlate: true });
+  return kartAvatarDataURL(kart);
+}
+// Même chose en SVG inline (utilisé pour les placeholders sans photo sur la page web).
+function genAvatarSVG(kart, opts) {
+  if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarSVG(kart, kart, opts);
+  if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarSVG(kart, null, { ...opts, hidePlate: true });
+  return kartAvatarSVG(kart, opts);
+}
+
 /* ------------------------------------------------------------------
 THEME — Lu depuis app_settings (key='global'), défini dans
 admin.html > Paramètres > Apparence.
@@ -27,6 +48,7 @@ const MAP = { classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon
 db.from('app_settings').select('value').eq('key', 'global').maybeSingle().then(({ data }) => {
 const theme = data && data.value && data.value.results_theme;
 PDF_SHOW_SECTORS = !!(data && data.value && data.value.sectors_enabled);
+PDF_AVATAR_MODE = (data && data.value && data.value.avatar_mode) || 'kart';
 if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
 
 const logoUrl = data && data.value && data.value.logo_url;
@@ -73,15 +95,32 @@ function flagOf(nat) { return FLAGS[nat] || FLAGS.OTHER; }
 
 // Avatar du podium : la photo du pilote si elle existe, sinon l'avatar kart (dessin
 // coloré selon le numéro de kart, avec ce numéro affiché dessus).
-function avatarHTML(src, kart, alt, cls = '') {
-if (src) {
-return `<img class="pilot-avatar ${cls}" src="${src}" alt="${alt}" loading="lazy" crossorigin="anonymous" width="200" height="280">`;
+// Un `src` invalide (chaîne vide, "null" littérale, URL cassée) laissait
+// avant un <img> vide affiché comme un simple rond sombre — cercles noirs
+// vus sur le site au lieu de l'avatar kart illustré. On valide la chaîne
+// ET on pose un onerror qui bascule sur l'avatar kart si le chargement
+// échoue quand même (photo supprimée du storage, etc.).
+function pdfxLikeValidSrc(src) {
+const p = typeof src === 'string' ? src.trim() : '';
+const bad = !p || p.toLowerCase() === 'null' || p.toLowerCase() === 'undefined';
+const looksLikeUrl = /^(https?:)?\/\//.test(p) || p.startsWith('data:') || p.startsWith('/');
+return (!bad && looksLikeUrl) ? p : '';
 }
-return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${kartAvatarSVG(kart, { title: alt })}</div>`;
+function avatarHTML(src, kart, alt, cls = '') {
+const p = pdfxLikeValidSrc(src);
+if (p) {
+const fallback = genAvatarDataURL(kart);
+return `<img class="pilot-avatar ${cls}" src="${p}" alt="${alt}" loading="lazy" crossorigin="anonymous" width="200" height="280" onerror="this.onerror=null;this.src='${fallback}'">`;
+}
+return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${genAvatarSVG(kart, { title: alt })}</div>`;
 }
 function rankAvatarHTML(src, kart) {
-if (src) return `<img src="${src}" alt="" loading="lazy" crossorigin="anonymous" width="57" height="57">`;
-return `<div class="rank-avatar-placeholder kart">${kartAvatarSVG(kart)}</div>`;
+const p = pdfxLikeValidSrc(src);
+if (p) {
+const fallback = genAvatarDataURL(kart);
+return `<img src="${p}" alt="" loading="lazy" crossorigin="anonymous" width="57" height="57" onerror="this.onerror=null;this.src='${fallback}'">`;
+}
+return `<div class="rank-avatar-placeholder kart">${genAvatarSVG(kart)}</div>`;
 }
 
 /* Temps stockés en SECONDES dans Supabase (colonne laps.lap_time_seconds) */
@@ -669,16 +708,39 @@ function pdfxInitial(name) {
 const PDFX_SVG_CLOCK = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>';
 const PDFX_SVG_CAL = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
 const PDFX_SVG_TAG = '<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/></svg>';
-const PDFX_SVG_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>';
 
 /* ---------- Fragments de markup — classement ---------- */
+/* Source d'avatar robuste : en production certaines lignes arrivent avec un
+   champ photo invalide (chaîne vide, "null" littérale, URL cassée/404) — le
+   <img> restait alors vide et seul le fond circulaire sombre s'affichait
+   (cercles noirs constatés en prod sur les pilotes "Unknown"). On valide la
+   chaîne ET on pose un onerror qui bascule sur l'avatar kart illustré si le
+   chargement échoue réellement (image supprimée du storage, etc.). */
+/* Renvoie la photo si c'est une vraie source utilisable, '' sinon. À tester par
+   `!!pdfxValidPhoto(photo)` — NE PAS comparer deux genAvatarDataURL() entre eux :
+   chaque appel génère un suffixe d'ids unique, donc deux avatars identiques
+   produisent des chaînes différentes. */
+function pdfxValidPhoto(photo) {
+  return pdfxLikeValidSrc(photo);
+}
+function pdfxPhotoSrc(photo, kart) {
+  return pdfxValidPhoto(photo) || genAvatarDataURL(kart);
+}
+function pdfxAvatarImg(photo, kart) {
+  const real = pdfxValidPhoto(photo);
+  const fallback = genAvatarDataURL(kart);
+  const src = real || fallback;
+  const onerr = real ? ` onerror=\"this.onerror=null;this.src='${fallback}'\"` : '';
+  return `<img src="${src}" alt=""${onerr}>`;
+}
+
 function pdfxPodiumHTML(field) {
   const cls = { 1: 'p1', 2: 'p2', 3: 'p3' };
   const order = [field[1], field[0], field[2]].filter(Boolean);
   return `<div class="pdfx-podium">${order.map(d => `
 <div class="pdfx-p-card ${cls[d.pos] || ''}">
 <div class="pdfx-p-rank">${d.pos}</div>
-<div class="pdfx-p-avatar"><img src="${d.photo || kartAvatarDataURL(d.kart)}" alt=""></div>
+<div class="pdfx-p-avatar">${pdfxAvatarImg(d.photo, d.kart)}</div>
 <div class="pdfx-p-name">${escapeHTML(d.name)}</div>
 <div class="pdfx-p-kart">Kart ${d.kart ?? '-'}</div>
 <div class="pdfx-p-stats">
@@ -696,7 +758,7 @@ function pdfxPodiumColHTML(field) {
 ${order.map(d => `
 <div class="pdfx-pv-card ${cls[d.pos] || ''}">
 <div class="pdfx-pv-rank">${d.pos}</div>
-<div class="pdfx-pv-avatar"><img src="${d.photo || kartAvatarDataURL(d.kart)}" alt=""></div>
+<div class="pdfx-pv-avatar">${pdfxAvatarImg(d.photo, d.kart)}</div>
 <div class="pdfx-pv-info">
 <div class="pdfx-pv-name">${escapeHTML(d.name)}</div>
 <div class="pdfx-pv-meta"><span>Kart <b>${d.kart ?? '-'}</b></span><span>Tours <b>${d.hasTime ? d.lapsCount : '--'}</b></span><span>Meill. <b>${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</b></span></div>
@@ -726,7 +788,7 @@ function pdfxRankRowsHTML(chunk, showSec) {
   return chunk.map(d => `
 <div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}">
 <span class="pos">${d.pos}</span>
-<span class="av"><img src="${d.photo || kartAvatarDataURL(d.kart)}" alt=""></span>
+<span class="av">${pdfxAvatarImg(d.photo, d.kart)}</span>
 <span class="name">${escapeHTML(d.name)}</span>
 <span class="kart">#${d.kart ?? '-'}</span>
 <span class="laps">${d.hasTime ? d.lapsCount : '--'}</span>
@@ -919,15 +981,24 @@ export async function downloadPilotPDF(pilot, btn) {
     const dateShort = escapeHTML(sessionInfo && sessionInfo.session_date
       ? new Date(sessionInfo.session_date + 'T12:00:00').toLocaleDateString('fr-FR')
       : '--');
-    const photoInner = pilot.photo
-      ? `<img src="${pilot.photo}" alt="">`
-      : PDFX_SVG_USER;
+    /* Dernier endroit qui utilisait encore `pilot.photo ? ... : ...` brut : même
+       défaut que les cercles noirs vus en prod (une photo "null"/cassée donnait un
+       <img> vide), et en plus une silhouette grise générique au lieu de l'avatar
+       illustré utilisé partout ailleurs. On passe donc par pdfxAvatarImg().
+       Le petit badge kart n'est affiché que s'il y a une vraie photo : sans photo,
+       la grande vignette EST déjà l'avatar et porte le numéro, le badge ferait
+       doublon. */
+    const hasRealPhoto = !!pdfxValidPhoto(pilot.photo);
+    const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart);
+    const kartBadge = hasRealPhoto
+      ? `<div class="pdfx-kart-badge"><img src="${genAvatarDataURL(pilot.kart)}" alt=""></div>`
+      : '';
 
     const headHTML = `
 <div class="pdfx-fp-header">
 <div class="pdfx-photo-wrap">
 <div class="pdfx-photo">${photoInner}</div>
-<div class="pdfx-kart-badge"><img src="${kartAvatarDataURL(pilot.kart)}" alt=""></div>
+${kartBadge}
 </div>
 <div class="pdfx-id-block">
 <div class="pdfx-pilot-name">${escapeHTML(pilot.name)}</div>
