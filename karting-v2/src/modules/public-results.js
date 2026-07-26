@@ -413,7 +413,30 @@ setTimeout(fin, 3000);
 })
 ));
 await new Promise(r => setTimeout(r, 80));
-const canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
+// --- Correctif metriques de police html2canvas -------------------------
+// html2canvas 1.x calcule la ligne de base de CHAQUE police via
+// FontMetrics.parseMetrics() : il cree un <div> cache contenant un <span>
+// "Hidden Text" et une <img> GIF 1x1 en vertical-align:baseline, puis
+// deduit la baseline de (img.offsetTop - span.offsetTop + 2).
+// Or le reset global de results.html declare
+// `img{display:block;max-width:100%;height:auto}` : la sonde 1x1 devient un
+// bloc, sort du flux en ligne, offsetTop est faux -> toutes les lignes de
+// texte sont peintes trop bas puis rognees par les overflow:hidden (noms
+// "manges", colonnes non centrees verticalement).
+// On neutralise donc display:block UNIQUEMENT pour cette sonde, et seulement
+// le temps de la capture. On ne touche surtout pas a vertical-align :
+// html2canvas le repositionne lui-meme (baseline puis super) pour ses deux
+// mesures, un !important casserait le calcul.
+const h2cFix = document.createElement('style');
+h2cFix.setAttribute('data-h2c-metrics-fix', '1');
+h2cFix.textContent = 'img[width="1"][height="1"]{display:inline!important;max-width:none!important;border:0!important;margin:0!important;padding:0!important}';
+document.head.appendChild(h2cFix);
+let canvas;
+try {
+canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
+} finally {
+h2cFix.remove();
+}
 holder.innerHTML = '';
 return canvas;
 }
@@ -600,6 +623,12 @@ function ensurePdfStyles() {
   font-family:var(--font-body);box-sizing:border-box;
 }
 .pdfx-page *{box-sizing:border-box;margin:0;padding:0}
+/* Avatars PDF : voir pdfxAvatarImg() — background-size (supporte par html2canvas)
+   au lieu de object-fit (non supporte). */
+/* line-height >= 1.4 sur les libelles tronques : avec overflow:hidden et un
+   line-height normal (~1.2) la boite fait pile la hauteur de la ligne et les
+   jambages (p, g, j) se font raboter au rendu canvas. */
+.pdfx-av{display:block;width:100%;height:100%;background-size:cover;background-position:center;background-repeat:no-repeat}
 .pdfx-page.portrait{width:595px}
 .pdfx-page.landscape{width:842px}
 .pdfx-sheet{display:flex;flex-direction:column;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;overflow:hidden}
@@ -630,8 +659,8 @@ function ensurePdfStyles() {
 .pdfx-p-card.p1 .pdfx-p-avatar{width:66px;height:66px;border-color:var(--pdx-p1)}
 .pdfx-p-card.p2 .pdfx-p-avatar{border-color:var(--pdx-p2)}
 .pdfx-p-card.p3 .pdfx-p-avatar{border-color:var(--pdx-p3)}
-.pdfx-p-avatar img{width:100%;height:100%;object-fit:cover;display:block}
-.pdfx-p-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;text-transform:uppercase;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfx-p-avatar .pdfx-av{width:100%;height:100%}
+.pdfx-p-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;text-transform:uppercase;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.45}
 .pdfx-p-card.p1 .pdfx-p-name{font-size:15px}
 .pdfx-p-kart{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted);margin-top:2px}
 .pdfx-p-stats{display:flex;justify-content:center;gap:8px;margin-top:7px;padding-top:7px;border-top:1px solid var(--c-border)}
@@ -654,9 +683,9 @@ function ensurePdfStyles() {
 .pdfx-pv-card.pv1 .pdfx-pv-avatar{border-color:var(--pdx-p1);width:42px;height:42px}
 .pdfx-pv-card.pv2 .pdfx-pv-avatar{border-color:var(--pdx-p2)}
 .pdfx-pv-card.pv3 .pdfx-pv-avatar{border-color:var(--pdx-p3)}
-.pdfx-pv-avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.pdfx-pv-avatar .pdfx-av{width:100%;height:100%}
 .pdfx-pv-info{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
-.pdfx-pv-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13.5px;text-transform:uppercase;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfx-pv-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13.5px;text-transform:uppercase;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.45}
 .pdfx-pv-meta{display:flex;gap:6px;flex-wrap:wrap}
 .pdfx-pv-meta span{font-size:7.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-pv-meta b{color:var(--c-accent)}
@@ -677,8 +706,8 @@ function ensurePdfStyles() {
 .pdfx-rank-row:last-child{border-bottom:none}
 .pdfx-rank-row .pos{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;color:var(--c-muted);text-align:center;font-variant-numeric:tabular-nums}
 .pdfx-rank-row .av{width:20px;height:20px;border-radius:50%;overflow:hidden;background:var(--c-bg);border:1px solid var(--c-border)}
-.pdfx-rank-row .av img{width:100%;height:100%;object-fit:cover;display:block}
-.pdfx-rank-row .name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfx-rank-row .av .pdfx-av{width:100%;height:100%}
+.pdfx-rank-row .name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.45}
 .pdfx-rank-row .kart{color:var(--c-muted);font-size:10px;text-align:center;font-variant-numeric:tabular-nums}
 .pdfx-rank-row .laps{color:var(--c-muted);font-size:10px;text-align:center;font-variant-numeric:tabular-nums}
 .pdfx-rank-row .best{font-weight:700;font-size:10.5px;text-align:center;font-variant-numeric:tabular-nums}
@@ -712,12 +741,12 @@ function ensurePdfStyles() {
 .pdfx-fp-header::after{content:'';position:absolute;top:8px;right:8px;width:22px;height:22px;border-top:2px solid var(--c-accent);border-right:2px solid var(--c-accent);opacity:.5}
 .pdfx-photo-wrap{position:relative;width:56px;height:56px;flex-shrink:0}
 .pdfx-photo{width:56px;height:56px;border-radius:12px;overflow:hidden;border:1px solid var(--c-border);background:var(--c-surface-2);display:flex;align-items:center;justify-content:center}
-.pdfx-photo img{width:100%;height:100%;object-fit:cover;display:block}
+.pdfx-photo .pdfx-av{width:100%;height:100%}
 .pdfx-photo svg{width:28px;height:28px;stroke:var(--c-muted);opacity:.6}
 .pdfx-kart-badge{position:absolute;right:-10px;bottom:-10px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--c-surface);box-shadow:0 2px 8px rgba(0,0,0,.5);background:var(--c-bg);overflow:hidden}
-.pdfx-kart-badge img{width:100%;height:100%;object-fit:cover;display:block}
+.pdfx-kart-badge .pdfx-av{width:100%;height:100%}
 .pdfx-id-block{min-width:76px;flex:1 1 76px}
-.pdfx-pilot-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text);transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pdfx-pilot-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text);transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.4}
 .pdfx-id-meta{display:flex;gap:7px;margin-top:3px;flex-wrap:nowrap}
 .pdfx-id-meta .item{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-id-meta .item b{color:var(--c-accent);font-size:1.05em}
@@ -833,12 +862,28 @@ function pdfxValidPhoto(photo) {
 function pdfxPhotoSrc(photo, kart) {
   return pdfxValidPhoto(photo) || genAvatarDataURL(kart);
 }
+/* Rendu d'un avatar DANS UN PDF.
+   /!\ On n'utilise volontairement PAS <img style="object-fit:cover"> :
+   html2canvas 1.4.1 n'implemente tout simplement pas `object-fit` (aucune
+   occurrence dans son bundle). Il peint donc l'image a sa taille intrinseque
+   dans la boite, ce qui la recadre/decale -> "les badges avatar ne rentrent
+   pas dans les cercles". En revanche html2canvas gere `background-size` :
+   on passe donc par un <div> avec background-size:cover + position:center,
+   ce qui donne exactement le recadrage centre attendu, a l'ecran comme au PDF.
+   Bonus : on empile la photo AU-DESSUS de l'avatar genere. Si la photo ne se
+   charge pas (URL cassee, storage inaccessible, CORS), la couche du dessous
+   reste visible -> plus de cercles noirs, sans avoir besoin d'un onerror. */
+/* NB : la valeur part dans un attribut style="..." delimite par des guillemets
+   doubles -> on cite les URL CSS avec des apostrophes, sinon l'attribut HTML se
+   fermerait au premier guillemet de url("...") et le fond disparaitrait. */
+function pdfxCssUrl(u) { return `url('${String(u).replace(/['\\]/g, '\\$&')}')`; }
 function pdfxAvatarImg(photo, kart) {
   const real = pdfxValidPhoto(photo);
   const fallback = genAvatarDataURL(kart);
-  const src = real || fallback;
-  const onerr = real ? ` onerror=\"this.onerror=null;this.src='${fallback}'\"` : '';
-  return `<img src="${src}" alt=""${onerr}>`;
+  const layers = real
+    ? `${pdfxCssUrl(real)},${pdfxCssUrl(fallback)}`
+    : pdfxCssUrl(fallback);
+  return `<div class="pdfx-av" style="background-image:${layers}"></div>`;
 }
 
 function pdfxPodiumHTML(field) {
@@ -1098,7 +1143,7 @@ export async function downloadPilotPDF(pilot, btn) {
     const hasRealPhoto = !!pdfxValidPhoto(pilot.photo);
     const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart);
     const kartBadge = hasRealPhoto
-      ? `<div class="pdfx-kart-badge"><img src="${genAvatarDataURL(pilot.kart)}" alt=""></div>`
+      ? `<div class="pdfx-kart-badge"><div class="pdfx-av" style="background-image:${pdfxCssUrl(genAvatarDataURL(pilot.kart))}"></div></div>`
       : '';
 
     const headHTML = `
