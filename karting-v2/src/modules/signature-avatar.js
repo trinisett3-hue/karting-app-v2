@@ -340,6 +340,28 @@ export function signatureAvatarsActive() {
   return !packBroken && cfg.pack === 'signature' && cfg.entitled === true;
 }
 
+/* Contour : anneau blanc dessiné SUR le bord de la pastille.
+   Historiquement l'option « contour » chargeait les SVG de la variante outline,
+   dont le halo blanc « sticker » entoure le sujet lui-même : à 110 px sur mobile
+   ce halo devient énorme et ses filets internes se lisent comme des traits
+   blancs parasites. On n'utilise donc plus que la variante plain, et le contour
+   est un anneau tracé au bord du cadran — même intention visuelle, propre à
+   toutes les tailles, et réversible sans changer d'asset.
+   Tracé dans l'espace de la viewBox pour être identique à l'écran et en PDF. */
+function ringLayerRaw(vb, shape, cls) {
+  const [x, y, w] = vb;
+  const sw = w * 0.028;
+  const inset = sw / 2;
+  const attr = 'fill="none" stroke="#fff" stroke-opacity=".92" stroke-width="' + sw + '"';
+  const body = shape === 'square'
+    ? '<rect x="' + (x + inset) + '" y="' + (y + inset) + '" width="' + (w - sw) +
+      '" height="' + (w - sw) + '" rx="' + (w * 0.12) + '" ' + attr + '/>'
+    : '<circle cx="' + (x + w / 2) + '" cy="' + (y + w / 2) + '" r="' + (w / 2 - inset) +
+      '" ' + attr + '/>';
+  return '<svg' + (cls ? ' class="' + cls + '"' : '') + ' viewBox="' + vb.join(' ') +
+    '" aria-hidden="true" preserveAspectRatio="xMidYMid meet">' + body + '</svg>';
+}
+
 function bgStyleOf(o) {
   const raw = (o && o.background !== undefined) ? o.background : cfg.background;
   if (raw === false || raw === null || raw === '' || raw === 'none' || raw === 'off') return null;
@@ -451,9 +473,10 @@ export function signatureAvatarHTML(kartNumber, opts) {
     ? o.kind : (o.small ? cfg.small_type : cfg.type);
   const style = bgStyleOf(o);
   const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
-  // Le halo blanc n'a de sens que détouré sur un fond : sans fond il dessinerait
-  // une auréole blanche sur le fond de la page.
-  const variant = (style && outline) ? 'outline' : 'plain';
+  // Toujours la variante plain : le contour est désormais un anneau (ringLayerRaw)
+  // et n'a de sens que sur un fond, sinon il flotterait sur la page.
+  const variant = 'plain';
+  const ring = (style && outline);
   const rawShape = o.shape || cfg.shape;
   const shape = (rawShape === 'square' || rawShape === 'squircle') ? 'square' : 'round';
 
@@ -478,6 +501,7 @@ export function signatureAvatarHTML(kartNumber, opts) {
     bg +
     '<img class="sigav__l sigav__sub" src="' + esc(signatureAvatarURL(kartNumber, kind, variant)) +
     '" alt="" loading="lazy" decoding="async" draggable="false">' +
+    (ring ? ringLayerRaw(vb, shape, 'sigav__l sigav__ring') : '') +
     numberLayer(kind, num) +
     '</div>';
 }
@@ -540,7 +564,10 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
     ? o.kind : (o.small ? cfg.small_type : cfg.type);
   const style = bgStyleOf(o);
   const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
-  const variant = (style && outline) ? 'outline' : 'plain';
+  const variant = 'plain';
+  const ring = (style && outline);
+  const rawShapeD = o.shape || cfg.shape;
+  const shapeD = (rawShapeD === 'square' || rawShapeD === 'squircle') ? 'square' : 'round';
   const vb = VIEWBOX[kind];
   const hue = HUES[pilotIdForKart(kartNumber)];
   const num = (o.number !== undefined) ? o.number : kartNumber;
@@ -560,7 +587,8 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
 
   const bg = style ? bgGroup(hue, vb, style) : '';
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
-    '" viewBox="' + vb.join(' ') + '">' + bg + nested + numberLayerRaw(kind, num) + '</svg>';
+    '" viewBox="' + vb.join(' ') + '">' + bg + nested +
+    (ring ? ringLayerRaw(vb, shapeD, '') : '') + numberLayerRaw(kind, num) + '</svg>';
 
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
@@ -582,7 +610,8 @@ function dataUrlKey(kartNumber, opts) {
   const style = bgStyleOf(o);
   const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
   const num = (o.number !== undefined) ? o.number : kartNumber;
-  return [kartNumber, kind, style || '-', outline ? 1 : 0, o.size || 512, num].join('|');
+  const shape = (o.shape || cfg.shape) === 'square' ? 'square' : 'round';
+  return [kartNumber, kind, style || '-', outline ? 1 : 0, shape, o.size || 512, num].join('|');
 }
 
 /** Précharge (async) les data URLs Signature pour une liste de karts.
@@ -627,8 +656,7 @@ export function preloadSignatureAvatars(kartNumbers, opts) {
   const kind = SIGNATURE_KINDS.indexOf(o.kind) >= 0
     ? o.kind : (o.small ? cfg.small_type : cfg.type);
   const style = bgStyleOf(o);
-  const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
-  const variant = (style && outline) ? 'outline' : 'plain';
+  const variant = 'plain';
   const seen = new Set();
   (kartNumbers || []).slice(0, 8).forEach((n) => {
     const url = signatureAvatarURL(n, kind, variant);
