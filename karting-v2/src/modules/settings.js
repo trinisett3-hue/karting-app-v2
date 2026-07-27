@@ -14,10 +14,22 @@ import { toggleSectorsField } from './results.js';
 import { kartAvatarSVG } from './kart-avatar.js';
 import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature } from './plan.js';
+import {
+configureSignatureAvatars,
+signatureAvatarHTML,
+signatureAvatarsActive,
+} from './signature-avatar.js';
 
 // Génère l'avatar (kart ou pilote) utilisé dans les aperçus Paramètres, selon le style
 // actuellement sélectionné (même logique que public-results.js > genAvatarSVG).
-function previewAvatarSVG(kart) {
+function previewAvatarSVG(kart, opts) {
+if (currentPack() === 'signature') {
+// L'admin doit voir CE QU'IL CHOISIT, meme si son plan ne l'autorise pas encore :
+// on force donc entitled ici. La page publique, elle, obeit a private.avatar_config()
+// qui reimpose 'classic' si l'entitlement manque — le cloisonnement reste serveur.
+configureSignatureAvatars(Object.assign(signaturePrefsFromForm(), { entitled: true, plan: 'pro' }));
+return signatureAvatarHTML(kart, opts || {});
+}
 const mode = document.getElementById('pref-avatar-mode')?.value || state.prefs.avatar_mode || 'kart';
 if (mode === 'pilot_kart') return pilotAvatarSVG(kart, kart);
 if (mode === 'pilot') return pilotAvatarSVG(kart, null, { hidePlate: true });
@@ -76,6 +88,12 @@ state.prefs.sectors_enabled = !!state.prefs.sectors_enabled;
 state.prefs.sector_count = Number(state.prefs.sector_count || 3);
 state.prefs.results_theme = state.prefs.results_theme || 'classic';
 state.prefs.avatar_mode = state.prefs.avatar_mode || 'kart';
+state.prefs.avatar_pack = state.prefs.avatar_pack || 'classic';
+state.prefs.avatar_type = state.prefs.avatar_type || 'kartpilot';
+state.prefs.avatar_small_type = state.prefs.avatar_small_type || 'helmet';
+state.prefs.avatar_background = state.prefs.avatar_background || 'studio';
+state.prefs.avatar_outline = state.prefs.avatar_outline !== false;
+state.prefs.avatar_shape = state.prefs.avatar_shape || 'round';
 
 renderLogoPreview();
 renderTrackMapPreview();
@@ -99,8 +117,19 @@ if (avSel) avSel.value = state.prefs.avatar_mode;
 document.querySelectorAll('.avatar-mode-row').forEach((r) => {
 r.style.borderColor = r.dataset.avatarVal === state.prefs.avatar_mode ? 'var(--acc)' : 'var(--bord)';
 });
-renderResultsPreview();
-renderKartAvatarGallery();
+await loadAvatarEntitlement();
+const setV = (id, val) => { const e = document.getElementById(id); if (e) e.value = val; };
+const setC = (id, val) => { const e = document.getElementById(id); if (e) e.checked = val; };
+setV('pref-avatar-pack', state.prefs.avatar_pack);
+setV('pref-avatar-type', state.prefs.avatar_type);
+setV('pref-avatar-small-type', state.prefs.avatar_small_type);
+// 'none' n'est pas une entree du menu des motifs : c'est la case a cocher qui le
+// represente. Un fond a 'none' laisse donc le menu sur sa valeur precedente, grise.
+setC('pref-avatar-bg-on', state.prefs.avatar_background !== 'none');
+if (state.prefs.avatar_background !== 'none') setV('pref-avatar-background', state.prefs.avatar_background);
+setC('pref-avatar-outline', state.prefs.avatar_outline);
+setV('pref-avatar-shape', state.prefs.avatar_shape);
+renderSignatureControls();
 
 const on = document.getElementById('pref-sectors-enabled');
 const n = document.getElementById('pref-sector-count');
@@ -340,6 +369,91 @@ renderResultsPreview(val);
 markPrefsDirty();
 }
 
+// --- Pack d'avatars (Classic / Signature Pro) ---------------------------------------
+// Etat commercial du tenant connecte, rempli une fois au chargement par
+// public.my_avatar_entitlement(). Sert UNIQUEMENT a afficher ou non l'encart
+// « reserve au plan Pro » : la decision reelle est prise par le serveur.
+let avatarEntitlement = { entitled: false, plan: 'free' };
+
+function currentPack() {
+return document.getElementById('pref-avatar-pack')?.value || state.prefs.avatar_pack || 'classic';
+}
+
+// Lit les six reglages Signature depuis le formulaire. Un seul endroit, pour que
+// l'apercu, la galerie et l'enregistrement ne puissent pas diverger.
+function signaturePrefsFromForm() {
+const v = (id, def) => document.getElementById(id)?.value || def;
+const c = (id) => !!document.getElementById(id)?.checked;
+return {
+pack: currentPack(),
+type: v('pref-avatar-type', 'kartpilot'),
+small_type: v('pref-avatar-small-type', 'helmet'),
+background: c('pref-avatar-bg-on') ? v('pref-avatar-background', 'studio') : 'none',
+outline: c('pref-avatar-outline'),
+shape: v('pref-avatar-shape', 'round'),
+};
+}
+
+export async function loadAvatarEntitlement() {
+try {
+const { data, error } = await db.rpc('my_avatar_entitlement');
+if (!error && data) avatarEntitlement = data;
+} catch (e) {
+// Sans reponse on reste sur { entitled:false } : on affiche l'encart plutot que
+// de promettre a tort que le pack sera visible en ligne.
+}
+}
+
+export function selectAvatarPack(val) {
+const sel = document.getElementById('pref-avatar-pack');
+if (sel) sel.value = val;
+markPrefsDirty();
+renderSignatureControls();
+}
+
+// Applique l'etat du formulaire a l'ecran : surlignage des pastilles de pack,
+// affichage des deux blocs d'options, encart Pro, bande d'apercu, galerie.
+export function renderSignatureControls() {
+const pack = currentPack();
+document.querySelectorAll('.avatar-pack-row').forEach((r) => {
+r.style.borderColor = r.dataset.packVal === pack ? 'var(--acc)' : 'var(--bord)';
+});
+const cls = document.getElementById('avatar-classic-options');
+const sig = document.getElementById('avatar-signature-options');
+if (cls) cls.style.display = pack === 'signature' ? 'none' : 'block';
+if (sig) sig.style.display = pack === 'signature' ? 'block' : 'none';
+const ups = document.getElementById('signature-upsell');
+if (ups) ups.style.display = (pack === 'signature' && !avatarEntitlement.entitled) ? 'block' : 'none';
+
+// Le contour blanc n'existe que detoure sur un fond : sans fond il dessinerait une
+// aureole blanche sur la page. On le grise plutot que de le laisser mentir.
+const bgOn = !!document.getElementById('pref-avatar-bg-on')?.checked;
+const bgSel = document.getElementById('pref-avatar-background');
+const outl = document.getElementById('pref-avatar-outline');
+if (bgSel) bgSel.disabled = !bgOn;
+if (outl) outl.disabled = !bgOn;
+const note = document.getElementById('outline-note');
+if (note) note.style.opacity = bgOn ? '1' : '.5';
+
+if (pack === 'signature') renderSignaturePreview();
+renderResultsPreview();
+renderKartAvatarGallery();
+}
+
+// Bande d'apercu : le grand format et le petit format cote a cote, aux tailles
+// reelles de la page publique (podium 96 px, tableau 40 px), pour que le choix se
+// juge sur ce qui sera vraiment affiche et non sur une vignette agrandie.
+function renderSignaturePreview() {
+const wrap = document.getElementById('signature-preview');
+if (!wrap) return;
+const cell = (n, size, small, lbl) =>
+'<div style="text-align:center"><div style="width:' + size + 'px;height:' + size + 'px;margin:0 auto">' +
+previewAvatarSVG(n, { size, small }) +
+'</div><div style="font-size:9px;color:var(--mut);margin-top:6px;text-transform:uppercase;letter-spacing:.06em">' + lbl + '</div></div>';
+wrap.innerHTML = cell(7, 96, false, 'Podium') + cell(7, 40, true, 'Tableau') +
+cell(14, 40, true, 'Tableau') + cell(21, 40, true, 'Tableau');
+}
+
 // Style d'avatar : 'kart' (dessin par numéro de kart, actuel), 'pilot_kart' (buste pilote
 // illustré + numéro de kart affiché) ou 'pilot' (même buste, sans numéro).
 export function selectAvatarMode(val) {
@@ -410,6 +524,10 @@ if (!wrap) return;
 // n'est affiché.
 const intro = document.getElementById('kart-avatars-intro');
 if (intro) {
+if (currentPack() === 'signature') {
+intro.innerHTML = 'Rendu du pack <b style="color:var(--txt)">Signature</b> pour les numéros de ta flotte, ' +
+'au format et à la forme choisis ci-dessus :';
+} else
 intro.innerHTML = 'Chaque pilote reçoit automatiquement son avatar selon le ' +
 '<b style="color:var(--txt)">style choisi dans l\'onglet Thème</b> — actuellement ' +
 avatarModeLabel().gal + ' (identique d\'une session à l\'autre). ' +
@@ -444,6 +562,14 @@ sectors_enabled: !!document.getElementById('pref-sectors-enabled')?.checked,
 sector_count: Number(document.getElementById('pref-sector-count')?.value || 3),
 results_theme: document.getElementById('pref-results-theme')?.value || 'classic',
 avatar_mode: document.getElementById('pref-avatar-mode')?.value || 'kart',
+avatar_pack: currentPack(),
+avatar_type: document.getElementById('pref-avatar-type')?.value || 'kartpilot',
+avatar_small_type: document.getElementById('pref-avatar-small-type')?.value || 'helmet',
+avatar_background: document.getElementById('pref-avatar-bg-on')?.checked
+? (document.getElementById('pref-avatar-background')?.value || 'studio')
+: 'none',
+avatar_outline: !!document.getElementById('pref-avatar-outline')?.checked,
+avatar_shape: document.getElementById('pref-avatar-shape')?.value || 'round',
 logo_url: state.prefs.logo_url || null,
 track_map_url: state.prefs.track_map_url || null,
 });
