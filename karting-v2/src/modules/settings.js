@@ -451,7 +451,17 @@ track_map_url: state.prefs.track_map_url || null,
 delete state.prefs.helmet_choice;
 delete state.prefs.helmet_colors;
 try {
-await db.from('app_settings').upsert({ key: 'global', value: state.prefs });
+// supabase-js v2 NE LEVE PAS sur erreur : il resout avec { data, error }.
+// Le try/catch autour de cet appel n'a donc jamais rien attrape, et l'appli
+// affichait "Parametres enregistres !" meme quand Postgres refusait tout.
+const { error: upErr } = await db.from('app_settings')
+.upsert({ key: 'global', value: state.prefs }, { onConflict: 'tenant_id,key' });
+if (upErr) {
+if (upErr.code === '23502' || upErr.code === '42501') {
+throw new Error('connexion admin requise pour enregistrer (auth non branchee)');
+}
+throw upErr;
+}
 showMsg('msg-prefs', 'Parametres enregistres !', 'ok');
 showMsg('msg-kart-numbers', 'Numeros de karts enregistres !', 'ok');
 updateDefaultsInfo();

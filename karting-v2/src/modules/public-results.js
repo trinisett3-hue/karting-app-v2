@@ -5,6 +5,8 @@
 import { db } from '../lib/supabase.js';
 import { kartAvatarSVG, kartAvatarDataURL } from './kart-avatar.js';
 import { pilotAvatarSVG, pilotAvatarDataURL } from './pilot-avatar.js';
+import { loadSiteConfig } from './site-config.js';
+import { signatureAvatarsActive, signatureAvatarHTML } from './signature-avatar.js';
 
 const FLAGS = { FR: '🇫🇷', BE: '🇧🇪', LU: '🇱🇺', DE: '🇩🇪', CH: '🇨🇭', NL: '🇳🇱', IT: '🇮🇹', ES: '🇪🇸', GB: '🇬🇧', US: '🇺🇸', OTHER: '🏁' };
 const PAGE1MAX = 10;
@@ -45,13 +47,19 @@ admin.html > Paramètres > Apparence.
 ------------------------------------------------------------------ */
 export function initTheme() {
 const MAP = { classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon' };
-db.from('app_settings').select('value').eq('key', 'global').maybeSingle().then(({ data }) => {
-const theme = data && data.value && data.value.results_theme;
-PDF_SHOW_SECTORS = !!(data && data.value && data.value.sectors_enabled);
-PDF_AVATAR_MODE = (data && data.value && data.value.avatar_mode) || 'kart';
+// Passe par le RPC public_site_config (SECURITY DEFINER) au lieu d'une lecture
+// directe d'app_settings : c'est Postgres, pas le navigateur, qui decide si ce
+// tenant a droit au pack Signature (private.avatar_config() force pack='classic'
+// si l'entitlement manque ou si l'abonnement a expire). Meme forme de JSON dans
+// cfg.settings que l'ancien data.value -- seule la source change.
+loadSiteConfig().then((cfg) => {
+const data = { value: cfg.settings };
+const theme = data.value && data.value.results_theme;
+PDF_SHOW_SECTORS = !!(data.value && data.value.sectors_enabled);
+PDF_AVATAR_MODE = (data.value && data.value.avatar_mode) || 'kart';
 if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
 
-const logoUrl = data && data.value && data.value.logo_url;
+const logoUrl = data.value && data.value.logo_url;
 if (logoUrl) {
 const header = document.querySelector('.circuit-header');
 if (header && !document.getElementById('circuit-logo')) {
@@ -70,7 +78,7 @@ header.appendChild(img);
 
 // Plan du circuit (optionnel) — affiché juste avant le podium, uniquement si configuré.
 // À gater sur le plan Pro une fois la facturation en place (Phase 3 roadmap).
-const trackMapUrl = data && data.value && data.value.track_map_url;
+const trackMapUrl = data.value && data.value.track_map_url;
 if (trackMapUrl) {
 const podiumWrap = document.getElementById('podium-wrap');
 if (podiumWrap && podiumWrap.parentElement && !document.getElementById('circuit-track-map')) {
@@ -112,6 +120,9 @@ if (p) {
 const fallback = genAvatarDataURL(kart);
 return `<img class="pilot-avatar ${cls}" src="${p}" alt="${alt}" loading="lazy" crossorigin="anonymous" width="200" height="280" onerror="this.onerror=null;this.src='${fallback}'">`;
 }
+if (signatureAvatarsActive()) {
+return `<div class="pilot-avatar-placeholder kart sigav-host ${cls}">${signatureAvatarHTML(kart, { title: alt })}</div>`;
+}
 return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${genAvatarSVG(kart, { title: alt })}</div>`;
 }
 function rankAvatarHTML(src, kart) {
@@ -119,6 +130,9 @@ const p = pdfxLikeValidSrc(src);
 if (p) {
 const fallback = genAvatarDataURL(kart);
 return `<img src="${p}" alt="" loading="lazy" crossorigin="anonymous" width="57" height="57" onerror="this.onerror=null;this.src='${fallback}'">`;
+}
+if (signatureAvatarsActive()) {
+return `<div class="rank-avatar-placeholder kart sigav-host">${signatureAvatarHTML(kart, { small: true })}</div>`;
 }
 return `<div class="rank-avatar-placeholder kart">${genAvatarSVG(kart)}</div>`;
 }
@@ -267,6 +281,9 @@ inscrit apparaît en fin de classement, marqué "Kart libre" ;
 export async function load() {
 const token = new URLSearchParams(window.location.search).get('result');
 if (!token) return fail();
+// AVANT tout rendu : sinon les avatars se dessinent en repli classique tant que
+// la config n'est pas revenue (course avec initTheme(), memes promesse memoisee).
+await loadSiteConfig();
 
 const { data: session, error: sErr } = await db.from('sessions').select('*').eq('public_results_token', token).maybeSingle();
 if (sErr || !session) return fail();
