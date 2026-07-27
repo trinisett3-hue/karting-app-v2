@@ -414,12 +414,11 @@ updateThemeToggleUI();
 <div class="field" id="pref-sectors-wrap"><label>Nombre de secteurs</label>
 <select id="pref-sector-count" onchange="updateChronoFormat();markPrefsDirty()"><option value="2">2 secteurs</option><option value="3">3 secteurs</option></select>
 </div>
-<div class="field"><label>Apparence &amp; personnalisation</label>
-<div style="display:flex;gap:8px;margin-bottom:14px;border-bottom:1px solid var(--bord);padding-bottom:8px">
-<button type="button" class="subtab-btn active" data-subtab="theme" onclick="switchAppearanceSubtab('theme')" style="background:none;border:none;color:var(--txt);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid var(--acc)">Thème</button>
-<button type="button" class="subtab-btn" data-subtab="avatars" onclick="switchAppearanceSubtab('avatars')" style="background:none;border:none;color:var(--mut);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;padding:6px 10px;cursor:pointer;border-bottom:2px solid transparent">Avatars</button>
 </div>
-<div id="appearance-subtab-theme">
+
+<div class="card">
+<div class="ctitle">Identite du circuit</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:14px">Ces deux images s'affichent sur la page publique de resultats et dans les exports PDF.</div>
 <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
 <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Logo du circuit</div>
 <div id="pref-logo-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
@@ -432,11 +431,11 @@ updateThemeToggleUI();
 Choisir un fichier
 <input type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style="display:none" onchange="uploadLogo(this)"/>
 </label>
-<div style="font-size:11px;color:var(--mut);margin-top:6px">PNG avec fond transparent recommandé. Affiché sur la page de résultats publics.</div>
+<div style="font-size:11px;color:var(--mut);margin-top:6px">PNG avec fond transparent recommande.</div>
 <div class="msg" id="msg-logo"></div>
 </div>
-<div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
-<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Plan du circuit <span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.7">(optionnel · Premium)</span></div>
+<div>
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Plan du circuit <span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.7">(optionnel &middot; Premium)</span></div>
 <div id="pref-trackmap-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
 <div style="width:96px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
 <img id="pref-trackmap-preview" src="" alt="Plan actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
@@ -450,29 +449,90 @@ Choisir un fichier
 <div id="trackmap-upsell" style="display:none;font-size:12px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px 12px">
 Le plan du circuit est reserve au plan <strong>Premium</strong>. Passe au plan superieur pour debloquer cette fonction.
 </div>
-<div style="font-size:11px;color:var(--mut);margin-top:6px">Affiche le tracé du circuit juste au-dessus du podium sur la page de résultats publics.</div>
+<div style="font-size:11px;color:var(--mut);margin-top:6px">Affiche le trace du circuit juste au-dessus du podium.</div>
 <div class="msg" id="msg-trackmap"></div>
 </div>
+</div>
+
+<div class="card">
+<div class="ctitle">Theme de la page resultats</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Couleurs de la page publique et des exports PDF. Apercu en direct a droite &rarr;</div>
 <div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div>
 <div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div>
 <div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Premium Carbon</span></div>
 <select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Premium Carbon</option></select>
-<div style="font-size:11px;color:var(--mut);margin-top:10px">Le thème s'applique à la page publique de résultats et aux exports PDF. Aperçu en direct à droite &rarr;</div>
-<div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--bord)">
+</div>
+
+<div class="card">
+<div class="ctitle">Avatars des pilotes</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Chaque pilote recoit automatiquement l'avatar de son kart : le numero affiche est celui du kart, et la couleur est propre a chaque numero (identique d'une session a l'autre).</div>
+
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Pack graphique</div>
+<div class="avatar-pack-row" data-pack-val="classic" onclick="selectAvatarPack('classic')" style="padding:10px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)">
+<div style="font-size:13px;font-weight:700">Classic</div>
+<div style="font-size:11px;color:var(--mut);margin-top:2px">Les avatars vectoriels d'origine, inclus dans tous les plans.</div>
+</div>
+<div class="avatar-pack-row" data-pack-val="signature" onclick="selectAvatarPack('signature')" style="padding:10px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)">
+<div style="font-size:13px;font-weight:700">Signature <span style="font-size:10px;font-weight:800;letter-spacing:.5px;background:var(--yel);color:#111;border-radius:4px;padding:1px 5px;vertical-align:1px">PRO</span></div>
+<div style="font-size:11px;color:var(--mut);margin-top:2px">24 illustrations exclusives, declinees en buste, casque, kart et kart + pilote.</div>
+</div>
+<select id="pref-avatar-pack" style="display:none"><option value="classic">Classic</option><option value="signature">Signature</option></select>
+<div id="signature-upsell" style="display:none;font-size:12px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px 12px;margin-top:10px">
+Le pack <strong>Signature</strong> est reserve au plan <strong>Pro</strong>. Il reste selectionnable ici, mais la page publique continuera d'afficher le pack Classic tant que le plan n'est pas actif.
+</div>
+
+<div id="avatar-classic-options" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--bord)">
 <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Style d'avatar</div>
-<div class="avatar-mode-row" data-avatar-val="kart" onclick="selectAvatarMode('kart')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="font-size:13px;font-weight:600">Avatar kart <span style="font-weight:500;color:var(--mut)">(actuel — un dessin par numéro de kart)</span></span></div>
-<div class="avatar-mode-row" data-avatar-val="pilot_kart" onclick="selectAvatarMode('pilot_kart')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="font-size:13px;font-weight:600">Pilote + kart <span style="font-weight:500;color:var(--mut)">(buste pilote illustré, numéro de kart affiché)</span></span></div>
-<div class="avatar-mode-row" data-avatar-val="pilot" onclick="selectAvatarMode('pilot')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="font-size:13px;font-weight:600">Pilote seul <span style="font-weight:500;color:var(--mut)">(même buste, sans numéro)</span></span></div>
+<div class="avatar-mode-row" data-avatar-val="kart" onclick="selectAvatarMode('kart')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="font-size:13px;font-weight:600">Avatar kart <span style="font-weight:500;color:var(--mut)">(un dessin par numero de kart)</span></span></div>
+<div class="avatar-mode-row" data-avatar-val="pilot_kart" onclick="selectAvatarMode('pilot_kart')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="font-size:13px;font-weight:600">Pilote + kart <span style="font-weight:500;color:var(--mut)">(buste pilote illustre, numero de kart affiche)</span></span></div>
+<div class="avatar-mode-row" data-avatar-val="pilot" onclick="selectAvatarMode('pilot')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)"><span style="font-size:13px;font-weight:600">Pilote seul <span style="font-weight:500;color:var(--mut)">(meme buste, sans numero)</span></span></div>
 <select id="pref-avatar-mode" onchange="markPrefsDirty();selectAvatarMode(this.value)" style="display:none"><option value="kart">Avatar kart</option><option value="pilot_kart">Pilote + kart</option><option value="pilot">Pilote seul</option></select>
-<div style="font-size:11px;color:var(--mut);margin-top:10px">S'applique à la page publique de résultats et aux exports PDF (podium, tableau, fiche pilote). Aperçu en direct à droite &rarr;</div>
 </div>
+
+<div id="avatar-signature-options" style="display:none;margin-top:18px;padding-top:16px;border-top:1px solid var(--bord)">
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px">Reglages du pack Signature</div>
+<div id="signature-preview" style="display:flex;gap:12px;align-items:center;justify-content:center;background:var(--surf2);border:1px solid var(--bord);border-radius:10px;padding:14px;margin-bottom:14px;min-height:96px"></div>
+<div class="g2" style="gap:10px">
+<div class="field"><label>Grand format (podium, fiche)</label>
+<select id="pref-avatar-type" onchange="markPrefsDirty();renderSignatureControls()">
+<option value="kartpilot">Kart + pilote</option><option value="kart">Kart seul</option><option value="helmet">Casque</option><option value="bust">Buste</option>
+</select></div>
+<div class="field"><label>Petit format (tableau)</label>
+<select id="pref-avatar-small-type" onchange="markPrefsDirty();renderSignatureControls()">
+<option value="same">Identique au grand format</option><option value="helmet">Casque</option><option value="bust">Buste</option><option value="kart">Kart seul</option><option value="kartpilot">Kart + pilote</option>
+</select></div>
 </div>
-<div id="appearance-subtab-avatars" style="display:none">
-<div id="kart-avatars-intro" style="font-size:12px;color:var(--mut);line-height:1.5;margin-bottom:12px"></div>
+<div class="g2" style="gap:10px">
+<div class="field"><label>Forme de la pastille</label>
+<select id="pref-avatar-shape" onchange="markPrefsDirty();renderSignatureControls()">
+<option value="round">Ronde</option><option value="square">Carre arrondi</option>
+</select></div>
+<div class="field"><label>Motif de fond</label>
+<select id="pref-avatar-background" onchange="markPrefsDirty();renderSignatureControls()">
+<option value="studio">Studio</option><option value="flat">Aplat</option><option value="duo">Duo</option><option value="carbon">Carbone</option><option value="halftone">Trame</option><option value="ring">Anneau</option><option value="chevron">Chevron</option><option value="speed">Vitesse</option>
+</select></div>
+</div>
+<div class="field">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-avatar-bg-on" style="width:auto" onchange="markPrefsDirty();renderSignatureControls()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Afficher un fond derriere l'avatar</span>
+</label>
+<div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Sans fond, l'avatar est detoure et se pose directement sur la page.</div>
+</div>
+<div class="field">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-avatar-outline" style="width:auto" onchange="markPrefsDirty();renderSignatureControls()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Contour blanc autour du sujet</span>
+</label>
+<div id="outline-note" style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">N'a d'effet que lorsqu'un fond est affiche.</div>
+</div>
+<div id="kart-avatars-intro" style="font-size:11px;color:var(--mut);line-height:1.5;margin:14px 0 8px"></div>
 <div id="kart-avatars-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:10px"></div>
 </div>
 </div>
-<button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer</button>
+
+<div class="card" style="position:sticky;bottom:12px;z-index:5">
+<button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer les parametres</button>
 <div class="msg" id="msg-prefs"></div>
 </div>
 
