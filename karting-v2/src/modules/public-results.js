@@ -6,7 +6,12 @@ import { db } from '../lib/supabase.js';
 import { kartAvatarSVG, kartAvatarDataURL } from './kart-avatar.js';
 import { pilotAvatarSVG, pilotAvatarDataURL } from './pilot-avatar.js';
 import { loadSiteConfig } from './site-config.js';
-import { signatureAvatarsActive, signatureAvatarHTML } from './signature-avatar.js';
+import {
+  signatureAvatarsActive,
+  signatureAvatarHTML,
+  prewarmSignatureAvatarDataURLs,
+  signatureAvatarDataURLSync
+} from './signature-avatar.js';
 
 const FLAGS = { FR: '🇫🇷', BE: '🇧🇪', LU: '🇱🇺', DE: '🇩🇪', CH: '🇨🇭', NL: '🇳🇱', IT: '🇮🇹', ES: '🇪🇸', GB: '🇬🇧', US: '🇺🇸', OTHER: '🏁' };
 const PAGE1MAX = 10;
@@ -29,7 +34,15 @@ let PDF_AVATAR_MODE = 'kart';
 
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
 // <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
-function genAvatarDataURL(kart) {
+function genAvatarDataURL(kart, opts) {
+  // Pack Signature (plan Pro) : le PDF doit utiliser le même avatar que l'écran.
+  // signatureAvatarDataURLSync() lit un cache préchauffé par prewarm… en tête des
+  // deux exports ; s'il est vide (pack cassé, kart non préchauffé) on retombe
+  // silencieusement sur l'avatar classique.
+  if (signatureAvatarsActive()) {
+    const sig = signatureAvatarDataURLSync(kart, opts);
+    if (sig) return sig;
+  }
   if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarDataURL(kart, kart);
   if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarDataURL(kart, null, { hidePlate: true });
   return kartAvatarDataURL(kart);
@@ -894,9 +907,9 @@ function pdfxPhotoSrc(photo, kart) {
    doubles -> on cite les URL CSS avec des apostrophes, sinon l'attribut HTML se
    fermerait au premier guillemet de url("...") et le fond disparaitrait. */
 function pdfxCssUrl(u) { return `url('${String(u).replace(/['\\]/g, '\\$&')}')`; }
-function pdfxAvatarImg(photo, kart) {
+function pdfxAvatarImg(photo, kart, opts) {
   const real = pdfxValidPhoto(photo);
-  const fallback = genAvatarDataURL(kart);
+  const fallback = genAvatarDataURL(kart, opts);
   const layers = real
     ? `${pdfxCssUrl(real)},${pdfxCssUrl(fallback)}`
     : pdfxCssUrl(fallback);
@@ -957,7 +970,7 @@ function pdfxRankRowsHTML(chunk, showSec) {
   return chunk.map(d => `
 <div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}">
 <span class="pos">${d.pos}</span>
-<span class="av">${pdfxAvatarImg(d.photo, d.kart)}</span>
+<span class="av">${pdfxAvatarImg(d.photo, d.kart, { small: true })}</span>
 <span class="name">${escapeHTML(d.name)}</span>
 <span class="kart">#${d.kart ?? '-'}</span>
 <span class="laps">${d.hasTime ? d.lapsCount : '--'}</span>
@@ -1068,6 +1081,14 @@ export async function downloadFullPDF(btn) {
   btn.innerHTML = `${SPIN_ICON} Génération…`;
   try {
     ensurePdfStyles();
+    /* Pack Signature : html2canvas ne sait pas attendre. On préchauffe donc les
+       data URLs (grand format podium + petit format lignes) AVANT de construire
+       le markup, sinon le PDF retombe sur l'avatar classique. */
+    if (signatureAvatarsActive()) {
+      const karts = (allResults || []).map(d => d.kart);
+      await prewarmSignatureAvatarDataURLs(karts);
+      await prewarmSignatureAvatarDataURLs(karts, { small: true });
+    }
     const { jsPDF } = window.jspdf;
     const g = pdfxGeom(PDF_ORIENT);
     const pdf = new jsPDF(g.landscape ? 'l' : 'p', 'mm', 'a4');
@@ -1138,6 +1159,9 @@ export async function downloadPilotPDF(pilot, btn) {
   btn.innerHTML = SPIN_ICON;
   try {
     ensurePdfStyles();
+    if (signatureAvatarsActive()) {
+      await prewarmSignatureAvatarDataURLs([pilot.kart]);
+    }
     const { jsPDF } = window.jspdf;
     const g = pdfxGeom(PDF_ORIENT);
     const pdf = new jsPDF(g.landscape ? 'l' : 'p', 'mm', 'a4');

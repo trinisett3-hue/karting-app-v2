@@ -353,9 +353,9 @@ function bgStyleOf(o) {
    -------------------------------------------------------------------------- */
 
 const CSS = `
-.sigav{position:relative;display:block;aspect-ratio:1;width:100%;max-width:100%;max-height:100%;margin:auto;overflow:hidden;background:transparent}
-.sigav--round{border-radius:50%}
-.sigav--square{border-radius:12%}
+.sigav{position:relative;display:block;aspect-ratio:1;width:100%;max-width:100%;max-height:100%;margin:auto;overflow:hidden;isolation:isolate;transform:translateZ(0);background:transparent}
+.sigav--round{border-radius:50%;-webkit-clip-path:circle(50% at 50% 50%);clip-path:circle(50% at 50% 50%)}
+.sigav--square{border-radius:12%;-webkit-clip-path:inset(0 round 12%);clip-path:inset(0 round 12%)}
 .sigav__l{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
 .sigav__sub{object-fit:contain}
 #sigav-defs{position:absolute;width:0;height:0;overflow:hidden}
@@ -563,6 +563,46 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
     '" viewBox="' + vb.join(' ') + '">' + bg + nested + numberLayerRaw(kind, num) + '</svg>';
 
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+/* -----------------------------------------------------------------------------
+   8bis. EXPORT PDF — cache synchrone
+   Les constructeurs de markup du PDF (pdfxAvatarImg, etc.) sont synchrones et
+   html2canvas ne sait pas attendre une promesse. On préchauffe donc les data
+   URLs en amont (downloadFullPDF / downloadPilotPDF sont async), puis les
+   builders lisent le cache de façon synchrone.
+   La clé englobe toutes les options qui changent le rendu.
+   -------------------------------------------------------------------------- */
+const dataUrlCache = new Map();
+
+function dataUrlKey(kartNumber, opts) {
+  const o = opts || {};
+  const kind = SIGNATURE_KINDS.indexOf(o.kind) >= 0
+    ? o.kind : (o.small ? cfg.small_type : cfg.type);
+  const style = bgStyleOf(o);
+  const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
+  const num = (o.number !== undefined) ? o.number : kartNumber;
+  return [kartNumber, kind, style || '-', outline ? 1 : 0, o.size || 512, num].join('|');
+}
+
+/** Précharge (async) les data URLs Signature pour une liste de karts.
+ *  À appeler et await AVANT de construire le markup PDF. */
+export async function prewarmSignatureAvatarDataURLs(kartNumbers, opts) {
+  if (!signatureAvatarsActive()) return;
+  const list = Array.from(new Set((kartNumbers || []).filter((n) => n != null && n !== '')));
+  await Promise.all(list.map(async (n) => {
+    const key = dataUrlKey(n, opts);
+    if (dataUrlCache.has(key)) return;
+    const url = await signatureAvatarDataURL(n, opts);
+    if (url) dataUrlCache.set(key, url);
+  }));
+}
+
+/** Lecture synchrone du cache. Renvoie null si non préchauffé (l'appelant
+ *  retombe alors sur l'avatar classique — jamais de PDF vide). */
+export function signatureAvatarDataURLSync(kartNumber, opts) {
+  if (!signatureAvatarsActive()) return null;
+  return dataUrlCache.get(dataUrlKey(kartNumber, opts)) || null;
 }
 
 /* même <text> que numberLayer(), mais sans le <svg> conteneur : dans l'export
