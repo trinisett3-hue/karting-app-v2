@@ -48,7 +48,18 @@ const THEME_COLORS = {
 classic: { bg: '#050608', surf: '#0d0f14', mut: '#7a7d8a', acc: '#ff2a2a', text: '#f4f5f8', p2: 'rgba(255,255,255,.28)', p3: 'rgba(184,134,90,.6)', gapBg: '#ff2a2a', gapText: '#fff' },
 neon: { bg: '#060810', surf: '#0b0e18', mut: '#6a7a9a', acc: '#00d4ff', text: '#f0f4ff', p2: 'rgba(255,0,128,.5)', p3: 'rgba(255,0,128,.3)', gapBg: '#00d4ff', gapText: '#060810' },
 carbon: { bg: '#111214', surf: '#181a1e', mut: '#8a8880', acc: '#c9a84c', text: '#f5f0e8', p2: 'rgba(180,180,180,.35)', p3: 'rgba(150,110,70,.5)', gapBg: 'transparent', gapText: '#c9a84c' },
+// Thèmes Pro (v15) — mêmes tokens que les blocs [data-theme="..."] de results.html.
+checkered: { bg: '#0a0a0a', surf: '#131313', mut: '#8f8f8f', acc: '#ffffff', text: '#f8f8f8', p2: 'rgba(255,255,255,.4)', p3: 'rgba(255,255,255,.22)', gapBg: '#ffffff', gapText: '#0a0a0a' },
+endurance: { bg: '#04060d', surf: '#080b16', mut: '#6f7793', acc: '#ffb020', text: '#eef1fb', p2: 'rgba(63,169,245,.45)', p3: 'rgba(255,176,32,.28)', gapBg: '#ffb020', gapText: '#04060d' },
+pitlane: { bg: '#0b0c0c', surf: '#141514', mut: '#8b8d82', acc: '#ffd600', text: '#f5f6f0', p2: 'rgba(255,255,255,.32)', p3: 'rgba(255,122,0,.4)', gapBg: '#ffd600', gapText: '#0b0c0c' },
+champagne: { bg: '#0d0b08', surf: '#151109', mut: '#9c9078', acc: '#e6c374', text: '#f7f0e2', p2: 'rgba(220,220,220,.32)', p3: 'rgba(160,120,65,.45)', gapBg: 'transparent', gapText: '#e6c374' },
+arctic: { bg: '#f5f6f8', surf: '#ffffff', mut: '#5b6070', acc: '#1c7ed6', text: '#12141c', p2: 'rgba(10,15,30,.28)', p3: 'rgba(28,126,214,.22)', gapBg: '#1c7ed6', gapText: '#ffffff' },
 };
+
+// Slugs des thèmes réservés au plan Pro (entitlement `premium_themes`,
+// cf. public.my_theme_entitlement() dans migration-v15-registre-stats-themes.sql).
+const PREMIUM_THEMES = new Set(['checkered', 'endurance', 'pitlane', 'champagne', 'arctic']);
+function isPremiumTheme(val) { return PREMIUM_THEMES.has(val); }
 
 // Libellé du style d'avatar courant, utilisé dans les textes explicatifs pour
 // qu'ils ne parlent plus systématiquement du kart.
@@ -112,6 +123,7 @@ if (sel) sel.value = state.prefs.results_theme;
 document.querySelectorAll('.theme-option-row').forEach((r) => {
 r.style.borderColor = r.dataset.themeVal === state.prefs.results_theme ? 'var(--acc)' : 'var(--bord)';
 });
+await loadThemeEntitlement();
 const avSel = document.getElementById('pref-avatar-mode');
 if (avSel) avSel.value = state.prefs.avatar_mode;
 document.querySelectorAll('.avatar-mode-row').forEach((r) => {
@@ -371,7 +383,56 @@ if (a) a.style.display = tab === 'avatars' ? 'block' : 'none';
 if (tab === 'avatars') renderKartAvatarGallery();
 }
 
+// --- Entitlement "thèmes premium" (plan Pro) ---------------------------------------
+// Même pattern que avatarEntitlement ci-dessous : rempli une fois au chargement par
+// public.my_theme_entitlement(), utilisé UNIQUEMENT pour l'affichage (griser/verrouiller
+// les thèmes Pro dans le picker). La décision réelle appartient au serveur — voir le
+// commentaire "LACUNE CONNUE" dans migration-v15-registre-stats-themes.sql : la page
+// publique ne revalide pas encore cet entitlement côté serveur.
+let themeEntitlement = { entitled: false, plan: 'free' };
+
+export async function loadThemeEntitlement() {
+try {
+const { data, error } = await db.rpc('my_theme_entitlement');
+if (!error && data) themeEntitlement = data;
+} catch (e) {
+// Sans reponse on reste sur { entitled:false } : les thèmes Pro restent verrouillés
+// dans l'UI plutôt que de promettre a tort qu'ils sont disponibles.
+}
+renderThemeGating();
+}
+
+// Applique le verrouillage visuel des lignes de thèmes Pro (grisé + icône cadenas),
+// sans jamais désactiver les 3 thèmes gratuits historiques.
+function renderThemeGating() {
+document.querySelectorAll('.theme-option-row').forEach((r) => {
+const locked = isPremiumTheme(r.dataset.themeVal) && !themeEntitlement.entitled;
+r.classList.toggle('theme-locked', locked);
+});
+const ups = document.getElementById('themes-upsell');
+if (ups) {
+const currentIsPremiumLocked = isPremiumTheme(state.prefs.results_theme) && !themeEntitlement.entitled;
+ups.style.display = (!themeEntitlement.entitled) ? 'block' : 'none';
+if (currentIsPremiumLocked) {
+// Cas résiduel (downgrade après sélection) : la préférence enregistrée pointe vers
+// un thème Pro que le tenant n'a plus le droit d'utiliser. On ne la modifie pas
+// silencieusement ici — voir la lacune connue côté public_site_config() — mais on
+// le signale clairement dans l'encart plutôt que de laisser un message générique.
+ups.innerHTML = 'Le thème actuellement enregistré est un thème <strong>Pro</strong> et ton plan ne l\'inclut plus : la page publique peut continuer à l\'afficher jusqu\'à ce que tu en choisisses un autre ici. Passe au plan supérieur pour le conserver, ou choisis un thème gratuit.';
+} else {
+ups.innerHTML = 'Les thèmes premium sont réservés au plan <strong>Pro</strong>. Passe au plan supérieur pour les débloquer.';
+}
+}
+}
+
 export function selectResultsTheme(val) {
+if (isPremiumTheme(val) && !themeEntitlement.entitled) {
+// Garde-fou côté picker : on ne laisse pas sélectionner/appliquer un thème Pro sans
+// entitlement — la RPC my_theme_entitlement() reste la source de vérité, ceci n'est
+// qu'un confort d'UI pour ne pas laisser croire que le choix a été pris en compte.
+renderThemeGating();
+return;
+}
 const sel = document.getElementById('pref-results-theme');
 if (sel) sel.value = val;
 document.querySelectorAll('.theme-option-row').forEach((r) => {
