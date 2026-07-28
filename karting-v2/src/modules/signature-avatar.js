@@ -351,10 +351,13 @@ export function signatureAvatarsActive() {
 function ringLayerRaw(vb, shape, cls) {
   const [x, y, w] = vb;
   const sw = w * 0.028;
-  /* inset = sw (et non sw/2) : à sw/2 le trait est tangent au bord de la
-     viewBox, donc rogné par le clip de la pastille — l'anneau apparaissait
-     ouvert sur les petites pastilles du classement. */
-  const inset = sw;
+  /* L'anneau doit affleurer le bord de la pastille : son bord EXTERIEUR se pose
+     sur le cercle de découpe. Avec inset = sw le trait rentrait d'une demi-
+     épaisseur vers l'intérieur et laissait une couronne de fond visible
+     au-delà — c'est ce liseré coloré qui donnait l'impression que « l'arrondi
+     blanc ne prend pas tout le cercle ». 0.55 (et non 0.5 pile) garde un
+     cheveu de marge pour l'anticrénelage du clip. */
+  const inset = sw * 0.55;
   const attr = 'fill="none" stroke="#fff" stroke-opacity=".92" stroke-width="' + sw + '"';
   const body = shape === 'square'
     ? '<rect x="' + (x + inset) + '" y="' + (y + inset) + '" width="' + (w - 2 * inset) +
@@ -413,10 +416,13 @@ const CSS = `
 .sigav--round .sigav__l{border-radius:50%;overflow:hidden}
 .sigav--square .sigav__l{border-radius:12%;overflow:hidden}
 .sigav__sub{object-fit:contain}
-/* Podium : la pastille remplissait toute la largeur de la carte et venait
-   mordre sur le chiffre de position (1/2/3) posé en haut à gauche. On la réduit
-   légèrement et on la décale vers le bas pour dégager le chiffre. */
-.pilot-photo-wrap .sigav{width:84%;margin-top:8%}
+/* Podium : la zone photo est courte (surtout sur mobile, .podium-card height:84%).
+   Une pastille en width:100% + aspect-ratio:1 débordait donc en hauteur et se
+   faisait trancher par la bande du nom. On la fait tenir EN HAUTEUR dans la zone
+   disponible, centrée, et on la plafonne en largeur pour dégager le chiffre de
+   position posé en haut à gauche. */
+.pilot-photo-wrap{display:flex;align-items:center;justify-content:center}
+.pilot-photo-wrap .sigav{height:100%;width:auto;max-width:80%;margin:0}
 #sigav-defs{position:absolute;width:0;height:0;overflow:hidden}
 `;
 

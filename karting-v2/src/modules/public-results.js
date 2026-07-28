@@ -420,7 +420,7 @@ node.textContent = value == null ? '' : String(value);
 return node.innerHTML;
 }
 
-async function sectionToCanvas(node, width, bg) {
+async function sectionToCanvas(node, width, bg, scale) {
 const holder = document.getElementById('pdf-render-root');
 holder.innerHTML = '';
 holder.style.width = width + 'px';
@@ -463,7 +463,7 @@ h2cFix.textContent = 'img[width="1"][height="1"]{display:inline!important;max-wi
 document.head.appendChild(h2cFix);
 let canvas;
 try {
-canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
+canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: scale || 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
 } finally {
 h2cFix.remove();
 }
@@ -1063,7 +1063,7 @@ function pdfxMeasureFill(page, bodySel, sheetSel, budgetPx, remaining, rowsHTML,
 }
 
 /* Pose la capture sur la page PDF, à l'échelle 1:1 (595px = 210mm). */
-function pdfxPlace(pdf, canvas, g, isFirst, t) {
+function pdfxPlace(pdf, canvas, g, isFirst, t, quality) {
   if (!isFirst) pdf.addPage(g.landscape ? [g.pageW, g.pageH] : undefined, g.landscape ? 'l' : 'p');
   pdfRGB(pdf, t.bg, 'setFillColor');
   pdf.rect(0, 0, g.pageW, g.pageH, 'F');
@@ -1073,7 +1073,7 @@ function pdfxPlace(pdf, canvas, g, isFirst, t) {
   // JPEG plutôt que PNG : le fond est opaque (pas de transparence à préserver) et
   // le PNG produisait des fichiers de ~12 Mo par page — impossibles à partager.
   // À qualité 0.94 et scale 2.5, le texte reste net pour ~1/10e du poids.
-  pdf.addImage(canvas.toDataURL('image/jpeg', 0.94), 'JPEG', (g.pageW - dw) / 2, 0, dw, dh);
+  pdf.addImage(canvas.toDataURL('image/jpeg', quality || 0.94), 'JPEG', (g.pageW - dw) / 2, 0, dw, dh);
 }
 
 /* ==================================================================
@@ -1251,8 +1251,11 @@ ${PDFX_SVG_CLOCK}
     });
 
     for (let i = 0; i < pages.length; i++) {
-      const canvas = await sectionToCanvas(pages[i], g.renderW, t.bg);
-      pdfxPlace(pdf, canvas, g, i === 0, t);
+      /* Fiche pilote : 1-2 pages seulement, on peut se permettre un rendu
+         beaucoup plus fin (x4 au lieu de x2.5) et une compression JPEG quasi
+         sans perte — c'est ce qui rendait l'avatar flou, pas la source SVG. */
+      const canvas = await sectionToCanvas(pages[i], g.renderW, t.bg, 4);
+      pdfxPlace(pdf, canvas, g, i === 0, t, 0.97);
     }
     pdf.save(`Fiche_Pilote_${pilot.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
   } catch (e) {
