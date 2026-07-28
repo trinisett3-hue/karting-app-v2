@@ -421,8 +421,8 @@ const CSS = `
    faisait trancher par la bande du nom. On la fait tenir EN HAUTEUR dans la zone
    disponible, centrée, et on la plafonne en largeur pour dégager le chiffre de
    position posé en haut à gauche. */
-.pilot-photo-wrap{display:flex;align-items:center;justify-content:center}
-.pilot-photo-wrap .sigav{height:100%;width:auto;max-width:80%;margin:0}
+.pilot-photo-wrap{display:flex;align-items:center;justify-content:center;min-height:0;overflow:hidden}
+.pilot-photo-wrap .sigav{width:84%;max-width:84%;height:auto;max-height:none;margin:0;flex:0 0 auto}
 #sigav-defs{position:absolute;width:0;height:0;overflow:hidden}
 `;
 
