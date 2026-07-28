@@ -49,10 +49,17 @@ export async function renderActivesGrid() {
       const inscrits = (regs || []).length;
       const occ = (regs || []).filter((r) => r.kart_number != null).length;
       const pub = s.public_results_token ? '<span class="sc-badge pub">Publie</span>' : '<span class="sc-badge">En cours</span>';
+      const TYPE_LABELS = { loisir: 'Loisir', competition: 'Competition', initiation: 'Initiation', entrainement: 'Entrainement' };
+      const typeBadge = s.session_type && TYPE_LABELS[s.session_type]
+        ? '<span class="sc-badge" style="background:rgba(236,234,42,.15);color:var(--yel)">' + TYPE_LABELS[s.session_type] + '</span>'
+        : '';
+      const notesDot = s.internal_notes
+        ? '<span title="Note interne presente" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--yel);margin-left:6px"></span>'
+        : '';
       return (
         '<div class="sess-card" onclick="openActiveDetail(\'' + s.id + '\')">' +
-        '<div class="flex" style="justify-content:space-between">' + pub + '</div>' +
-        '<h3>' + s.title + '</h3>' +
+        '<div class="flex" style="justify-content:space-between">' + pub + typeBadge + '</div>' +
+        '<h3>' + s.title + notesDot + '</h3>' +
         '<div class="sc-meta">' + s.max_karts + ' karts max' + (s.laps_count ? ' - ' + s.laps_count + ' tours' : '') + '</div>' +
         '<div class="sc-occ">' + occ + '/' + inscrits + ' karts occupes</div>' +
         '</div>'
@@ -82,6 +89,7 @@ export async function createSession({ onCreated } = {}) {
     ? state.prefs.default_karts
     : parseInt(document.getElementById('s-karts').value) || state.prefs.default_karts;
   const laps = state.prefs.laps_enabled ? state.prefs.default_laps : null;
+  const sessionType = document.getElementById('s-type')?.value || 'loisir';
   if (!title) {
     showMsg('msg-create', 'Donne un titre.', 'err');
     return;
@@ -90,7 +98,7 @@ export async function createSession({ onCreated } = {}) {
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await db
     .from('sessions')
-    .insert({ title: fullTitle, max_karts: karts, laps_count: laps, session_date: today, status: 'registration_open' })
+    .insert({ title: fullTitle, max_karts: karts, laps_count: laps, session_date: today, status: 'registration_open', session_type: sessionType })
     .select()
     .single();
   if (error) {
@@ -116,6 +124,10 @@ export async function openActiveDetail(id, { onOpened } = {}) {
   document.getElementById('det-karts-input').value = s.max_karts;
   document.getElementById('det-laps-input').value = s.laps_count || state.prefs.default_laps;
   document.getElementById('det-laps-wrap').style.display = state.prefs.laps_enabled ? 'block' : 'none';
+  const typeEl = document.getElementById('det-type-input');
+  if (typeEl) typeEl.value = s.session_type || 'loisir';
+  const notesEl = document.getElementById('det-notes-input');
+  if (notesEl) notesEl.value = s.internal_notes || '';
   document.getElementById('det-save-btn').style.display = 'none';
   updateQRReg();
   await loadInscrits();
@@ -133,11 +145,15 @@ export async function saveDetailMeta() {
   const title = document.getElementById('det-title-input').value.trim();
   const karts = parseInt(document.getElementById('det-karts-input').value) || state.activeDetailSession.max_karts;
   const laps = parseInt(document.getElementById('det-laps-input').value) || state.activeDetailSession.laps_count;
+  const sessionType = document.getElementById('det-type-input')?.value || state.activeDetailSession.session_type || 'loisir';
+  const internalNotes = document.getElementById('det-notes-input')?.value ?? state.activeDetailSession.internal_notes ?? '';
   if (!title) return;
-  await db.from('sessions').update({ title, max_karts: karts, laps_count: laps }).eq('id', state.activeDetailSession.id);
+  await db.from('sessions').update({ title, max_karts: karts, laps_count: laps, session_type: sessionType, internal_notes: internalNotes }).eq('id', state.activeDetailSession.id);
   state.activeDetailSession.title = title;
   state.activeDetailSession.max_karts = karts;
   state.activeDetailSession.laps_count = laps;
+  state.activeDetailSession.session_type = sessionType;
+  state.activeDetailSession.internal_notes = internalNotes;
   document.getElementById('det-save-btn').style.display = 'none';
   showMsg('msg-ins', 'Informations mises a jour.', 'ok');
   await loadActiveSessions();
@@ -182,10 +198,59 @@ export async function deleteActiveSession({ afterDelete } = {}) {
   showMsg('msg-create', 'Session supprimee.', 'ok');
 }
 
-export async function terminerSession({ afterEnd } = {}) {
+// Point 4 : remplace le confirm() natif par une modal récapitulative (titre,
+// nb pilotes, meilleur temps + nom, 2e temps + écart, statut publication).
+// `loadRanking` est injecté par results.js (openActiveDetailAndShowResults /
+// app.js) via l'orchestrateur pour éviter une dépendance circulaire
+// sessions.js <-> results.js (results.js importe déjà sessions.js).
+export async function terminerSession({ afterEnd, loadRanking, formatTime } = {}) {
   if (!state.activeDetailSession) return;
-  if (!confirm('Terminer et archiver "' + state.activeDetailSession.title + '" ?')) return;
+  const s = state.activeDetailSession;
+  let recapHTML = '<div style="font-size:13px;color:var(--mut)">Chargement du recapitulatif...</div>';
+  if (loadRanking) {
+    try {
+      const results = await loadRanking(s);
+      const { data: regs } = await db.from('session_registrations').select('id').eq('session_id', s.id);
+      const nbPilotes = (regs || []).length;
+      const fmt = formatTime || ((t) => t.toFixed(3) + ' s');
+      const first = results[0];
+      const second = results[1];
+      const pubStatus = s.public_results_token ? 'Publiee' : 'Non publiee';
+      recapHTML =
+        '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px">' +
+        '<div><b>' + nbPilotes + '</b> pilote(s) inscrit(s)</div>' +
+        (first ? '<div>Meilleur temps : <b>' + fmt(first.t) + '</b> — ' + first.name + '</div>' : '<div>Aucun chrono enregistre.</div>') +
+        (second ? '<div>2e temps : <b>' + fmt(second.t) + '</b> — ' + second.name + ' (ecart +' + fmt(second.t - first.t) + ')</div>' : '') +
+        '<div>Statut de publication : <b>' + pubStatus + '</b></div>' +
+        '</div>';
+    } catch (e) {
+      recapHTML = '<div style="font-size:13px;color:var(--red)">Erreur recapitulatif: ' + e.message + '</div>';
+    }
+  }
+  const contentEl = document.getElementById('recap-content');
+  const titleEl = document.getElementById('recap-title');
+  if (titleEl) titleEl.textContent = 'Terminer "' + s.title + '" ?';
+  if (contentEl) {
+    contentEl.innerHTML = recapHTML +
+      '<div class="flex" style="justify-content:center;margin-top:14px;gap:10px">' +
+      '<button class="btn btn-ghost btn-sm" onclick="closeRecapModal()">Annuler</button>' +
+      '<button class="btn btn-red btn-sm" onclick="confirmTerminerSession()">Terminer et archiver</button>' +
+      '</div>';
+  }
+  const overlay = document.getElementById('close-recap-overlay');
+  if (overlay) overlay.classList.add('show');
+  state._terminerAfterEnd = afterEnd;
+}
+
+export function closeRecapModal() {
+  const overlay = document.getElementById('close-recap-overlay');
+  if (overlay) overlay.classList.remove('show');
+}
+
+export async function confirmTerminerSession() {
+  if (!state.activeDetailSession) { closeRecapModal(); return; }
   const id = state.activeDetailSession.id;
+  const afterEnd = state._terminerAfterEnd;
   try {
     const { error } = await db
       .from('sessions')
@@ -199,6 +264,7 @@ export async function terminerSession({ afterEnd } = {}) {
     showMsg('msg-res', 'Erreur: ' + e.message, 'err');
     return;
   }
+  closeRecapModal();
   state.activeDetailSession = null;
   state.inscritsData = [];
   await loadActiveSessions();
