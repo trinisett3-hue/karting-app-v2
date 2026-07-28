@@ -889,7 +889,10 @@ function renderPerformanceBlock(p) {
   if (kpiGrid) {
     kpiGrid.innerHTML =
       kpiBox('Pilotes en progression', pct(p.pctProgression), null, '📈') +
-      kpiBox('Progression moyenne', p.progressionMoyenne != null ? '-' + p.progressionMoyenne.toFixed(2) + ' s' : '--', 'Entre 1re et derniere session', '⏱️');
+      // p.progressionMoyenne est toujours positif (voir loadOffre2Blocks : ne cumule que
+      // les deltas > 0) — c'est un gain de temps, affiche avec un signe moins pour bien
+      // marquer "plus rapide", jamais un delta negatif/regression.
+      kpiBox('Progression moyenne', p.progressionMoyenne != null ? '−' + p.progressionMoyenne.toFixed(2) + ' s' : '--', p.progressionMoyenne != null ? 'Plus rapide entre 1re et derniere session' : 'Entre 1re et derniere session', '⏱️');
   }
   const nivEl = document.getElementById('stats-perf-niveaux');
   if (nivEl) {
