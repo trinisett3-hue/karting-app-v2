@@ -32,6 +32,13 @@ function sectorsEnabled() { return PDF_SHOW_SECTORS !== false; }
 //   'pilot'      : même jeu de bustes pilote, sans numéro affiché (combinaison neutre).
 let PDF_AVATAR_MODE = 'kart';
 
+// 🆕 v19 : logo du circuit (Paramètres › Apparence), lu depuis app_settings.global
+// via public_site_config — déjà affiché sur cette page web (voir plus bas), mais pas
+// encore repris dans les 2 exports PDF (Fiche pilote / Classement complet). Mémorisé
+// ici pour que downloadPilotPDF()/downloadFullPDF() puissent y accéder sans refaire
+// l'appel réseau.
+let PDF_LOGO_URL = null;
+
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
 // <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
 function genAvatarDataURL(kart, opts) {
@@ -85,6 +92,7 @@ PDF_AVATAR_MODE = (data.value && data.value.avatar_mode) || 'kart';
 if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
 
 const logoUrl = data.value && data.value.logo_url;
+PDF_LOGO_URL = logoUrl || null;
 if (logoUrl) {
 const header = document.querySelector('.circuit-header');
 if (header && !document.getElementById('circuit-logo')) {
@@ -691,6 +699,12 @@ function ensurePdfStyles() {
 .pdfx-head-right{text-align:right}
 .pdfx-head-right .pdfx-date{font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--c-muted);text-transform:uppercase}
 .pdfx-head-right .pdfx-count{font-size:10.5px;color:var(--c-muted);margin-top:2px}
+/* 🆕 v19 : logo du circuit dans le bandeau du PDF "Classement complet" — placé entre
+   le nom et les infos de droite via l'ordre du flex (justify-content:space-between
+   sur .pdfx-head-band le pousse naturellement au centre grâce à ce 3e enfant). */
+.pdfx-head-logo{flex-shrink:0;max-height:34px;max-width:100px;object-fit:contain;order:2}
+.pdfx-head-band .pdfx-head-right{order:3}
+.pdfx-page.landscape .pdfx-head-logo{max-height:40px;max-width:130px}
 
 /* ---------- Corps : 1 colonne en portrait, 2 en paysage ---------- */
 .pdfx-body-wrap{display:flex;flex-direction:column;flex:1;min-height:0}
@@ -1134,8 +1148,12 @@ export async function downloadFullPDF(btn) {
       ? new Date(sessionInfo.session_date + 'T12:00:00').toLocaleDateString('fr-FR')
       : '--');
 
+    const headLogo = PDF_LOGO_URL
+      ? `<img class="pdfx-head-logo" src="${PDF_LOGO_URL}" alt="Logo du circuit" crossorigin="anonymous">`
+      : '';
     const headBand = `
 <div class="pdfx-head-band">
+${headLogo}
 <div class="pdfx-head-left">
 <div class="pdfx-circuit-name">${title}</div>
 <div class="pdfx-session-lbl">Classement complet — ${label}</div>
@@ -1352,7 +1370,9 @@ ${palmaresHTML(palmares)}
 <div class="item">${PDFX_SVG_TAG}<span>${sessionTxt}</span></div>
 </div>
 </div>
-<div class="pdfx-circuit-logo">${pdfxInitial((sessionInfo && sessionInfo.circuit_name) || 'Trinisette')}</div>
+<div class="pdfx-circuit-logo">${PDF_LOGO_URL
+      ? `<img src="${PDF_LOGO_URL}" alt="Logo" crossorigin="anonymous" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;background:var(--c-surface)">`
+      : pdfxInitial((sessionInfo && sessionInfo.circuit_name) || 'Trinisette')}</div>
 </div>
 </div>`;
     const footer = `<div class="pdfx-sheet-footer"><span>${circuitTxt} · <b>${dateTxt}</b></span><span><b>Trinisette</b> Karting</span></div>`;

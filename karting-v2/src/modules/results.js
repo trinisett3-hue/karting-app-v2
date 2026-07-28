@@ -271,6 +271,25 @@ export async function importChrono() {
   return importChronoSimple();
 }
 
+// 🆕 v19 : le texte brut de CHAQUE import (celui réellement traité, donc déjà
+// normalisé même s'il vient d'un fichier Excel/CSV — voir handleChronoFile())
+// est conservé dans chrono_imports, consultable/téléchargeable depuis les
+// archives de la session (voir loadArchiveChronoImports() plus bas). Ne doit
+// JAMAIS bloquer l'import lui-même si l'écriture échoue (RLS, réseau...) — le
+// chrono importé prime, l'historique est un confort.
+async function saveChronoImportHistory(sessionId, rawText, linesCount, importedCount) {
+  try {
+    await db.from('chrono_imports').insert({
+      session_id: sessionId,
+      raw_text: rawText,
+      lines_count: linesCount,
+      imported_count: importedCount,
+    });
+  } catch (e) {
+    console.warn('[results] historique import chrono non enregistré — non bloquant.', e);
+  }
+}
+
 // Exportée (en plus d'être utilisée par importChrono()) pour la saisie manuelle
 // (validateManualChrono ci-dessous) : le tableau "1 ligne par kart" ne saisit
 // jamais de secteurs, donc il doit toujours utiliser ce format-ci, même quand
@@ -341,6 +360,7 @@ export async function importChronoSimple() {
     imported++;
   }
   await db.from('sessions').update({ status: 'chrono_imported' }).eq('id', sid);
+  await saveChronoImportHistory(sid, raw, lines.length, imported);
   btn.disabled = false;
   btn.innerHTML = originalLabel;
   showMsg('msg-chrono', imported + ' temps importes' + (errors.length ? ' - ' + errors.length + ' erreurs' : ''), 'ok');
@@ -421,6 +441,7 @@ async function importChronoWithSectors() {
     }
     if (saved.error) throw saved.error;
     await db.from('sessions').update({ status: 'chrono_imported' }).eq('id', sid);
+    await saveChronoImportHistory(sid, raw, lines.length, rows.length);
     showMsg('msg-chrono', rows.length + ' tours importés' + (errors.length ? ' — ' + errors.length + ' lignes ignorées' : ''), 'ok');
     document.getElementById('chrono-raw').value = '';
     await loadDetailSession(sid);
@@ -546,6 +567,60 @@ export async function openArchiveDetail(id) {
   } else {
     document.getElementById('arch-qr-wrap').innerHTML = '<div class="empty">Non publie</div>';
   }
+  await loadArchiveChronoImports(id);
+}
+
+// --- Historique des imports chrono (v19) ---------------------------------------------------
+// Permet de retrouver, depuis une archive, le texte exact qui a été importé
+// (colle manuelle ou généré depuis un fichier Excel/CSV) — jusqu'ici ce texte
+// était traité puis jeté, impossible à revoir après coup si un import avait
+// laissé des trous (kart oublié, ligne mal formée...).
+
+async function loadArchiveChronoImports(sessionId) {
+  const el = document.getElementById('arch-chrono-imports');
+  if (!el) return;
+  el.innerHTML = '<div class="empty">Chargement...</div>';
+  const { data, error } = await db
+    .from('chrono_imports')
+    .select('id,lines_count,imported_count,created_at')
+    .eq('session_id', sessionId)
+    .order('created_at', { ascending: false });
+  if (error || !data || !data.length) {
+    el.innerHTML = '<div class="empty">Aucun import chrono enregistré pour cette session.</div>';
+    return;
+  }
+  el.innerHTML =
+    '<table class="tbl"><thead><tr><th>Date</th><th>Lignes</th><th>Importés</th><th></th></tr></thead><tbody>' +
+    data
+      .map(
+        (c) =>
+          '<tr><td>' + fmtDateTime(c.created_at) + '</td><td>' + (c.lines_count ?? '--') + '</td><td>' + (c.imported_count ?? '--') + '</td>' +
+          '<td><button class="btn btn-ghost btn-sm" onclick="downloadChronoImport(\'' + c.id + '\')">Télécharger</button></td></tr>'
+      )
+      .join('') +
+    '</tbody></table>';
+}
+
+function fmtDateTime(iso) {
+  if (!iso) return '--';
+  return new Date(iso).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+export async function downloadChronoImport(importId) {
+  const { data, error } = await db.from('chrono_imports').select('raw_text,created_at').eq('id', importId).single();
+  if (error || !data) {
+    showMsg('msg-arch', 'Import introuvable.', 'err');
+    return;
+  }
+  const blob = new Blob([data.raw_text], { type: 'text/plain;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'chrono-import-' + (data.created_at ? data.created_at.slice(0, 10) : importId.slice(0, 8)) + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 // Point 10/11 : type de session + notes internes, éditables aussi depuis une
