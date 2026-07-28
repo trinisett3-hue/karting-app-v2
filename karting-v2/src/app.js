@@ -320,4 +320,7 @@ filterRegistry: registry.filterRegistry,
 confirmDeletePilot: registry.confirmDeletePilot,
 confirmDeleteLegacy: registry.confirmDeleteLegacy,
 exportRegistryCSV: registry.exportRegistryCSV,
+startEditRegistry: registry.startEditRegistry,
+cancelRegistryEdit: registry.cancelRegistryEdit,
+saveRegistryEdit: registry.saveRegistryEdit,
 });
