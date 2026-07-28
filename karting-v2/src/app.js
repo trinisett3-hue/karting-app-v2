@@ -292,6 +292,7 @@ updateChronoFormat: results.updateChronoFormat,
 exportSessionPDF: results.exportSessionPDF,
 renderManualChronoTable: results.renderManualChronoTable,
 validateManualChrono: results.validateManualChrono,
+downloadChronoImport: results.downloadChronoImport,
 // Paramètres
 markPrefsDirty: () => (state.prefsDirty = true),
 addKartNumber: settings.addKartNumber,
