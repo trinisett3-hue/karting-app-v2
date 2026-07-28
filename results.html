@@ -1229,17 +1229,23 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   #page-screen-2 .circuit-name { font-size: clamp(1.7rem, 8vw, 2.2rem); }
   #page-screen-2 > section { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
   #page-screen-2 > section .section-title { flex-shrink: 0; margin-bottom: var(--space-2); }
-  #page-screen-2 .top10-wrap { flex: 1; min-height: 0; }
+  /* Le classement complet s'adapte a n'importe quel nombre de karts (plus ou
+     moins de 12) : au lieu de forcer les lignes a se partager une hauteur
+     fixe (ce qui rognait les dernieres lignes des que le nombre depassait ce
+     que la densite minimale pouvait absorber), le conteneur defile
+     verticalement des que le contenu depasse l'espace disponible. */
+  #page-screen-2 .top10-wrap { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
   #page2-ranking {
-    height: 100%;
-    display: grid;
-    grid-template-rows: repeat(var(--page2-count, 1), minmax(0, 1fr));
+    display: flex;
+    flex-direction: column;
+    gap: calc(.3rem * var(--page2-density, 1));
   }
   #page2-ranking .top10-row {
+    flex-shrink: 0;
     min-height: 0;
     grid-template-columns: calc(1.55rem * var(--page2-density, 1)) calc(2rem * var(--page2-density, 1)) minmax(0, 1fr) auto;
     gap: calc(.4rem * var(--page2-density, 1));
-    padding: 0 calc(.5rem * var(--page2-density, 1));
+    padding: calc(.25rem * var(--page2-density, 1)) calc(.5rem * var(--page2-density, 1));
   }
   #page2-ranking .rank-pos { font-size: calc(1.45rem * var(--page2-density, 1)); }
   #page2-ranking .rank-avatar { width: calc(2rem * var(--page2-density, 1)); height: calc(2rem * var(--page2-density, 1)); }

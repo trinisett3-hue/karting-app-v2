@@ -84,7 +84,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .stats-range-btn{background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;text-align:center;transition:.15s;color:var(--txt);font-weight:600}
 .stats-range-btn.selected{border-color:var(--acc);background:rgba(255,59,48,.14);color:var(--acc2);font-weight:700}
 .reg-search{width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--bord);background:var(--bg);color:var(--txt);font-size:13px;margin-bottom:12px}
-.ins-table-scroll{background:linear-gradient(var(--bg2,#1a1a2e) 30%,transparent) 0 0,linear-gradient(transparent,var(--bg2,#1a1a2e) 70%) 0 100%,radial-gradient(farthest-side at 50% 0,rgba(0,0,0,.3),transparent) 0 0,radial-gradient(farthest-side at 50% 100%,rgba(0,0,0,.3),transparent) 0 100%;background-color:var(--bg2,#1a1a2e);background-repeat:no-repeat;background-size:100% 40px,100% 40px,100% 12px,100% 12px;background-attachment:local,local,scroll,scroll}
+.ins-table-scroll{background:linear-gradient(var(--surf2) 30%,transparent) 0 0,linear-gradient(transparent,var(--surf2) 70%) 0 100%,radial-gradient(farthest-side at 50% 0,rgba(0,0,0,.15),transparent) 0 0,radial-gradient(farthest-side at 50% 100%,rgba(0,0,0,.15),transparent) 0 100%;background-color:var(--surf2);background-repeat:no-repeat;background-size:100% 40px,100% 40px,100% 12px,100% 12px;background-attachment:local,local,scroll,scroll}
 .btn-ghost{background:var(--surf2);color:var(--txt);border:1px solid var(--bord)}
 .btn-ghost:hover{background:#262b42;border-color:#3a4062}
 .btn-sm{padding:6px 12px;font-size:12px}
@@ -170,7 +170,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .pilot-row-select:hover{background:var(--surf2)}
 .kart-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 8px;border-radius:7px;font-weight:800;font-size:13px;background:var(--surf2);border:1px solid var(--bord)}
 .kart-badge.assigned{background:rgba(255,59,48,.15);color:var(--acc2);border-color:rgba(255,59,48,.35)}
-.kart-badge.empty{color:var(--mut);font-weight:600;font-size:11px}
+.kart-badge.unassigned{color:var(--mut);font-weight:600;font-size:11px}
 /* Paramètres : deux colonnes (réglages à gauche, aperçu en direct à droite) */
 .params-layout{display:flex;gap:20px;align-items:flex-start}
 .params-col-left{flex:0 0 clamp(360px,42vw,540px);min-width:0}
