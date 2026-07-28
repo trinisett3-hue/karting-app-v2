@@ -284,7 +284,7 @@ export async function loadStatsTab(range) {
   const hofKartsEl = document.getElementById('stats-hof-karts');
   if (kpiGrid) kpiGrid.innerHTML = '<div class="empty">Chargement...</div>';
 
-  let sessQuery = db.from('sessions').select('id,session_date,created_at,max_karts');
+  let sessQuery = db.from('sessions').select('id,session_date,created_at,max_karts,starts_at,incident_count,interruption_minutes');
   if (currentRange.from) sessQuery = sessQuery.gte('session_date', currentRange.from);
   if (currentRange.to) sessQuery = sessQuery.lte('session_date', currentRange.to);
   const sessRes = await sessQuery;
@@ -297,7 +297,7 @@ export async function loadStatsTab(range) {
   // .in('session_id', ...) plutôt que de filtrer côté client — plus proche
   // du style existant (filtres appliqués côté requête) et ça évite de
   // retélécharger des lignes qui seront de toute façon jetées.
-  let regsQuery = db.from('session_registrations').select('id,session_id,display_name,kart_number');
+  let regsQuery = db.from('session_registrations').select('id,session_id,display_name,kart_number,nationality,is_unknown,created_at');
   let lapsQuery = db.from('laps').select('registration_id,lap_time_seconds,session_id');
   if (currentRange.from || currentRange.to) {
     regsQuery = regsQuery.in('session_id', sessionIds.length ? sessionIds : ['00000000-0000-0000-0000-000000000000']);
@@ -403,6 +403,18 @@ export async function loadStatsTab(range) {
 
   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
   renderFrequencyChart(allSessions, currentRange);
+
+  // --- Offre 2 : fidelisation, performance avancee, qualite, utilisation avancee ---------
+  // Section entierement separee (voir plus bas dans ce fichier) — ne modifie rien de ce
+  // qui precede, se contente de lire allSessions/allRegs/allLaps/timeRows deja charges
+  // pour le filtre en cours. Enveloppee dans un try/catch : un souci sur un bloc Offre 2
+  // (ex. table session_ratings pas encore migree chez un tenant) ne doit jamais casser
+  // l'affichage Offre 1 ci-dessus, deja rendu a ce stade.
+  try {
+    await loadOffre2Blocks(allSessions, allRegs, allLaps, timeRows, currentRange);
+  } catch (e) {
+    console.warn('[stats] blocs Offre 2 indisponibles.', e);
+  }
 }
 
 // Lundi de la semaine contenant `date`. Extrait de l'ancien isoWeekLabel()
@@ -529,6 +541,413 @@ function renderFrequencyChart(allSessions, range) {
   });
 }
 
+// =========================================================================================
+// OFFRE 2 — Statistiques avancees (fidelisation, performance sportive, qualite, usage)
+// =========================================================================================
+// Section volontairement separee du reste du fichier (Offre 1 ci-dessus) : fidelisation,
+// performance sportive avancee, experience/qualite et usage avance/saisonnalite sont des
+// analyses qui NE FONT PAS partie du pack de base. Aucun KPI de chiffre d'affaires ici
+// (revenu, panier moyen, CA par type de session) — explicitement hors perimetre.
+//
+// Comme le reste du fichier, ces fonctions restent volontairement simples : elles
+// reçoivent les tableaux deja charges par loadStatsTab() (allSessions/allRegs/allLaps/
+// timeRows) et ne font de requete DB additionnelle QUE pour des donnees pas deja
+// chargees (session_ratings, sessions "avant la periode" pour le taux de retour, presets
+// de visites 30/90/365j, saisonnalite 12 mois, reglages du tenant). Chacune de ces
+// requetes est non-bloquante : en cas d'echec (RLS, table pas encore migree chez ce
+// tenant...) le bloc concerne affiche "--" plutot que de faire planter tout l'onglet —
+// voir le try/catch autour de loadOffre2Blocks() dans loadStatsTab().
+
+let lastFidelisation = { tauxRetour: null, visites30: null, visites90: null, visites365: null, segmentation: { nouveaux: 0, reguliers: 0, fans: 0 }, top10: [] };
+let lastPerformance = { pctProgression: null, progressionMoyenne: null, niveaux: { debutant: 0, intermediaire: 0, expert: 0 }, hofEnrichi: [] };
+let lastQualite = { csatMoyen: null, csatPositifPct: null, nbReponses: 0, tauxIncident: null, interruptionMinutes: 0 };
+let lastUsageAvance = { pctEnLigne: null, pctSurPlace: null, planPisteActif: false, themeActuel: null, themePremium: false, saisonnalite: { months: [], topHours: [] } };
+
+// Identite d'un pilote a travers plusieurs sessions : meme convention que l'ancien
+// regroupement par pseudo de l'Offre 1 — pas d'identifiant stable pour les pilotes
+// "Unknown"/sur-place, donc le pseudo normalise reste la seule cle disponible cote client.
+function pilotKey(reg) {
+  return (reg.display_name || '').trim().toLowerCase();
+}
+
+// Segmentation simple par nombre de sessions sur la periode — seuils demandes tels
+// quels dans le cahier des charges (1 = nouveau, 2-4 = regulier, 5+ = fan).
+function segmentLabel(count) {
+  if (count >= 5) return 'fans';
+  if (count >= 2) return 'reguliers';
+  return 'nouveaux';
+}
+
+// Seuils de niveau (temps au tour, en secondes) — valeurs par defaut generiques, a
+// affiner par circuit plus tard (pas de reglage dedie cote Parametres pour l'instant,
+// meme logique que DEFAULT_OPENING_HOURS_PER_DAY en Offre 1 : point de config futur,
+// pas une verite universelle — un circuit indoor court n'a pas les memes temps qu'un
+// circuit outdoor long).
+const LEVEL_THRESHOLDS_SECONDS = { expertMax: 45, intermediaireMax: 55 };
+function levelForBestLap(bestLapSeconds) {
+  if (bestLapSeconds == null) return null;
+  if (bestLapSeconds <= LEVEL_THRESHOLDS_SECONDS.expertMax) return 'expert';
+  if (bestLapSeconds <= LEVEL_THRESHOLDS_SECONDS.intermediaireMax) return 'intermediaire';
+  return 'debutant';
+}
+
+// Coefficient de variation (ecart-type / moyenne) en-dessous duquel un pilote est
+// considere "regulier" (badge "Metronome") — seuil simple et documente, pas un calcul
+// scientifique de constance.
+const REGULARITY_CV_THRESHOLD = 0.03;
+
+function stddev(values) {
+  if (!values.length) return null;
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((a, b) => a + (b - mean) * (b - mean), 0) / values.length;
+  return { mean, sd: Math.sqrt(variance) };
+}
+
+// Themes "Pro" — copie volontairement locale de la liste de PREMIUM_THEMES dans
+// settings.js (pas d'import croise entre les deux modules pour ce simple usage en
+// lecture) : settings.js reste la source de verite si la liste doit evoluer.
+const PREMIUM_THEME_SLUGS = new Set(['checkered', 'endurance', 'pitlane', 'champagne', 'arctic']);
+
+function formatMinutes(min) {
+  if (!min) return '0 min';
+  if (min < 60) return min + ' min';
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return h + 'h' + (m ? String(m).padStart(2, '0') : '');
+}
+
+async function loadOffre2Blocks(allSessions, allRegs, allLaps, timeRows, range) {
+  const regsById = new Map(allRegs.map((r) => [r.id, r]));
+  const sessionsById = new Map(allSessions.map((s) => [s.id, s]));
+
+  // ---------------------------------------------------------------------------------------
+  // 1) FIDELISATION & COMPORTEMENT PILOTES
+  // ---------------------------------------------------------------------------------------
+  const byPilot = new Map();
+  allRegs.forEach((r) => {
+    const key = pilotKey(r);
+    if (!key) return;
+    if (!byPilot.has(key)) byPilot.set(key, { name: r.display_name, nationalities: new Map(), sessions: new Set() });
+    const p = byPilot.get(key);
+    p.sessions.add(r.session_id);
+    if (r.nationality) p.nationalities.set(r.nationality, (p.nationalities.get(r.nationality) || 0) + 1);
+  });
+
+  const segmentation = { nouveaux: 0, reguliers: 0, fans: 0 };
+  byPilot.forEach((p) => { segmentation[segmentLabel(p.sessions.size)]++; });
+
+  const top10Engagement = Array.from(byPilot.values())
+    .map((p) => ({
+      name: p.name,
+      nationality: (Array.from(p.nationalities.entries()).sort((a, b) => b[1] - a[1])[0] || [])[0] || '--',
+      sessions: p.sessions.size,
+    }))
+    .sort((a, b) => b.sessions - a.sessions)
+    .slice(0, 10);
+
+  // Taux de retour : % de pilotes de la periode deja vus AVANT le debut de la periode.
+  // N'a de sens que sur une plage bornee (sinon "avant la periode" n'existe pas, d'où
+  // le '--' sur "Depuis le debut") — requete additionnelle legere, non bloquante.
+  let tauxRetour = null;
+  if (range && range.from) {
+    try {
+      const { data: priorSessions } = await db.from('sessions').select('id').lt('session_date', range.from);
+      const priorIds = (priorSessions || []).map((s) => s.id);
+      if (priorIds.length) {
+        const { data: priorRegs } = await db.from('session_registrations').select('display_name').in('session_id', priorIds);
+        const priorKeys = new Set((priorRegs || []).map((r) => (r.display_name || '').trim().toLowerCase()).filter(Boolean));
+        const pilotsInRange = Array.from(byPilot.keys());
+        const returning = pilotsInRange.filter((k) => priorKeys.has(k)).length;
+        tauxRetour = pilotsInRange.length ? returning / pilotsInRange.length : null;
+      } else {
+        tauxRetour = 0; // aucune session avant la periode : personne ne peut etre "de retour"
+      }
+    } catch (e) {
+      tauxRetour = null;
+    }
+  }
+
+  // Visites moyennes/pilote sur des presets fixes (30/90/365j), independants du filtre
+  // en cours — demande explicitement telle quelle ("basé sur ... des presets").
+  const visites = await computeVisitesPresets();
+
+  lastFidelisation = { tauxRetour, visites30: visites.j30, visites90: visites.j90, visites365: visites.j365, segmentation, top10: top10Engagement };
+  renderFidelisationBlock(lastFidelisation);
+
+  // ---------------------------------------------------------------------------------------
+  // 2) PERFORMANCE SPORTIVE AVANCEE
+  // ---------------------------------------------------------------------------------------
+  // Meilleur tour par (pilote, session) — pour la progression — et tous les tours par
+  // pilote — pour la regularite.
+  const bestLapByRegistration = new Map();
+  const lapsByPilot = new Map();
+  allLaps.forEach((l) => {
+    if (!l.registration_id) return;
+    const reg = regsById.get(l.registration_id);
+    if (!reg) return;
+    const key = pilotKey(reg);
+    if (!key) return;
+    const t = Number(l.lap_time_seconds);
+    if (!Number.isFinite(t)) return;
+    const curBest = bestLapByRegistration.get(l.registration_id);
+    if (curBest == null || t < curBest) bestLapByRegistration.set(l.registration_id, t);
+    if (!lapsByPilot.has(key)) lapsByPilot.set(key, []);
+    lapsByPilot.get(key).push(t);
+  });
+
+  const sessionsByPilotChrono = new Map(); // key -> [{ date, best }] trie par date
+  allRegs.forEach((r) => {
+    const key = pilotKey(r);
+    if (!key) return;
+    const best = bestLapByRegistration.get(r.id);
+    if (best == null) return;
+    const sess = sessionsById.get(r.session_id);
+    if (!sess || !sess.session_date) return;
+    if (!sessionsByPilotChrono.has(key)) sessionsByPilotChrono.set(key, []);
+    sessionsByPilotChrono.get(key).push({ date: sess.session_date, best });
+  });
+
+  let progressCount = 0, eligibleCount = 0, progressionSum = 0;
+  const niveaux = { debutant: 0, intermediaire: 0, expert: 0 };
+  const regularityByPilot = new Map(); // key -> { cv, isRegular }
+  sessionsByPilotChrono.forEach((rows) => {
+    rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const overallBest = Math.min(...rows.map((r) => r.best));
+    const lvl = levelForBestLap(overallBest);
+    if (lvl) niveaux[lvl]++;
+    if (rows.length >= 2) {
+      eligibleCount++;
+      const delta = rows[0].best - rows[rows.length - 1].best; // positif = plus rapide qu'au debut
+      if (delta > 0) { progressCount++; progressionSum += delta; }
+    }
+  });
+  lapsByPilot.forEach((times, key) => {
+    if (times.length < 5) return; // pas assez de tours pour juger de la regularite
+    const s = stddev(times);
+    if (!s || !s.mean) return;
+    const cv = s.sd / s.mean;
+    regularityByPilot.set(key, { cv, isRegular: cv < REGULARITY_CV_THRESHOLD });
+  });
+
+  const pctProgression = eligibleCount ? progressCount / eligibleCount : null;
+  const progressionMoyenne = progressCount ? progressionSum / progressCount : null;
+
+  // Hall of Fame enrichi : reprend le classement "top temps absolus" deja calcule par
+  // l'Offre 1 (timeRows, trie par temps total croissant) et lui ajoute nb sessions,
+  // niveau et badge de regularite — sans recalculer le classement lui-meme.
+  const hofEnrichi = timeRows.slice(0, 10).map((r) => {
+    const key = r.name.trim().toLowerCase();
+    const sessions = (byPilot.get(key) && byPilot.get(key).sessions.size) || 1;
+    const rows = sessionsByPilotChrono.get(key) || [];
+    const overallBest = rows.length ? Math.min(...rows.map((x) => x.best)) : null;
+    const reg = regularityByPilot.get(key);
+    return { name: r.name, total: r.total, sessions, niveau: levelForBestLap(overallBest), regulier: !!(reg && reg.isRegular) };
+  });
+
+  lastPerformance = { pctProgression, progressionMoyenne, niveaux, hofEnrichi };
+  renderPerformanceBlock(lastPerformance);
+
+  // ---------------------------------------------------------------------------------------
+  // 3) EXPERIENCE CLIENT & QUALITE
+  // ---------------------------------------------------------------------------------------
+  const incidentsTotal = allSessions.reduce((a, s) => a + (Number(s.incident_count) || 0), 0);
+  const interruptionTotal = allSessions.reduce((a, s) => a + (Number(s.interruption_minutes) || 0), 0);
+  const tauxIncident = allSessions.length ? (incidentsTotal / allSessions.length) * 100 : null;
+
+  let csatMoyen = null, csatPositifPct = null, nbReponses = 0;
+  try {
+    const sessionIds = allSessions.map((s) => s.id);
+    if (sessionIds.length) {
+      const { data: ratings } = await db.from('session_ratings').select('rating').in('session_id', sessionIds);
+      const list = (ratings || []).map((r) => Number(r.rating)).filter((n) => n >= 1 && n <= 5);
+      nbReponses = list.length;
+      if (nbReponses) {
+        csatMoyen = list.reduce((a, b) => a + b, 0) / nbReponses;
+        csatPositifPct = list.filter((n) => n >= 4).length / nbReponses;
+      }
+    }
+  } catch (e) {
+    // table pas encore migree chez ce tenant, ou aucune note enregistree : pas bloquant
+  }
+
+  lastQualite = { csatMoyen, csatPositifPct, nbReponses, tauxIncident, interruptionMinutes: interruptionTotal };
+  renderQualiteBlock(lastQualite);
+
+  // ---------------------------------------------------------------------------------------
+  // 4) UTILISATION AVANCEE & SAISONNALITE
+  // ---------------------------------------------------------------------------------------
+  const enLigne = allRegs.filter((r) => r.is_unknown === false).length;
+  const surPlace = allRegs.filter((r) => r.is_unknown === true).length;
+  const totalRegs = enLigne + surPlace;
+  const pctEnLigne = totalRegs ? enLigne / totalRegs : null;
+  const pctSurPlace = totalRegs ? surPlace / totalRegs : null;
+
+  let planPisteActif = false, themeActuel = null, themePremium = false;
+  try {
+    const { data: cfg } = await db.from('app_settings').select('value').eq('key', 'global').maybeSingle();
+    if (cfg && cfg.value) {
+      planPisteActif = !!cfg.value.track_map_url;
+      themeActuel = cfg.value.results_theme || 'classic';
+      themePremium = PREMIUM_THEME_SLUGS.has(themeActuel);
+    }
+  } catch (e) {
+    // pas bloquant
+  }
+
+  const saisonnalite = await computeSaisonnalite12Mois();
+
+  lastUsageAvance = { pctEnLigne, pctSurPlace, planPisteActif, themeActuel, themePremium, saisonnalite };
+  renderUsageAvanceBlock(lastUsageAvance);
+}
+
+// Visites moyennes/pilote sur 3 fenetres glissantes fixes (30/90/365 jours), independantes
+// du filtre de plage courant — 3 requetes legeres, chacune non-bloquante individuellement.
+async function computeVisitesPresets() {
+  const presets = { j30: 30, j90: 90, j365: 365 };
+  const today = new Date();
+  const out = {};
+  for (const key of Object.keys(presets)) {
+    try {
+      const from = new Date(today);
+      from.setDate(from.getDate() - presets[key]);
+      const fromStr = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0') + '-' + String(from.getDate()).padStart(2, '0');
+      const { data: sess } = await db.from('sessions').select('id').gte('session_date', fromStr);
+      const ids = (sess || []).map((s) => s.id);
+      if (!ids.length) { out[key] = null; continue; }
+      const { data: regs } = await db.from('session_registrations').select('display_name').in('session_id', ids);
+      const uniq = new Set((regs || []).map((r) => (r.display_name || '').trim().toLowerCase()).filter(Boolean));
+      out[key] = uniq.size ? (regs || []).length / uniq.size : null;
+    } catch (e) {
+      out[key] = null;
+    }
+  }
+  return out;
+}
+
+// Saisonnalite sur les 12 derniers mois glissants — vue globale, independante du filtre
+// de plage courant (demande explicitement telle quelle) : nb de sessions par mois, et
+// les creneaux horaires (heure de depart) les plus demandes.
+async function computeSaisonnalite12Mois() {
+  try {
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(from.getDate() - 365);
+    const fromStr = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0') + '-' + String(from.getDate()).padStart(2, '0');
+    const { data: sess } = await db.from('sessions').select('session_date,starts_at').gte('session_date', fromStr);
+    const list = sess || [];
+    const byMonth = new Map();
+    const byHour = new Map();
+    list.forEach((s) => {
+      if (s.session_date) {
+        const mKey = s.session_date.slice(0, 7);
+        byMonth.set(mKey, (byMonth.get(mKey) || 0) + 1);
+      }
+      if (s.starts_at) {
+        const h = new Date(s.starts_at).getHours();
+        byHour.set(h, (byHour.get(h) || 0) + 1);
+      }
+    });
+    const months = Array.from(byMonth.entries()).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([m, c]) => ({ month: m, count: c }));
+    const topHours = Array.from(byHour.entries()).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([h, c]) => ({ hour: h, count: c }));
+    return { months, topHours };
+  } catch (e) {
+    return { months: [], topHours: [] };
+  }
+}
+
+function renderFidelisationBlock(f) {
+  const kpiGrid = document.getElementById('stats-fid-kpi-grid');
+  if (kpiGrid) {
+    kpiGrid.innerHTML =
+      kpiBox('Taux de retour', pct(f.tauxRetour), f.tauxRetour == null ? 'Non calculable sur "Depuis le debut"' : null, '🔁') +
+      kpiBox('Visites / pilote (30j)', f.visites30 != null ? f.visites30.toFixed(1) : '--', null, '📆') +
+      kpiBox('Visites / pilote (90j)', f.visites90 != null ? f.visites90.toFixed(1) : '--', null, '📆') +
+      kpiBox('Visites / pilote (1 an)', f.visites365 != null ? f.visites365.toFixed(1) : '--', null, '📆');
+  }
+  const segEl = document.getElementById('stats-fid-segmentation');
+  if (segEl) {
+    const total = f.segmentation.nouveaux + f.segmentation.reguliers + f.segmentation.fans;
+    const row = (lbl, n, color) =>
+      '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + lbl + '</span><span>' + n + ' (' + (total ? Math.round((n / total) * 100) : 0) + '%)</span></div>' +
+      '<div style="height:8px;border-radius:4px;background:var(--surf2);overflow:hidden"><div style="height:100%;width:' + (total ? Math.round((n / total) * 100) : 0) + '%;background:' + color + '"></div></div></div>';
+    segEl.innerHTML = total
+      ? row('Nouveaux (1 session)', f.segmentation.nouveaux, '#7c74ff') + row('Reguliers (2-4 sessions)', f.segmentation.reguliers, '#f0c419') + row('Fans (5+ sessions)', f.segmentation.fans, '#ff3b30')
+      : '<div class="empty">Aucun pilote sur la periode.</div>';
+  }
+  const topEl = document.getElementById('stats-fid-top10');
+  if (topEl) {
+    topEl.innerHTML = f.top10.length
+      ? '<table class="rank-tbl"><thead><tr><th>#</th><th>Nom</th><th>Nat.</th><th>Sessions</th></tr></thead><tbody>' +
+        f.top10.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p.name + '</td><td>' + p.nationality + '</td><td>' + p.sessions + '</td></tr>').join('') +
+        '</tbody></table>'
+      : '<div class="empty">Aucun pilote.</div>';
+  }
+}
+
+function renderPerformanceBlock(p) {
+  const kpiGrid = document.getElementById('stats-perf-kpi-grid');
+  if (kpiGrid) {
+    kpiGrid.innerHTML =
+      kpiBox('Pilotes en progression', pct(p.pctProgression), null, '📈') +
+      kpiBox('Progression moyenne', p.progressionMoyenne != null ? '-' + p.progressionMoyenne.toFixed(2) + ' s' : '--', 'Entre 1re et derniere session', '⏱️');
+  }
+  const nivEl = document.getElementById('stats-perf-niveaux');
+  if (nivEl) {
+    const total = p.niveaux.debutant + p.niveaux.intermediaire + p.niveaux.expert;
+    nivEl.innerHTML = total
+      ? '<table class="rank-tbl"><thead><tr><th>Niveau</th><th>Pilotes</th><th>Part</th></tr></thead><tbody>' +
+        [['Debutant', p.niveaux.debutant], ['Intermediaire', p.niveaux.intermediaire], ['Expert', p.niveaux.expert]]
+          .map((pair) => '<tr><td>' + pair[0] + '</td><td>' + pair[1] + '</td><td>' + Math.round((pair[1] / total) * 100) + '%</td></tr>').join('') +
+        '</tbody></table>'
+      : '<div class="empty">Aucun temps enregistre.</div>';
+  }
+  const hofEl = document.getElementById('stats-perf-hof');
+  if (hofEl) {
+    const NIVEAU_LABELS = { expert: 'Expert', intermediaire: 'Intermediaire', debutant: 'Debutant' };
+    hofEl.innerHTML = p.hofEnrichi.length
+      ? '<table class="rank-tbl"><thead><tr><th>#</th><th>Nom</th><th>Temps</th><th>Sessions</th><th>Niveau</th><th>Regularite</th></tr></thead><tbody>' +
+        p.hofEnrichi.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + r.name + '</td><td>' + formatTime(r.total) + '</td><td>' + r.sessions + '</td><td>' + (NIVEAU_LABELS[r.niveau] || '--') + '</td><td>' + (r.regulier ? '🎯 Metronome' : '--') + '</td></tr>').join('') +
+        '</tbody></table>'
+      : '<div class="empty">Aucun classement disponible.</div>';
+  }
+}
+
+function renderQualiteBlock(q) {
+  const kpiGrid = document.getElementById('stats-qualite-kpi-grid');
+  if (!kpiGrid) return;
+  kpiGrid.innerHTML =
+    kpiBox('CSAT moyen', q.csatMoyen != null ? q.csatMoyen.toFixed(1) + ' / 5' : '--', q.nbReponses ? q.nbReponses + ' reponse(s)' : 'Aucune note recue', '⭐') +
+    kpiBox('Avis positifs (4-5)', pct(q.csatPositifPct), null, '👍') +
+    kpiBox("Taux d'incident", q.tauxIncident != null ? q.tauxIncident.toFixed(1) + ' / 100 sessions' : '--', null, '⚠️') +
+    kpiBox('Interruption piste', formatMinutes(q.interruptionMinutes), 'Cumul sur la periode', '⏸️');
+}
+
+function renderUsageAvanceBlock(u) {
+  const kpiGrid = document.getElementById('stats-usage-kpi-grid');
+  if (kpiGrid) {
+    kpiGrid.innerHTML =
+      kpiBox('Inscriptions en ligne', pct(u.pctEnLigne), 'Via register.html', '💻') +
+      kpiBox('Inscriptions sur place', pct(u.pctSurPlace), 'Walk-in / saisie admin', '🚶') +
+      kpiBox('Plan de piste', u.planPisteActif ? 'Actif' : 'Inactif', null, '🗺️') +
+      kpiBox('Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Pro' : 'Theme gratuit', '🎨');
+  }
+  const saisonEl = document.getElementById('stats-usage-saison');
+  if (!saisonEl) return;
+  if (!u.saisonnalite.months.length) {
+    saisonEl.innerHTML = '<div class="empty">Pas assez d\'historique (12 mois).</div>';
+    return;
+  }
+  const maxCount = Math.max.apply(null, u.saisonnalite.months.map((m) => m.count).concat([1]));
+  const bars = u.saisonnalite.months.map((m) =>
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' +
+    '<span style="width:52px;font-size:11px;color:var(--mut)">' + m.month + '</span>' +
+    '<div style="flex:1;height:8px;border-radius:4px;background:var(--surf2);overflow:hidden"><div style="height:100%;width:' + Math.round((m.count / maxCount) * 100) + '%;background:#7c74ff"></div></div>' +
+    '<span style="width:24px;text-align:right;font-size:11px">' + m.count + '</span></div>'
+  ).join('');
+  const topHoursTxt = u.saisonnalite.topHours.length ? u.saisonnalite.topHours.map((h) => h.hour + 'h (' + h.count + ')').join(' · ') : '--';
+  saisonEl.innerHTML = bars + '<div style="margin-top:10px;font-size:11px;color:var(--mut)">Creneaux les plus demandes : ' + topHoursTxt + '</div>';
+}
+
 // --- Export XLSX (multi-onglets) --------------------------------------------------------------
 // 🆕 v17 : remplace l'ancien export CSV (qui ne couvrait que le "Top temps")
 // par un classeur Excel avec UN ONGLET PAR BLOC de l'onglet Statistiques —
@@ -595,6 +1014,78 @@ export function exportStatsXLSX() {
     ['Sessions par semaine (moyenne)', e.sessionsPerWeek != null ? e.sessionsPerWeek.toFixed(1) : '--', ''],
   ]);
   XLSX.utils.book_append_sheet(wb, exploitationSheet, 'Exploitation piste');
+
+  // --- Offre 2 : 4 feuilles supplementaires, memes principes (aucune requete DB, reprend
+  // ce qui est deja affiche a l'ecran via lastFidelisation/lastPerformance/lastQualite/
+  // lastUsageAvance) ------------------------------------------------------------------------
+  const f = lastFidelisation;
+  const fidSheet = XLSX.utils.aoa_to_sheet([
+    ['Fidelisation pilotes — ' + periodeTxt],
+    [],
+    ['Indicateur', 'Valeur'],
+    ['Taux de retour', pct(f.tauxRetour)],
+    ['Visites / pilote (30j)', f.visites30 != null ? f.visites30.toFixed(1) : '--'],
+    ['Visites / pilote (90j)', f.visites90 != null ? f.visites90.toFixed(1) : '--'],
+    ['Visites / pilote (1 an)', f.visites365 != null ? f.visites365.toFixed(1) : '--'],
+    [],
+    ['Segmentation', 'Nb pilotes'],
+    ['Nouveaux (1 session)', f.segmentation.nouveaux],
+    ['Reguliers (2-4 sessions)', f.segmentation.reguliers],
+    ['Fans (5+ sessions)', f.segmentation.fans],
+    [],
+    ['Top 10 par engagement — Position', 'Nom', 'Nationalite', 'Sessions'],
+    ...f.top10.map((p, i) => [i + 1, p.name, p.nationality, p.sessions]),
+  ]);
+  XLSX.utils.book_append_sheet(wb, fidSheet, 'Fidelisation');
+
+  const p = lastPerformance;
+  const NIVEAU_LABELS_XLSX = { expert: 'Expert', intermediaire: 'Intermediaire', debutant: 'Debutant' };
+  const perfSheet = XLSX.utils.aoa_to_sheet([
+    ['Performance sportive avancee — ' + periodeTxt],
+    [],
+    ['Indicateur', 'Valeur'],
+    ['Pilotes en progression', pct(p.pctProgression)],
+    ['Progression moyenne', p.progressionMoyenne != null ? '-' + p.progressionMoyenne.toFixed(2) + ' s' : '--'],
+    [],
+    ['Niveau', 'Pilotes'],
+    ['Debutant', p.niveaux.debutant],
+    ['Intermediaire', p.niveaux.intermediaire],
+    ['Expert', p.niveaux.expert],
+    [],
+    ['Hall of Fame enrichi — Position', 'Nom', 'Temps', 'Sessions', 'Niveau', 'Regulier'],
+    ...p.hofEnrichi.map((r, i) => [i + 1, r.name, formatTime(r.total), r.sessions, NIVEAU_LABELS_XLSX[r.niveau] || '--', r.regulier ? 'Oui' : 'Non']),
+  ]);
+  XLSX.utils.book_append_sheet(wb, perfSheet, 'Performance sportive');
+
+  const q = lastQualite;
+  const qualiteSheet = XLSX.utils.aoa_to_sheet([
+    ['Experience & qualite — ' + periodeTxt],
+    [],
+    ['Indicateur', 'Valeur', 'Detail'],
+    ['CSAT moyen', q.csatMoyen != null ? q.csatMoyen.toFixed(1) + ' / 5' : '--', q.nbReponses + ' reponse(s)'],
+    ['Avis positifs (4-5)', pct(q.csatPositifPct), ''],
+    ["Taux d'incident", q.tauxIncident != null ? q.tauxIncident.toFixed(1) + ' / 100 sessions' : '--', ''],
+    ['Interruption piste (cumul)', formatMinutes(q.interruptionMinutes), ''],
+  ]);
+  XLSX.utils.book_append_sheet(wb, qualiteSheet, 'Experience qualite');
+
+  const u = lastUsageAvance;
+  const usageSheet = XLSX.utils.aoa_to_sheet([
+    ['Utilisation avancee & saisonnalite — ' + periodeTxt],
+    [],
+    ['Indicateur', 'Valeur', 'Detail'],
+    ['Inscriptions en ligne (register.html)', pct(u.pctEnLigne), ''],
+    ['Inscriptions sur place (walk-in/admin)', pct(u.pctSurPlace), ''],
+    ['Plan de piste', u.planPisteActif ? 'Actif' : 'Inactif', ''],
+    ['Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Pro' : 'Theme gratuit'],
+    [],
+    ['Saisonnalite (12 derniers mois) — Mois', 'Sessions'],
+    ...u.saisonnalite.months.map((m) => [m.month, m.count]),
+    [],
+    ['Creneaux les plus demandes — Heure', 'Sessions'],
+    ...u.saisonnalite.topHours.map((h) => [h.hour + 'h', h.count]),
+  ]);
+  XLSX.utils.book_append_sheet(wb, usageSheet, 'Utilisation avancee');
 
   const today = new Date();
   const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');

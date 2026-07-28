@@ -547,6 +547,10 @@ export async function openArchiveDetail(id) {
   if (typeEl) typeEl.value = s.session_type || 'loisir';
   const notesEl = document.getElementById('arch-notes-input');
   if (notesEl) notesEl.value = s.internal_notes || '';
+  const incidentsEl = document.getElementById('arch-incidents-input');
+  if (incidentsEl) incidentsEl.value = s.incident_count || 0;
+  const interruptionEl = document.getElementById('arch-interruption-input');
+  if (interruptionEl) interruptionEl.value = s.interruption_minutes || 0;
   const results = await loadRanking(s);
   renderRankTable('arch-ranking', results);
   renderSessionStats(results, 'arch-stats-card', 'arch-stats-grid');
@@ -630,13 +634,25 @@ export async function saveArchiveMeta() {
   if (!state.archiveSession) return;
   const sessionType = document.getElementById('arch-type-input')?.value || 'loisir';
   const internalNotes = document.getElementById('arch-notes-input')?.value ?? '';
-  const { error } = await db.from('sessions').update({ session_type: sessionType, internal_notes: internalNotes }).eq('id', state.archiveSession.id);
+  // 🆕 Offre 2 : incidents/interruption saisis manuellement a la cloture —
+  // alimentent le bloc "Experience & qualite" de l'onglet Statistiques
+  // (voir migration-v21-offre2-qualite.sql). Jamais negatifs.
+  const incidentCount = Math.max(0, parseInt(document.getElementById('arch-incidents-input')?.value, 10) || 0);
+  const interruptionMinutes = Math.max(0, parseInt(document.getElementById('arch-interruption-input')?.value, 10) || 0);
+  const { error } = await db.from('sessions').update({
+    session_type: sessionType,
+    internal_notes: internalNotes,
+    incident_count: incidentCount,
+    interruption_minutes: interruptionMinutes,
+  }).eq('id', state.archiveSession.id);
   if (error) {
     showMsg('msg-arch-meta', 'Erreur: ' + error.message, 'err');
     return;
   }
   state.archiveSession.session_type = sessionType;
   state.archiveSession.internal_notes = internalNotes;
+  state.archiveSession.incident_count = incidentCount;
+  state.archiveSession.interruption_minutes = interruptionMinutes;
   showMsg('msg-arch-meta', 'Enregistre.', 'ok');
 }
 
