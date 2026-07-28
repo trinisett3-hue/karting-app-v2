@@ -62,7 +62,16 @@ THEME — Lu depuis app_settings (key='global'), défini dans
 admin.html > Paramètres > Apparence.
 ------------------------------------------------------------------ */
 export function initTheme() {
-const MAP = { classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon' };
+const MAP = {
+classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon',
+// v15 : thèmes premium (plan Pro/Business) — manquaient de cette table,
+// donc my_theme_entitlement() avait beau autoriser le thème choisi dans
+// Paramètres, initTheme() le retombait silencieusement sur 'classic' ici
+// (MAP[theme] || 'classic') faute d'entrée correspondante. Même impact sur
+// l'export PDF, qui lit exactement le même data-theme sur <html>.
+checkered: 'checkered', endurance: 'endurance', pitlane: 'pitlane',
+champagne: 'champagne', arctic: 'arctic',
+};
 // Passe par le RPC public_site_config (SECURITY DEFINER) au lieu d'une lecture
 // directe d'app_settings : c'est Postgres, pas le navigateur, qui decide si ce
 // tenant a droit au pack Signature (private.avatar_config() force pack='classic'
@@ -361,11 +370,9 @@ hasTime,
 if (r.kart_number != null) usedKarts.add(Number(r.kart_number));
 });
 
-const maxKarts = Number(session.max_karts || 0);
-for (let k = 1; k <= maxKarts; k++) {
-if (usedKarts.has(k)) continue;
-results.push({ kart: k, name: 'Kart libre', nat: 'OTHER', photo: null, total: NO_TIME, lapsCount: 0, lapsArr: [], bestLap: null, isUnknown: true, hasTime: false });
-}
+// Les slots de karts non attribués (max_karts non atteint) ne doivent PAS
+// apparaître comme lignes "Kart libre" dans les résultats publics — seuls
+// les pilotes réellement inscrits sont affichés (retour client explicite).
 
 results.sort((a, b) => a.total - b.total);
 const leader = results.find(r => r.hasTime);

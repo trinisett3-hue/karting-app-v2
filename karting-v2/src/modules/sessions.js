@@ -360,7 +360,7 @@ export function renderInscritsTable(onRowActions = {}) {
         const isSelected = state.selectedPilotId === r.id;
         const kartBadge = r.kart_number
           ? '<span class="kart-badge assigned">' + r.kart_number + '</span>'
-          : '<span class="kart-badge empty">--</span>';
+          : '<span class="kart-badge unassigned">--</span>';
         return (
           '<tr class="pilot-row-select' + (isSelected ? ' selected' : '') + ' " data-rid="' + r.id + '">' +
           '<td>' + photo + '</td>' +
