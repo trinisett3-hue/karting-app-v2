@@ -16,6 +16,7 @@ import * as results from './modules/results.js';
 import * as settings from './modules/settings.js';
 import * as auth from './modules/auth.js';
 import * as stats from './modules/stats.js';
+import * as registry from './modules/registry.js';
 // Auth branchée (24/07) : l'admin nécessite désormais une session Supabase Auth valide.
 // Voir doLogin()/doLogout() et l'overlay #login-overlay dans admin.html.
 
@@ -106,7 +107,7 @@ if (!ok) return;
 state.prefsDirty = false;
 settings.loadPrefs();
 }
-const names = ['creer', 'actives', 'archives', 'stats', 'parametres'];
+const names = ['creer', 'actives', 'archives', 'stats', 'registre', 'parametres'];
 document.querySelectorAll('.sb-tab').forEach((t, i) => t.classList.toggle('active', names[i] === tab));
 document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
 document.getElementById('panel-' + tab).classList.add('active');
@@ -117,6 +118,7 @@ sessions.loadActiveSessions();
 }
 if (tab === 'archives') loadArchivesTab();
 if (tab === 'stats') stats.loadStatsTab();
+if (tab === 'registre') registry.loadRegistryTab();
 }
 
 // --- Wrappers qui recollent les morceaux entre modules (remplacent les callbacks
@@ -306,4 +308,13 @@ removeLogo: settings.removeLogo,
 uploadTrackMap: settings.uploadTrackMap,
 removeTrackMap: settings.removeTrackMap,
 savePrefs: settings.savePrefs,
+// Statistiques
+selectStatsRange: stats.selectStatsRange,
+exportStatsCSV: stats.exportStatsCSV,
+// Registre
+loadRegistryTab: registry.loadRegistryTab,
+filterRegistry: registry.filterRegistry,
+confirmDeletePilot: registry.confirmDeletePilot,
+confirmDeleteLegacy: registry.confirmDeleteLegacy,
+exportRegistryCSV: registry.exportRegistryCSV,
 });

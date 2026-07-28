@@ -12,6 +12,64 @@ import { formatTime, formatDate } from './ui.js';
 
 let chartInstance = null;
 
+// Filtre de plage de dates courant — { key, from, to } ; from/to sont des
+// chaines 'YYYY-MM-DD' ou null pour "Depuis le debut". Conserve entre deux
+// rendus pour que exportStatsCSV() sache quel libelle mettre dans le nom
+// de fichier sans devoir re-parser le DOM.
+let currentRange = { key: 'all', from: null, to: null };
+let lastTimeRows = [];
+
+const RANGE_LABELS = {
+  jour: 'Jour',
+  semaine: 'Semaine',
+  mois: 'Mois',
+  annee: 'Annee',
+  all: 'Depuis le debut',
+};
+
+function toDateStr(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// Calcule les bornes { from, to } pour une clef de filtre donnee. Reutilise
+// mondayOf() (extrait de l'ancien isoWeekLabel()) pour que le debut de
+// semaine reste coherent avec le graphique de frequentation.
+export function computeRangeBounds(key) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  if (key === 'jour') {
+    const s = toDateStr(today);
+    return { key, from: s, to: s };
+  }
+  if (key === 'semaine') {
+    const monday = mondayOf(today);
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    return { key, from: toDateStr(monday), to: toDateStr(sunday) };
+  }
+  if (key === 'mois') {
+    const first = new Date(today.getFullYear(), today.getMonth(), 1);
+    const last = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    return { key, from: toDateStr(first), to: toDateStr(last) };
+  }
+  if (key === 'annee') {
+    const first = new Date(today.getFullYear(), 0, 1);
+    const last = new Date(today.getFullYear(), 11, 31);
+    return { key, from: toDateStr(first), to: toDateStr(last) };
+  }
+  return { key: 'all', from: null, to: null };
+}
+
+// Bouton de filtre cliqué depuis admin.html (rangée pill/segmentée) : recalcule
+// les bornes et relance le chargement de l'onglet, puis met à jour l'état visuel.
+export function selectStatsRange(key) {
+  currentRange = computeRangeBounds(key);
+  document.querySelectorAll('.stats-range-btn').forEach((b) => {
+    b.classList.toggle('selected', b.dataset.rangeVal === currentRange.key);
+  });
+  loadStatsTab(currentRange);
+}
+
 function kpiBox(lbl, val, sub) {
   return (
     '<div class="card" style="text-align:center;padding:16px">' +
@@ -22,7 +80,8 @@ function kpiBox(lbl, val, sub) {
   );
 }
 
-export async function loadStatsTab() {
+export async function loadStatsTab(range) {
+  currentRange = range || currentRange || { key: 'all', from: null, to: null };
   const kpiGrid = document.getElementById('stats-kpi-grid');
   const topTimesEl = document.getElementById('stats-top-times');
   const topPilotsEl = document.getElementById('stats-top-pilots');
@@ -30,12 +89,26 @@ export async function loadStatsTab() {
   const hofPilotsEl = document.getElementById('stats-hof-pilots');
   if (kpiGrid) kpiGrid.innerHTML = '<div class="empty">Chargement...</div>';
 
-  const [sessRes, regsRes, lapsRes] = await Promise.all([
-    db.from('sessions').select('id,session_date,created_at'),
-    db.from('session_registrations').select('id,session_id,display_name,kart_number'),
-    db.from('laps').select('registration_id,lap_time_seconds'),
-  ]);
+  let sessQuery = db.from('sessions').select('id,session_date,created_at');
+  if (currentRange.from) sessQuery = sessQuery.gte('session_date', currentRange.from);
+  if (currentRange.to) sessQuery = sessQuery.lte('session_date', currentRange.to);
+  const sessRes = await sessQuery;
   const allSessions = sessRes.data || [];
+  const sessionIds = allSessions.map((s) => s.id);
+
+  // Sur "Depuis le debut" (pas de filtre), on garde les requetes globales
+  // telles quelles pour ne rien changer au comportement existant. Sur un
+  // filtre actif, on restreint regs/laps aux sessions déjà filtrées via
+  // .in('session_id', ...) plutôt que de filtrer côté client — plus proche
+  // du style existant (filtres appliqués côté requête) et ça évite de
+  // retélécharger des lignes qui seront de toute façon jetées.
+  let regsQuery = db.from('session_registrations').select('id,session_id,display_name,kart_number');
+  let lapsQuery = db.from('laps').select('registration_id,lap_time_seconds,session_id');
+  if (currentRange.from || currentRange.to) {
+    regsQuery = regsQuery.in('session_id', sessionIds.length ? sessionIds : ['00000000-0000-0000-0000-000000000000']);
+    lapsQuery = lapsQuery.in('session_id', sessionIds.length ? sessionIds : ['00000000-0000-0000-0000-000000000000']);
+  }
+  const [regsRes, lapsRes] = await Promise.all([regsQuery, lapsQuery]);
   const allRegs = regsRes.data || [];
   const allLaps = lapsRes.data || [];
 
@@ -66,6 +139,7 @@ export async function loadStatsTab() {
     timeRows.push({ name: reg.display_name || '--', kart: reg.kart_number, total, date: sess ? sess.session_date : null });
   });
   timeRows.sort((a, b) => a.total - b.total);
+  lastTimeRows = timeRows;
   if (topTimesEl) {
     const top = timeRows.slice(0, 10);
     topTimesEl.innerHTML = top.length
@@ -134,12 +208,20 @@ export async function loadStatsTab() {
   renderFrequencyChart(allSessions);
 }
 
-function isoWeekLabel(date) {
-  // Lundi de la semaine contenant `date`, affiché "DD/MM".
+// Lundi de la semaine contenant `date`. Extrait de l'ancien isoWeekLabel()
+// pour être partagé avec computeRangeBounds('semaine') — même math, un
+// seul endroit qui décide de "quand commence la semaine".
+function mondayOf(date) {
   const d = new Date(date);
   const day = (d.getDay() + 6) % 7; // 0 = lundi
   d.setDate(d.getDate() - day);
+  d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function isoWeekLabel(date) {
+  // Lundi de la semaine contenant `date`, affiché "DD/MM".
+  return mondayOf(date);
 }
 
 function renderFrequencyChart(allSessions) {
@@ -183,4 +265,40 @@ function renderFrequencyChart(allSessions) {
       },
     },
   });
+}
+
+// --- Export CSV -----------------------------------------------------------------------------
+// Déclenche un téléchargement Blob + <a download>, sans dépendance externe (aucune lib CSV
+// dans ce projet, voir les autres export* de results.js qui utilisent déjà XLSX pour Excel,
+// mais rien pour du CSV brut). BOM UTF-8 + délimiteur ';' pour un rendu correct dans Excel FR.
+function triggerCSVDownload(filename, rows) {
+  const csv = '﻿' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+function csvCell(value) {
+  const s = value == null ? '' : String(value);
+  return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// Exporte le "Top temps" actuellement affiché (lastTimeRows, déjà calculé et trié par
+// loadStatsTab() pour le filtre en cours) — aucune requête DB supplémentaire.
+export function exportStatsCSV() {
+  const rows = [['Position', 'Nom', 'Kart', 'Temps', 'Date']];
+  lastTimeRows.forEach((r, i) => {
+    rows.push([i + 1, r.name, r.kart || '', formatTime(r.total), r.date ? formatDate(r.date) : '']);
+  });
+  const RANGE_SLUGS = { jour: 'jour', semaine: 'semaine', mois: 'mois', annee: 'annee', all: 'depuis-le-debut' };
+  const label = RANGE_SLUGS[currentRange.key] || 'depuis-le-debut';
+  const today = new Date();
+  const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
+  triggerCSVDownload('stats-' + label + '-' + dateStr + '.csv', rows);
 }

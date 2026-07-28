@@ -188,6 +188,238 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 }
 
 /* ============================================================
+   DÉCLINAISON 4 (PRO) — DAMIER RALLYE (checkered)
+   Noir graphite profond + platine perlé et filet or discret :
+   esprit podium officiel / livrée endurance haut de gamme plutôt
+   que le noir & blanc plat d'un drapeau à damier générique.
+   ============================================================ */
+[data-theme="checkered"] {
+  --c-bg:          #08090b;
+  --c-surface:     #101114;
+  --c-surface-2:   #16181c;
+  --c-border:      rgba(235,232,224,.13);
+  --c-text:        #f7f6f2;
+  --c-muted:       #9a9a94;
+  --c-faint:       #3a3a3a;
+  --c-accent:      #ece8dd;
+  --c-accent-glow: rgba(236,232,221,.26);
+  --c-accent-2:    #c9a35d;
+  --c-p1-border:   #ece8dd;
+  --c-p1-glow:     0 0 42px rgba(236,232,221,.4), 0 0 92px rgba(201,163,93,.18);
+  --c-p2-border:   rgba(255,255,255,.4);
+  --c-p3-border:   rgba(201,163,93,.35);
+  --c-gap-bg:      #ece8dd;
+  --c-gap-text:    #0a0a0a;
+
+  /* damier resserré en fond + un fil d'or très discret sur une des deux
+     diagonales, pour éviter l'effet drapeau plat et suggérer un tressage
+     de livrée plutôt qu'un motif décoratif. */
+  --bg-grid: repeating-linear-gradient(
+      45deg,
+      rgba(236,232,221,.03) 0px, rgba(236,232,221,.03) 13px,
+      transparent 13px, transparent 26px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      rgba(201,163,93,.025) 0px, rgba(201,163,93,.025) 13px,
+      transparent 13px, transparent 26px
+    );
+  --bg-radial:
+    radial-gradient(ellipse 55% 38% at 0% 0%, rgba(236,232,221,.07) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 32% at 100% 0%, rgba(201,163,93,.06) 0%, transparent 70%);
+
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
+
+  --corner-radius: var(--radius-md);
+  --card-stripe: repeating-linear-gradient(
+    45deg,
+    rgba(236,232,221,.045) 0px, rgba(236,232,221,.045) 6px,
+    transparent 6px, transparent 12px
+  );
+}
+
+/* ============================================================
+   DÉCLINAISON 5 (PRO) — ENDURANCE LE MANS TWILIGHT
+   Bleu nuit profond stratifié + ambre de phares longue-portée,
+   esprit départ de nuit 24h vu depuis la ligne droite des stands.
+   ============================================================ */
+[data-theme="endurance"] {
+  --c-bg:          #03050b;
+  --c-surface:     #070a17;
+  --c-surface-2:   #0c1123;
+  --c-border:      rgba(224,232,255,.09);
+  --c-text:        #eef1fb;
+  --c-muted:       #7580a6;
+  --c-faint:       #262b40;
+  --c-accent:      #ffb238;
+  --c-accent-glow: rgba(255,178,56,.34);
+  --c-accent-2:    #4fb2ff;
+  --c-p1-border:   #ffb238;
+  --c-p1-glow:     0 0 42px rgba(255,178,56,.48), 0 0 96px rgba(79,178,255,.2);
+  --c-p2-border:   rgba(79,178,255,.48);
+  --c-p3-border:   rgba(255,178,56,.3);
+  --c-gap-bg:      #ffb238;
+  --c-gap-text:    #04060d;
+
+  /* grille double densité, façon éclairage de piste vu de loin */
+  --bg-grid: repeating-linear-gradient(
+    90deg,
+    rgba(79,178,255,.028) 0px, rgba(79,178,255,.028) 1px,
+    transparent 1px, transparent 38px
+  ),
+  repeating-linear-gradient(
+    0deg,
+    rgba(79,178,255,.014) 0px, rgba(79,178,255,.014) 1px,
+    transparent 1px, transparent 38px
+  );
+  --bg-radial:
+    radial-gradient(ellipse 60% 42% at 0% 0%, rgba(255,178,56,.1) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 36% at 100% 0%, rgba(79,178,255,.09) 0%, transparent 70%),
+    radial-gradient(ellipse 70% 50% at 50% 120%, rgba(79,178,255,.05) 0%, transparent 65%);
+
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
+
+  --corner-radius: var(--radius-md);
+  --card-stripe: none;
+}
+
+/* ============================================================
+   DÉCLINAISON 6 (PRO) — PIT LANE F1
+   Ambre stand-boxe posé sur un acier graphite profond, accent
+   vermillon en second plan : signalétique de garage haut de
+   gamme plutôt qu'un simple aplat jaune/noir façon ruban de
+   chantier.
+   ============================================================ */
+[data-theme="pitlane"] {
+  --c-bg:          #0a0b0b;
+  --c-surface:     #131613;
+  --c-surface-2:   #191c17;
+  --c-border:      rgba(240,196,25,.16);
+  --c-text:        #f6f4ea;
+  --c-muted:       #8d8f80;
+  --c-faint:       #333427;
+  --c-accent:      #f0c419;
+  --c-accent-glow: rgba(240,196,25,.36);
+  --c-accent-2:    #ff6a1f;
+  --c-p1-border:   #f0c419;
+  --c-p1-glow:     0 0 42px rgba(240,196,25,.52), 0 0 90px rgba(255,106,31,.2);
+  --c-p2-border:   rgba(255,255,255,.32);
+  --c-p3-border:   rgba(255,106,31,.4);
+  --c-gap-bg:      #f0c419;
+  --c-gap-text:    #0b0c0c;
+
+  /* bandes de garage resserrées, superposées à une trame fine façon tôle
+     brossée pour éviter le simple aplat "ruban de signalisation" */
+  --bg-grid: repeating-linear-gradient(
+      45deg,
+      rgba(240,196,25,.04) 0px, rgba(240,196,25,.04) 9px,
+      transparent 9px, transparent 22px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255,255,255,.012) 0px, rgba(255,255,255,.012) 1px,
+      transparent 1px, transparent 5px
+    );
+  --bg-radial:
+    radial-gradient(ellipse 55% 38% at 0% 0%, rgba(240,196,25,.08) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 32% at 100% 0%, rgba(255,106,31,.06) 0%, transparent 70%);
+
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
+
+  --corner-radius: var(--radius-md);
+  --card-stripe: repeating-linear-gradient(
+    -45deg,
+    rgba(240,196,25,.055) 0px, rgba(240,196,25,.055) 7px,
+    transparent 7px, transparent 14px
+  );
+}
+
+/* ============================================================
+   DÉCLINAISON 7 (PRO) — CHAMPAGNE GOLD LUXURY
+   Esthétique podium/VIP : doré champagne plus profond et plus
+   chaud (moins jaune) sur un brun-noir feutré, glow stratifié à
+   la manière d'un trophée éclairé en salon plutôt qu'un simple
+   halo doré plat.
+   ============================================================ */
+[data-theme="champagne"] {
+  --c-bg:          #0c0a07;
+  --c-surface:     #161009;
+  --c-surface-2:   #1e170d;
+  --c-border:      rgba(230,201,148,.16);
+  --c-text:        #f8f1e3;
+  --c-muted:       #a4937b;
+  --c-faint:       #3d3320;
+  --c-accent:      #d9b978;
+  --c-accent-glow: rgba(217,185,120,.32);
+  --c-accent-2:    #f4e3ba;
+  --c-p1-border:   #d9b978;
+  --c-p1-glow:     0 0 36px rgba(217,185,120,.42), 0 0 84px rgba(217,185,120,.14), 0 2px 30px rgba(0,0,0,.65);
+  --c-p2-border:   rgba(224,224,224,.32);
+  --c-p3-border:   rgba(163,122,66,.48);
+  --c-gap-bg:      transparent;
+  --c-gap-text:    #d9b978;
+
+  --bg-grid: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30'%3E%3Cpath d='M15 0L30 15L15 30L0 15Z' fill='none' stroke='rgba(217,185,120,0.05)' stroke-width='0.6'/%3E%3C/svg%3E");
+  --bg-radial:
+    radial-gradient(ellipse 52% 36% at 50% 0%, rgba(217,185,120,.07) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 45% at 50% 115%, rgba(217,185,120,.04) 0%, transparent 65%);
+
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
+
+  --corner-radius: var(--radius-md);
+  --card-stripe: none;
+}
+
+/* ============================================================
+   DÉCLINAISON 8 (PRO) — ARCTIC WHITE MINIMAL
+   Minimalisme clair haut de gamme : bleu glacé approfondi (moins
+   "web app" plat) et ombres stratifiées pour donner du relief
+   sur un fond quasi blanc sans jamais basculer dans le criard.
+   ============================================================ */
+[data-theme="arctic"] {
+  --c-bg:          #f4f6f9;
+  --c-surface:     #ffffff;
+  --c-surface-2:   #eef1f6;
+  --c-border:      rgba(10,18,38,.1);
+  --c-text:        #11131c;
+  --c-muted:       #565c72;
+  --c-faint:       #c3c8d5;
+  --c-accent:      #1a6fbd;
+  --c-accent-glow: rgba(26,111,189,.22);
+  --c-accent-2:    #0c4a86;
+  --c-p1-border:   #1a6fbd;
+  --c-p1-glow:     0 0 32px rgba(26,111,189,.24), 0 10px 34px rgba(10,15,30,.11);
+  --c-p2-border:   rgba(10,15,30,.3);
+  --c-p3-border:   rgba(26,111,189,.24);
+  --c-gap-bg:      #1a6fbd;
+  --c-gap-text:    #ffffff;
+
+  --bg-grid: repeating-linear-gradient(
+    90deg,
+    rgba(10,18,38,.025) 0px, rgba(10,18,38,.025) 1px,
+    transparent 1px, transparent 40px
+  );
+  --bg-radial:
+    radial-gradient(ellipse 55% 38% at 0% 0%, rgba(26,111,189,.07) 0%, transparent 70%),
+    radial-gradient(ellipse 45% 32% at 100% 0%, rgba(26,111,189,.05) 0%, transparent 70%);
+
+  --clip-card:  none;
+  --clip-badge: none;
+  --clip-wrap:  none;
+
+  --corner-radius: var(--radius-md);
+  --card-stripe: none;
+}
+
+/* ============================================================
    ARRIÈRE-PLAN GLOBAL
    ============================================================ */
 .results-bg {

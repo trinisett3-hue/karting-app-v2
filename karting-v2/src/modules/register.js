@@ -36,6 +36,9 @@ import {
   signatureAvatarHTML,
 } from './signature-avatar.js';
 
+// Liste déroulante (plus adaptée qu'une grille de boutons à une liste qui va
+// grandir) : UE au complet + principaux pays hors UE, "Autre" en repli final.
+// Codes ISO 3166-1 alpha-2 conservés partout où possible.
 const NATS = [
   { code: 'FR', flag: '🇫🇷', label: 'France' },
   { code: 'BE', flag: '🇧🇪', label: 'Belgique' },
@@ -44,6 +47,21 @@ const NATS = [
   { code: 'ES', flag: '🇪🇸', label: 'Espagne' },
   { code: 'GB', flag: '🇬🇧', label: 'Angleterre' },
   { code: 'NL', flag: '🇳🇱', label: 'Pays-Bas' },
+  { code: 'CH', flag: '🇨🇭', label: 'Suisse' },
+  { code: 'PT', flag: '🇵🇹', label: 'Portugal' },
+  { code: 'PL', flag: '🇵🇱', label: 'Pologne' },
+  { code: 'AT', flag: '🇦🇹', label: 'Autriche' },
+  { code: 'SE', flag: '🇸🇪', label: 'Suède' },
+  { code: 'NO', flag: '🇳🇴', label: 'Norvège' },
+  { code: 'DK', flag: '🇩🇰', label: 'Danemark' },
+  { code: 'FI', flag: '🇫🇮', label: 'Finlande' },
+  { code: 'IE', flag: '🇮🇪', label: 'Irlande' },
+  { code: 'LU', flag: '🇱🇺', label: 'Luxembourg' },
+  { code: 'MA', flag: '🇲🇦', label: 'Maroc' },
+  { code: 'DZ', flag: '🇩🇿', label: 'Algérie' },
+  { code: 'TN', flag: '🇹🇳', label: 'Tunisie' },
+  { code: 'US', flag: '🇺🇸', label: 'États-Unis' },
+  { code: 'CA', flag: '🇨🇦', label: 'Canada' },
   { code: 'OTHER', flag: '🌍', label: 'Autre' },
 ];
 
@@ -81,20 +99,24 @@ const FALLBACK_CONFIG = {
   logo_url: null,
 };
 
+// id="nat-grid" est repris tel quel côté HTML mais pointe désormais vers un
+// <select> (liste déroulante) plutôt qu'une grille de boutons : la liste de
+// pays est amenée à s'allonger, une grille de chips n'aurait pas tenu.
 export function renderNats() {
-  const grid = document.getElementById('nat-grid');
-  if (!grid) return;
-  grid.innerHTML = NATS.map(
+  const select = document.getElementById('nat-grid');
+  if (!select) return;
+  select.innerHTML = NATS.map(
     (n) =>
-      '<div class="nat-btn ' + (n.code === 'FR' ? 'selected' : '') + '" onclick="selectNat(\'' + n.code + '\',this)">' +
-      n.flag + ' ' + n.label + '</div>'
+      '<option value="' + n.code + '"' + (n.code === regState.selectedNat ? ' selected' : '') + '>' +
+      n.flag + ' ' + n.label + '</option>'
   ).join('');
 }
 
-export function selectNat(code, el) {
+// `el` est conservé en second paramètre optionnel pour compatibilité (ancien
+// appel onclick(code, this) sur les chips) mais n'est plus utilisé : le
+// <select> porte lui-même l'état visuel de la sélection.
+export function selectNat(code) {
   regState.selectedNat = code;
-  document.querySelectorAll('.nat-btn').forEach((b) => b.classList.remove('selected'));
-  el.classList.add('selected');
 }
 
 function showMsg(id, msg, type) {
