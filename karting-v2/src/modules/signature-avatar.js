@@ -480,8 +480,23 @@ export function pilotIdForKart(kartNumber) {
   return schemeForKart(kartNumber) + 1;
 }
 
-export function signatureAvatarURL(kartNumber, kind, variant) {
-  const pid = pilotIdForKart(kartNumber);
+/* pid (1..24) pour un appel donné : si opts.scheme est fourni (0..23, comme
+ * l'API déjà supportée par kartAvatarSVG), il prend le pas sur le numéro de
+ * kart — c'est ce qui permet de rendre un avatar Signature par INDEX BRUT
+ * plutôt que par numéro de kart (carrousel d'inscription register.html,
+ * session_registrations.avatar_scheme choisi explicitement par le pilote),
+ * sans dupliquer de fonction : signatureAvatarHTML(null, { scheme: i }) rend
+ * l'avatar #i indépendamment de tout numéro de kart. Repli identique à
+ * kartAvatarSVG : un index hors 0..23 est ramené dans l'intervalle par modulo. */
+function pidForOpts(kartNumber, o) {
+  if (o && o.scheme != null) {
+    return ((Math.round(o.scheme) % AVATAR_SCHEME_COUNT) + AVATAR_SCHEME_COUNT) % AVATAR_SCHEME_COUNT + 1;
+  }
+  return pilotIdForKart(kartNumber);
+}
+
+export function signatureAvatarURL(kartNumber, kind, variant, opts) {
+  const pid = pidForOpts(kartNumber, opts);
   return cfg.base_url + variant + '/pilot_' + (pid < 10 ? '0' + pid : pid) + '_' + kind + '.svg';
 }
 
@@ -523,7 +538,7 @@ export function signatureAvatarHTML(kartNumber, opts) {
   const rawShape = o.shape || cfg.shape;
   const shape = (rawShape === 'square' || rawShape === 'squircle') ? 'square' : 'round';
 
-  const pid = pilotIdForKart(kartNumber);
+  const pid = pidForOpts(kartNumber, o);
   const hue = HUES[pid];
   const vb = VIEWBOX[kind];
   const num = (o.number !== undefined) ? o.number : kartNumber;
@@ -538,13 +553,13 @@ export function signatureAvatarHTML(kartNumber, opts) {
       (shared ? '' : part.defs) + clip.open + part.body + clip.close + '</svg>';
   }
 
-  const label = o.title || o.alt || ('Kart ' + kartNumber);
+  const label = o.title || o.alt || (o.scheme != null ? ('Avatar ' + (pid)) : ('Kart ' + kartNumber));
   const sizeCss = o.size ? ' style="width:' + o.size + 'px;height:' + o.size + 'px"' : '';
 
   return '<div class="sigav sigav--' + shape + '" role="img" aria-label="' + esc(label) + '"' +
     sizeCss + ' data-kart="' + esc(kartNumber) + '" data-kind="' + kind + '">' +
     bg +
-    '<img class="sigav__l sigav__sub" src="' + esc(signatureAvatarURL(kartNumber, kind, variant)) +
+    '<img class="sigav__l sigav__sub" src="' + esc(signatureAvatarURL(kartNumber, kind, variant, o)) +
     '" alt="" loading="lazy" decoding="async" draggable="false">' +
     (ring ? ringLayerRaw(vb, shape, 'sigav__l sigav__ring') : '') +
     numberLayer(kind, num) +
@@ -614,7 +629,8 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
   const rawShapeD = o.shape || cfg.shape;
   const shapeD = (rawShapeD === 'square' || rawShapeD === 'squircle') ? 'square' : 'round';
   const vb = VIEWBOX[kind];
-  const hue = HUES[pilotIdForKart(kartNumber)];
+  const pidD = pidForOpts(kartNumber, o);
+  const hue = HUES[pidD];
   const num = (o.number !== undefined) ? o.number : kartNumber;
   /* 1024 et non 512 : html2canvas rastérise le data URL à sa taille intrinsèque
      avant de l'agrandir dans la fiche pilote — à 512 l'avatar sortait flou. */
@@ -622,7 +638,7 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
 
   let inner;
   try {
-    inner = await fetchSubject(signatureAvatarURL(kartNumber, kind, variant));
+    inner = await fetchSubject(signatureAvatarURL(kartNumber, kind, variant, o));
   } catch (err) {
     packBroken = true;
     return null;
@@ -661,18 +677,38 @@ function dataUrlKey(kartNumber, opts) {
   const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
   const num = (o.number !== undefined) ? o.number : kartNumber;
   const shape = (o.shape || cfg.shape) === 'square' ? 'square' : 'round';
-  return [kartNumber, kind, style || '-', outline ? 1 : 0, shape, o.size || 512, num].join('|');
+  // La clé doit distinguer deux avatars qui partagent le même kartNumber mais
+  // pas le même avatar_scheme (pilote inscrit via le nouveau parcours, scheme
+  // choisi explicitement) — sinon le second écraserait/lirait le cache du
+  // premier. o.scheme fait donc partie de la clé, jamais kartNumber seul.
+  const schemePart = o.scheme != null ? 'sch' + (((Math.round(o.scheme) % 24) + 24) % 24) : 'kart' + kartNumber;
+  return [schemePart, kind, style || '-', outline ? 1 : 0, shape, o.size || 512, num].join('|');
 }
 
 /** Précharge (async) les data URLs Signature pour une liste de karts.
- *  À appeler et await AVANT de construire le markup PDF. */
-export async function prewarmSignatureAvatarDataURLs(kartNumbers, opts) {
+ *  À appeler et await AVANT de construire le markup PDF.
+ *  `items` accepte soit une liste de numéros de kart (API historique, repli
+ *  sur le schéma déduit du numéro), soit une liste d'objets { kart, scheme }
+ *  quand l'avatar de certains inscrits a été choisi explicitement
+ *  (session_registrations.avatar_scheme) — chaque objet reçoit alors la
+ *  priorité sur le schéma déduit du kart, exactement comme signatureAvatarHTML. */
+export async function prewarmSignatureAvatarDataURLs(items, opts) {
   if (!signatureAvatarsActive()) return;
-  const list = Array.from(new Set((kartNumbers || []).filter((n) => n != null && n !== '')));
-  await Promise.all(list.map(async (n) => {
-    const key = dataUrlKey(n, opts);
+  const norm = (items || [])
+    .map((it) => (it && typeof it === 'object') ? it : { kart: it })
+    .filter((it) => it.kart != null && it.kart !== '');
+  const seen = new Set();
+  const list = [];
+  for (const it of norm) {
+    const itemOpts = it.scheme != null ? { ...opts, scheme: it.scheme } : opts;
+    const key = dataUrlKey(it.kart, itemOpts);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    list.push({ it, itemOpts, key });
+  }
+  await Promise.all(list.map(async ({ it, itemOpts, key }) => {
     if (dataUrlCache.has(key)) return;
-    const url = await signatureAvatarDataURL(n, opts);
+    const url = await signatureAvatarDataURL(it.kart, itemOpts);
     if (url) dataUrlCache.set(key, url);
   }));
 }

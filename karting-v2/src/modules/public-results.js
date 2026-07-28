@@ -45,7 +45,10 @@ function genAvatarDataURL(kart, opts) {
   }
   if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarDataURL(kart, kart);
   if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarDataURL(kart, null, { hidePlate: true });
-  return kartAvatarDataURL(kart);
+  // avatar_scheme (session_registrations) prioritaire : opts.scheme, déjà
+  // supporté par kartAvatarSVG/kartAvatarDataURL, doit être transmis ici —
+  // avant ce correctif il était silencieusement perdu (opts non transmis).
+  return kartAvatarDataURL(kart, opts);
 }
 // Même chose en SVG inline (utilisé pour les placeholders sans photo sur la page web).
 function genAvatarSVG(kart, opts) {
@@ -127,27 +130,31 @@ const bad = !p || p.toLowerCase() === 'null' || p.toLowerCase() === 'undefined';
 const looksLikeUrl = /^(https?:)?\/\//.test(p) || p.startsWith('data:') || p.startsWith('/');
 return (!bad && looksLikeUrl) ? p : '';
 }
-function avatarHTML(src, kart, alt, cls = '') {
+// scheme : session_registrations.avatar_scheme (0-23) de l'inscrit, s'il en a
+// choisi un explicitement au moment de l'inscription (nouveau parcours) —
+// prioritaire sur la déduction historique depuis le numéro de kart. `null`/
+// `undefined` reproduit exactement le comportement d'avant (repli sur kart).
+function avatarHTML(src, kart, alt, cls = '', scheme) {
 const p = pdfxLikeValidSrc(src);
 if (p) {
-const fallback = genAvatarDataURL(kart);
+const fallback = genAvatarDataURL(kart, { scheme });
 return `<img class="pilot-avatar ${cls}" src="${p}" alt="${alt}" loading="lazy" crossorigin="anonymous" width="200" height="280" onerror="this.onerror=null;this.src='${fallback}'">`;
 }
 if (signatureAvatarsActive()) {
-return `<div class="pilot-avatar-placeholder kart sigav-host ${cls}">${signatureAvatarHTML(kart, { title: alt })}</div>`;
+return `<div class="pilot-avatar-placeholder kart sigav-host ${cls}">${signatureAvatarHTML(kart, { title: alt, scheme })}</div>`;
 }
-return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${genAvatarSVG(kart, { title: alt })}</div>`;
+return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${genAvatarSVG(kart, { title: alt, scheme })}</div>`;
 }
-function rankAvatarHTML(src, kart) {
+function rankAvatarHTML(src, kart, scheme) {
 const p = pdfxLikeValidSrc(src);
 if (p) {
-const fallback = genAvatarDataURL(kart);
+const fallback = genAvatarDataURL(kart, { scheme });
 return `<img src="${p}" alt="" loading="lazy" crossorigin="anonymous" width="57" height="57" onerror="this.onerror=null;this.src='${fallback}'">`;
 }
 if (signatureAvatarsActive()) {
-return `<div class="rank-avatar-placeholder kart sigav-host">${signatureAvatarHTML(kart, { small: true })}</div>`;
+return `<div class="rank-avatar-placeholder kart sigav-host">${signatureAvatarHTML(kart, { small: true, scheme })}</div>`;
 }
-return `<div class="rank-avatar-placeholder kart">${genAvatarSVG(kart)}</div>`;
+return `<div class="rank-avatar-placeholder kart">${genAvatarSVG(kart, { scheme })}</div>`;
 }
 
 /* Temps stockés en SECONDES dans Supabase (colonne laps.lap_time_seconds) */
@@ -188,7 +195,7 @@ const cls = posClass[d.pos] || '';
 const gapTxt = gapBadge(d);
 return `<article class="podium-card ${cls}" aria-label="P${d.pos} — ${d.name}">
 <div class="pos-badge" aria-hidden="true">${d.pos}</div>
-<div class="pilot-photo-wrap">${avatarHTML(d.photo, d.kart, `Photo de ${d.name}`)}</div>
+<div class="pilot-photo-wrap">${avatarHTML(d.photo, d.kart, `Photo de ${d.name}`, '', d.scheme)}</div>
 <div class="pilot-name-band">
 <div class="pilot-name ${d.isUnknown ? 'unknown' : ''}"><span class="pilot-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
 <div class="pilot-info-bar">
@@ -209,7 +216,7 @@ const gapTxt = gapBadge(d);
 const isLdr = d.hasTime && d.gap === 0;
 return `<article class="top10-row" role="listitem" aria-label="P${d.pos} — ${d.name}">
 <span class="rank-pos" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart)}</div>
+<div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>
 <div class="rank-main">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
 <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${extraLine ? ' · ' + extraLine : ''}</div>
@@ -260,7 +267,7 @@ return `<div class="lap-chip ${isBest ? 'best' : ''}"><div class="lc-idx">Tour $
 return `<article class="acc-item">
 <div class="acc-head">
 <span class="rank-pos acc-toggle" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart)}</div>
+<div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>
 <div class="rank-main acc-toggle">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
 <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span></div>
@@ -340,6 +347,11 @@ kart: r.kart_number,
 name: r.display_name || 'Inconnu',
 nat: r.nationality || (drv && drv.nationality) || 'OTHER',
 photo: (drv && drv.photo_url) || null,
+// avatar_scheme (0-23) : présent seulement pour les inscrits passés par le
+// nouveau parcours (choix explicite au carrousel d'inscription). null pour
+// tous les autres — le rendu retombe alors sur l'ancien comportement
+// (déduction depuis le numéro de kart), inchangé.
+scheme: (r.avatar_scheme != null ? r.avatar_scheme : null),
 total: hasTime ? totals.get(r.id) : NO_TIME,
 lapsCount: lapCounts.get(r.id) || 0,
 lapsArr, bestLap,
@@ -926,7 +938,7 @@ function pdfxPodiumHTML(field) {
   return `<div class="pdfx-podium">${order.map(d => `
 <div class="pdfx-p-card ${cls[d.pos] || ''}">
 <div class="pdfx-p-rank">${d.pos}</div>
-<div class="pdfx-p-avatar">${pdfxAvatarImg(d.photo, d.kart)}</div>
+<div class="pdfx-p-avatar">${pdfxAvatarImg(d.photo, d.kart, { scheme: d.scheme })}</div>
 <div class="pdfx-p-name">${escapeHTML(d.name)}</div>
 <div class="pdfx-p-kart">Kart ${d.kart ?? '-'}</div>
 <div class="pdfx-p-stats">
@@ -944,7 +956,7 @@ function pdfxPodiumColHTML(field) {
 ${order.map(d => `
 <div class="pdfx-pv-card ${cls[d.pos] || ''}">
 <div class="pdfx-pv-rank">${d.pos}</div>
-<div class="pdfx-pv-avatar">${pdfxAvatarImg(d.photo, d.kart)}</div>
+<div class="pdfx-pv-avatar">${pdfxAvatarImg(d.photo, d.kart, { scheme: d.scheme })}</div>
 <div class="pdfx-pv-info">
 <div class="pdfx-pv-name">${escapeHTML(d.name)}</div>
 <div class="pdfx-pv-meta"><span>Kart <b>${d.kart ?? '-'}</b></span><span>Tours <b>${d.hasTime ? d.lapsCount : '--'}</b></span><span>Meill. <b>${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</b></span></div>
@@ -974,7 +986,7 @@ function pdfxRankRowsHTML(chunk, showSec) {
   return chunk.map(d => `
 <div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}">
 <span class="pos">${d.pos}</span>
-<span class="av">${pdfxAvatarImg(d.photo, d.kart, { small: true })}</span>
+<span class="av">${pdfxAvatarImg(d.photo, d.kart, { small: true, scheme: d.scheme })}</span>
 <span class="name">${escapeHTML(d.name)}</span>
 <span class="kart">#${d.kart ?? '-'}</span>
 <span class="laps">${d.hasTime ? d.lapsCount : '--'}</span>
@@ -1089,7 +1101,10 @@ export async function downloadFullPDF(btn) {
        data URLs (grand format podium + petit format lignes) AVANT de construire
        le markup, sinon le PDF retombe sur l'avatar classique. */
     if (signatureAvatarsActive()) {
-      const karts = (allResults || []).map(d => d.kart);
+      // { kart, scheme } et non de simples numéros de kart : certains inscrits
+      // ont choisi leur avatar_scheme explicitement (nouveau parcours), et le
+      // cache de préchauffage doit être clé sur ce couple, pas sur le seul kart.
+      const karts = (allResults || []).map(d => ({ kart: d.kart, scheme: d.scheme }));
       await prewarmSignatureAvatarDataURLs(karts);
       await prewarmSignatureAvatarDataURLs(karts, { small: true });
     }
@@ -1260,8 +1275,8 @@ export async function downloadPilotPDF(pilot, btn) {
   try {
     ensurePdfStyles();
     if (signatureAvatarsActive()) {
-      await prewarmSignatureAvatarDataURLs([pilot.kart], PILOT_SHEET_AV_OPTS);
-      await prewarmSignatureAvatarDataURLs([pilot.kart]);
+      await prewarmSignatureAvatarDataURLs([{ kart: pilot.kart, scheme: pilot.scheme }], PILOT_SHEET_AV_OPTS);
+      await prewarmSignatureAvatarDataURLs([{ kart: pilot.kart, scheme: pilot.scheme }]);
     }
     const { jsPDF } = window.jspdf;
     const g = pdfxGeom(PDF_ORIENT);
@@ -1290,9 +1305,9 @@ export async function downloadPilotPDF(pilot, btn) {
     /* Pack Signature : la vignette de la fiche pilote reprend exactement les
        réglages du podium (même type, même fond, même contour) mais en pastille
        CARRÉE, pour occuper tout le cadre arrondi de l'en-tête. */
-    const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart, PILOT_SHEET_AV_OPTS);
+    const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart, { ...PILOT_SHEET_AV_OPTS, scheme: pilot.scheme });
     const kartBadge = hasRealPhoto
-      ? `<div class="pdfx-kart-badge"><div class="pdfx-av" style="background-image:${pdfxCssUrl(genAvatarDataURL(pilot.kart))}"></div></div>`
+      ? `<div class="pdfx-kart-badge"><div class="pdfx-av" style="background-image:${pdfxCssUrl(genAvatarDataURL(pilot.kart, { scheme: pilot.scheme }))}"></div></div>`
       : '';
 
     const headHTML = `

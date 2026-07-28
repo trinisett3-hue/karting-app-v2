@@ -1,21 +1,40 @@
 // Module d'inscription publique (register.html) — accès par QR code / lien, sans auth.
 //
-// Reprend à l'identique la logique de l'ancien register.html monofichier pour la
-// résolution de session (public_registration_token) et la sélection nationalité.
-//
 // 🔧 v13 : formulaire à une seule étape, étape photo retirée (réservée à une
-// offre future Compétition/Séminaires — voir session_type). Plus d'upload vers
-// le bucket driver-photos ni de création de fiche `drivers` : driver_id reste
-// null sur session_registrations (déjà géré ailleurs, cf. avatarHTML() dans
-// public-results.js qui affiche un avatar de substitution par numéro de kart).
+// offre future Compétition/Séminaires — voir session_type).
 //
-// 🆕 v13 + demande client post-v13 : le champ "nom" du formulaire devient le
-// PSEUDO du pilote — c'est lui qui alimente display_name (déjà le cas
-// aujourd'hui, donc aucune régression côté podium/classement/PDF, qui lisent
-// tous display_name). Prénom/nom réel et email sont des champs séparés,
-// stockés sur session_registrations (email) — aucune fiche `drivers` n'étant
-// plus créée par cette page, c'est le seul endroit qui garantit de les capturer.
+// 🆕 v14 : identité pilote GLOBALE (plateforme-entière, pseudo unique,
+// cross-tenant) + choix d'avatar par session. Le formulaire à une étape de
+// v13 devient 3 écrans :
+//   0  — choix « 1ère fois sur ce circuit » / « déjà pilote sur ce circuit »
+//   1a — création du profil pilote (pseudo/prénom/nom/email/naissance) via
+//        register_new_pilot() — le pseudo est LE seul identifiant public
+//        (display_name), jamais l'email ni le nom réel.
+//   1b — recherche du profil existant par email OU pseudo via
+//        find_pilot_by_query() (ne renvoie jamais l'email : un visiteur qui
+//        ne connaît que le pseudo d'un pilote ne peut pas en déduire son
+//        adresse).
+//   2  — écran de session existant (nationalité) + NOUVEAU carrousel
+//        d'avatar (session_taken_avatars() exclut ceux déjà pris pour CETTE
+//        session ; avatar_scheme est ensuite envoyé avec l'inscription).
+// Dans les deux cas (1a et 1b), pilot_id est connu avant l'écran 2 : c'est
+// lui qui alimente session_registrations.pilot_id, et un trigger serveur
+// (fill_registration_from_pilot) recopie first_name/last_name/email depuis
+// `pilots` à l'insertion — le front n'a donc JAMAIS besoin de connaître ou
+// de transmettre l'email du pilote à l'écran 1b.
+//
+// Le pack d'avatars (classic/signature) affiché dans le carrousel n'est
+// JAMAIS décidé ici : public_registration_config() relaie tel quel ce que
+// private.avatar_config(tenant_id) a déjà tranché côté serveur (Pro ou pas),
+// exactement comme le fait déjà site-config.js pour results.html.
 import { db } from '../lib/supabase.js';
+import { kartAvatarSVG } from './kart-avatar.js';
+import {
+  configureSignatureAvatars,
+  wireSignatureAvatarFallback,
+  signatureAvatarsActive,
+  signatureAvatarHTML,
+} from './signature-avatar.js';
 
 const NATS = [
   { code: 'FR', flag: '🇫🇷', label: 'France' },
@@ -28,14 +47,39 @@ const NATS = [
   { code: 'OTHER', flag: '🌍', label: 'Autre' },
 ];
 
+const AVATAR_COUNT = 24;
+
 const regState = {
   selectedNat: 'FR',
   sessionId: null,
+  registrationToken: null,
+  // Pilote résolu (créé en 1a ou retrouvé/confirmé en 1b) : { id, pseudo }.
+  pilot: null,
+  // Candidat renvoyé par find_pilot_by_query(), en attente de confirmation
+  // explicite avant de devenir regState.pilot (écran 1b).
+  foundCandidate: null,
+  // Schémas 0..23 encore disponibles pour CETTE session (déjà pris exclus).
+  avatarPool: [],
+  avatarIndex: 0,
 };
 
 // Validation email basique — suffisante pour un formulaire mobile, pas une
 // vérification RFC complète (pas de vérification de délivrabilité côté front).
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Même règle que la contrainte SQL pilots_pseudo_format : lettres/chiffres/
+// tiret/underscore/point uniquement, AUCUN accent, refusé net (pas de
+// translittération silencieuse — demande explicite du client).
+const PSEUDO_RE = /^[A-Za-z0-9_.-]+$/;
+
+const FALLBACK_CONFIG = {
+  avatar_pack: 'classic',
+  avatar_type: 'kartpilot',
+  avatar_small_type: 'helmet',
+  avatar_outline: true,
+  avatar_background: 'studio',
+  circuit_name: null,
+  logo_url: null,
+};
 
 export function renderNats() {
   const grid = document.getElementById('nat-grid');
@@ -47,6 +91,76 @@ export function renderNats() {
   ).join('');
 }
 
+export function selectNat(code, el) {
+  regState.selectedNat = code;
+  document.querySelectorAll('.nat-btn').forEach((b) => b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function showMsg(id, msg, type) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'msg ' + type;
+}
+
+function clearMsg(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = '';
+  el.className = 'msg';
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.reg-screen').forEach((s) => s.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
+/**
+ * Configuration publique (thème/logo/pack d'avatars) du circuit de cette
+ * session. Jamais d'exception qui remonte : la page doit rester utilisable
+ * (avatars classiques, sans logo) même si la RPC n'existe pas encore côté
+ * base (migration v14 pas encore appliquée) ou si le token est invalide.
+ */
+async function loadRegistrationConfig(token) {
+  if (!token) return FALLBACK_CONFIG;
+  try {
+    const res = await db.rpc('public_registration_config', { _registration_token: token });
+    if (res.error) throw res.error;
+    if (!res.data) return FALLBACK_CONFIG;
+    return Object.assign({}, FALLBACK_CONFIG, res.data);
+  } catch (e) {
+    console.warn('[register] configuration publique indisponible — repli sur' +
+      ' le thème et les avatars par défaut (migration v14 appliquée ?).', e);
+    return FALLBACK_CONFIG;
+  }
+}
+
+function applyCircuitBranding(cfg) {
+  const wrap = document.getElementById('circuit-logo-wrap');
+  if (wrap) {
+    wrap.innerHTML = cfg.logo_url
+      ? '<img class="circuit-logo" src="' + cfg.logo_url + '" alt="' + (cfg.circuit_name || 'Circuit') + '">'
+      : '';
+  }
+  // private.avatar_config() ne redescend jamais 'signature' pour un tenant
+  // non entitled (voir commentaire de public_registration_config() dans la
+  // migration v14) : le pack reçu ici EST déjà la décision commerciale.
+  // 'entitled' n'a donc besoin d'être vrai que si le pack reçu est
+  // 'signature' — inutile (et non fourni par cette RPC allégée) de le
+  // redemander séparément.
+  configureSignatureAvatars({
+    pack: cfg.avatar_pack,
+    type: cfg.avatar_type,
+    small_type: cfg.avatar_small_type,
+    outline: cfg.avatar_outline,
+    background: cfg.avatar_background,
+    entitled: cfg.avatar_pack === 'signature',
+  });
+  wireSignatureAvatarFallback();
+}
+
 export async function initRegisterPage() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('session');
@@ -54,6 +168,7 @@ export async function initRegisterPage() {
     document.getElementById('session-name').textContent = 'Lien invalide';
     return;
   }
+  regState.registrationToken = token;
   const { data: sess } = await db.from('sessions').select('id,title').eq('public_registration_token', token).single();
   if (!sess) {
     document.getElementById('session-name').textContent = 'Session introuvable';
@@ -61,52 +176,229 @@ export async function initRegisterPage() {
   }
   regState.sessionId = sess.id;
   document.getElementById('session-name').textContent = sess.title;
+
+  applyCircuitBranding(await loadRegistrationConfig(token));
 }
 
-export function selectNat(code, el) {
-  regState.selectedNat = code;
-  document.querySelectorAll('.nat-btn').forEach((b) => b.classList.remove('selected'));
-  el.classList.add('selected');
+/* -----------------------------------------------------------------------------
+   ÉCRAN 0 — choix d'identité
+   -------------------------------------------------------------------------- */
+
+export function goFirstTime() {
+  clearMsg('msg-0');
+  showScreen('screen-1a');
 }
 
-export function showMsg(msg, type) {
-  const el = document.getElementById('msg');
-  if (!el) return;
-  el.textContent = msg;
-  el.className = 'msg ' + type;
+export function goAlreadyPilot() {
+  clearMsg('msg-0');
+  showScreen('screen-1b');
 }
 
-export async function submitForm() {
-  if (!regState.sessionId) { showMsg('Session invalide.', 'err'); return; }
-  // Le pseudo est ce qui alimente display_name — donc ce qui s'affiche
-  // réellement sur le kart, le podium, le classement et les PDF (comme
-  // aujourd'hui : c'était déjà le seul champ "nom" du formulaire).
+export function backToScreen0() {
+  regState.pilot = null;
+  regState.foundCandidate = null;
+  clearMsg('msg-1a');
+  clearMsg('msg-1b');
+  clearMsg('msg-2');
+  showScreen('screen-0');
+}
+
+/* -----------------------------------------------------------------------------
+   ÉCRAN 1a — première fois : création du profil pilote
+   -------------------------------------------------------------------------- */
+
+export async function createPilot() {
+  clearMsg('msg-1a');
   const pseudo = document.getElementById('inp-name').value.trim();
   const firstName = document.getElementById('inp-firstname').value.trim();
   const lastName = document.getElementById('inp-lastname').value.trim();
   const email = document.getElementById('inp-email').value.trim();
-  if (!pseudo) { showMsg('Entre ton pseudo.', 'err'); return; }
-  if (!email) { showMsg('Entre ton email.', 'err'); return; }
-  if (!EMAIL_RE.test(email)) { showMsg('Email invalide.', 'err'); return; }
+  const birthdate = document.getElementById('inp-birthdate').value || null;
+
+  if (!pseudo) { showMsg('msg-1a', 'Entre ton pseudo.', 'err'); return; }
+  if (!PSEUDO_RE.test(pseudo)) {
+    showMsg('msg-1a', "Pseudo invalide : pas d'accents, uniquement lettres/chiffres/tiret/underscore.", 'err');
+    return;
+  }
+  if (!firstName) { showMsg('msg-1a', 'Entre ton prénom.', 'err'); return; }
+  if (!lastName) { showMsg('msg-1a', 'Entre ton nom.', 'err'); return; }
+  if (!email) { showMsg('msg-1a', 'Entre ton email.', 'err'); return; }
+  if (!EMAIL_RE.test(email)) { showMsg('msg-1a', 'Email invalide.', 'err'); return; }
+
+  const btn = document.getElementById('btn-create-pilot');
+  btn.disabled = true; btn.textContent = 'Création…';
+  try {
+    const { data, error } = await db.rpc('register_new_pilot', {
+      _first_name: firstName,
+      _last_name: lastName,
+      _email: email,
+      _pseudo: pseudo,
+      _birth_date: birthdate,
+    });
+    if (error) throw error;
+    regState.pilot = { id: data, pseudo };
+    await enterScreen2();
+  } catch (e) {
+    showMsg('msg-1a', e.message || 'Erreur lors de la création du profil.', 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Continuer';
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   ÉCRAN 1b — déjà pilote : recherche par email ou pseudo
+   -------------------------------------------------------------------------- */
+
+export function escapeHTML(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+
+export async function searchPilot() {
+  clearMsg('msg-1b');
+  const query = document.getElementById('inp-search').value.trim();
+  const resultEl = document.getElementById('search-result');
+  if (!query) { showMsg('msg-1b', 'Entre ton email ou ton pseudo.', 'err'); return; }
+
+  const btn = document.getElementById('btn-search-pilot');
+  btn.disabled = true; btn.textContent = 'Recherche…';
+  resultEl.innerHTML = '';
+  try {
+    const { data, error } = await db.rpc('find_pilot_by_query', { _query: query });
+    if (error) throw error;
+    if (!data) {
+      regState.foundCandidate = null;
+      resultEl.innerHTML = '<div class="not-found-card">Aucun profil trouvé pour "' +
+        escapeHTML(query) + '". Vérifie l\'orthographe, ou inscris-toi comme nouveau pilote.</div>';
+      return;
+    }
+    regState.foundCandidate = data;
+    resultEl.innerHTML =
+      '<div class="pilot-found-card">' +
+      '<div class="pilot-found-pseudo">🏁 ' + escapeHTML(data.pseudo) + '</div>' +
+      '<div class="choice-sub">' + escapeHTML(data.first_name || '') + '</div>' +
+      '</div>' +
+      '<button type="button" class="btn btn-primary" onclick="confirmPilotFound()">C\'est moi, continuer</button>';
+  } catch (e) {
+    showMsg('msg-1b', e.message || 'Erreur lors de la recherche.', 'err');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Rechercher';
+  }
+}
+
+export async function confirmPilotFound() {
+  if (!regState.foundCandidate) return;
+  regState.pilot = { id: regState.foundCandidate.id, pseudo: regState.foundCandidate.pseudo };
+  await enterScreen2();
+}
+
+/* -----------------------------------------------------------------------------
+   ÉCRAN 2 — session : nationalité + carrousel d'avatar
+   -------------------------------------------------------------------------- */
+
+async function enterScreen2() {
+  clearMsg('msg-2');
+  const sub = document.getElementById('screen2-sub');
+  if (sub && regState.pilot) sub.textContent = 'Dernière étape, ' + regState.pilot.pseudo + ' !';
+  showScreen('screen-2');
+  await initAvatarCarousel();
+}
+
+async function initAvatarCarousel() {
+  const all = Array.from({ length: AVATAR_COUNT }, (_, i) => i);
+  let taken = [];
+  try {
+    const { data, error } = await db.rpc('session_taken_avatars', { _session_id: regState.sessionId });
+    if (error) throw error;
+    taken = Array.isArray(data) ? data : [];
+  } catch (e) {
+    // Le carrousel est un confort, pas un bloquant : si la RPC échoue
+    // (migration pas encore appliquée, réseau...) on retombe sur la liste
+    // complète plutôt que d'empêcher l'inscription.
+    console.warn('[register] avatars pris introuvables — carrousel non filtré.', e);
+  }
+  regState.avatarPool = all.filter((i) => taken.indexOf(i) < 0);
+  if (!regState.avatarPool.length) {
+    // Tous les avatars de cette session sont déjà pris (session très
+    // fréquentée, ou pool corrompu) : on retombe sur la liste complète
+    // plutôt que de bloquer l'inscription — le pire cas est une collision
+    // sur avatar_scheme, déjà gérée par submitForm() (code 23505).
+    regState.avatarPool = all;
+  }
+  regState.avatarIndex = 0;
+  renderAvatarStage();
+}
+
+function renderAvatarStage() {
+  const stage = document.getElementById('avatar-stage');
+  const status = document.getElementById('avatar-status');
+  if (!stage) return;
+  const scheme = regState.avatarPool[regState.avatarIndex];
+  stage.innerHTML = signatureAvatarsActive()
+    ? signatureAvatarHTML(null, { scheme, size: 140 })
+    : kartAvatarSVG(null, { scheme, size: 140 });
+  if (status) {
+    status.textContent = (regState.avatarIndex + 1) + ' / ' + regState.avatarPool.length +
+      ' disponibles — utilise les flèches pour changer';
+  }
+  const prevBtn = document.getElementById('avatar-prev');
+  const nextBtn = document.getElementById('avatar-next');
+  const single = regState.avatarPool.length <= 1;
+  if (prevBtn) prevBtn.disabled = single;
+  if (nextBtn) nextBtn.disabled = single;
+}
+
+export function avatarPrev() {
+  if (!regState.avatarPool.length) return;
+  regState.avatarIndex = (regState.avatarIndex - 1 + regState.avatarPool.length) % regState.avatarPool.length;
+  renderAvatarStage();
+}
+
+export function avatarNext() {
+  if (!regState.avatarPool.length) return;
+  regState.avatarIndex = (regState.avatarIndex + 1) % regState.avatarPool.length;
+  renderAvatarStage();
+}
+
+export async function submitForm() {
+  if (!regState.sessionId) { showMsg('msg-2', 'Session invalide.', 'err'); return; }
+  if (!regState.pilot) { showMsg('msg-2', 'Profil pilote manquant — retourne en arrière.', 'err'); return; }
+
   const btn = document.getElementById('btn-submit');
   btn.disabled = true; btn.textContent = 'Inscription en cours…';
+  const chosenScheme = regState.avatarPool.length ? regState.avatarPool[regState.avatarIndex] : null;
   try {
     const { error } = await db.from('session_registrations').insert({
       session_id: regState.sessionId,
-      display_name: pseudo,
+      pilot_id: regState.pilot.id,
+      // display_name reste sous le contrôle exclusif du front (voir
+      // fill_registration_from_pilot() dans la migration v14) : c'est le
+      // pseudo, seul identifiant public — first_name/last_name/email sont
+      // recopiés serveur-side depuis `pilots` via pilot_id, jamais envoyés
+      // depuis ici (l'écran 1b ne les connaît d'ailleurs pas).
+      display_name: regState.pilot.pseudo,
       nationality: regState.selectedNat,
-      email,
-      first_name: firstName || null,
-      last_name: lastName || null,
+      avatar_scheme: chosenScheme,
       driver_id: null,
       is_unknown: false,
     });
     if (error) throw error;
-    document.getElementById('form-card').style.display = 'none';
+    document.getElementById('screen-2').classList.remove('active');
     document.getElementById('success-card').style.display = 'block';
-    document.getElementById('success-name').textContent = 'Bonne course ' + pseudo + ' !';
+    document.getElementById('success-name').textContent = 'Bonne course ' + regState.pilot.pseudo + ' !';
   } catch (e) {
-    showMsg('Erreur: ' + e.message, 'err');
+    if (e && e.code === '23505') {
+      // Collision sur (session_id, avatar_scheme) : un autre pilote vient de
+      // prendre exactement le même avatar entre le chargement du carrousel
+      // et la soumission. On rafraîchit la liste des disponibles et on
+      // laisse le pilote réessayer, sans perdre le reste du formulaire.
+      showMsg('msg-2', 'Cet avatar vient d\'être pris par un autre pilote — choisis-en un autre.', 'err');
+      await initAvatarCarousel();
+    } else {
+      showMsg('msg-2', 'Erreur: ' + e.message, 'err');
+    }
+  } finally {
     btn.disabled = false; btn.textContent = "S'inscrire à la course 🏁";
   }
 }
