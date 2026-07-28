@@ -11,14 +11,83 @@ import { db } from '../lib/supabase.js';
 import { formatTime, formatDate } from './ui.js';
 
 let chartInstance = null;
-// 🆕 v17 : les 5 blocs de l'onglet Statistiques sont conservés en mémoire au
-// fil de loadStatsTab() pour que l'export (désormais XLSX multi-onglets,
-// voir exportStatsXLSX()) reprenne exactement ce qui est affiché à l'écran,
-// pour le filtre en cours, sans requête DB supplémentaire.
+// 🆕 v20 : Offre 1 — l'onglet Statistiques reste un pack leger (KPIs globaux,
+// exploitation piste, Hall of Fame chronos compact). Les blocs "Top 5 pilotes
+// (nb sessions jouees)" et "Classement permanent (meilleur temps unique par
+// pilote)" ont ete retires : ce sont des analyses de frequentation/sportives
+// qui relevent de l'Offre 2, pas du pack de base. Le code ci-dessous ne les
+// calcule donc plus (voir git history si besoin de les reprendre).
+//
+// Les blocs de l'onglet Statistiques sont conserves en memoire au fil de
+// loadStatsTab() pour que l'export (XLSX multi-onglets, voir
+// exportStatsXLSX()) reprenne exactement ce qui est affiche a l'ecran, pour
+// le filtre en cours, sans requete DB supplementaire.
 let lastKpis = { sessions: 0, pilotsUniques: 0, chronos: 0 };
-let lastTopPilots = [];
 let lastHofKarts = [];
-let lastHofPilots = [];
+let lastExploitation = { avgFill: null, minFill: null, maxFill: null, utilizationRate: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
+
+// --- Exploitation piste (Offre 1, MVP) --------------------------------------------------
+// Ni la table `sessions` ni les Parametres n'ont aujourd'hui de champ "duree
+// de session" ou "horaires d'ouverture" — ajouter un vrai reglage sort du
+// perimetre de cette tache (Offre 1 = pack leger, pas de nouvelle UI de
+// configuration). En attendant, on utilise deux constantes simples et
+// documentees : une duree moyenne de session estimee, et un nombre d'heures
+// d'ouverture par jour par defaut. Le "taux d'utilisation piste" qui en
+// decoule est donc une ESTIMATION volontairement simple (demandee telle
+// quelle dans le cahier des charges), pas une mesure exacte — a affiner plus
+// tard avec un vrai reglage d'horaires cote Parametres si besoin.
+const DEFAULT_AVG_SESSION_MINUTES = 15;
+const DEFAULT_OPENING_HOURS_PER_DAY = 8;
+
+function pct(v) {
+  return v == null ? '--' : Math.round(v * 100) + '%';
+}
+
+// Nombre de jours couverts par la plage filtree — utilise pour "sessions par
+// jour/semaine" et le taux d'utilisation piste. Sur les plages bornees
+// (jour/semaine/mois/annee/personnalise) c'est simplement (to - from). Sur
+// "Depuis le debut" (pas de bornes), seule reference disponible : l'etendue
+// reelle entre la premiere et la derniere session existante.
+function daysInRangeCount(range, allSessions) {
+  if (range && range.from && range.to) {
+    const from = new Date(range.from + 'T12:00:00');
+    const to = new Date(range.to + 'T12:00:00');
+    return Math.max(1, Math.round((to - from) / 86400000) + 1);
+  }
+  const dates = allSessions.map((s) => s.session_date).filter(Boolean).sort();
+  if (!dates.length) return 0;
+  const from = new Date(dates[0] + 'T12:00:00');
+  const to = new Date(dates[dates.length - 1] + 'T12:00:00');
+  return Math.max(1, Math.round((to - from) / 86400000) + 1);
+}
+
+// KPIs "Exploitation piste" (Offre 1) : taux de remplissage moyen des
+// sessions (pilotes inscrits / capacite max), taux d'utilisation piste
+// (estimation simple, voir constantes ci-dessus) et sessions par jour/semaine.
+// `regsCountBySession` : Map(session_id -> nb d'inscrits), deja disponible
+// dans loadStatsTab() a partir de `allRegs` — aucune requete DB de plus.
+function computeExploitationKpis(allSessions, regsCountBySession, range) {
+  const fillRates = [];
+  allSessions.forEach((s) => {
+    const cap = Number(s.max_karts) || 0;
+    if (!cap) return; // pas de capacite connue pour cette session : exclue du taux
+    const count = regsCountBySession.get(s.id) || 0;
+    fillRates.push(Math.min(1, count / cap));
+  });
+  const avgFill = fillRates.length ? fillRates.reduce((a, b) => a + b, 0) / fillRates.length : null;
+  const minFill = fillRates.length ? Math.min(...fillRates) : null;
+  const maxFill = fillRates.length ? Math.max(...fillRates) : null;
+
+  const days = daysInRangeCount(range, allSessions);
+  const totalSessionMinutes = allSessions.length * DEFAULT_AVG_SESSION_MINUTES;
+  const theoreticalMinutes = days > 0 ? days * DEFAULT_OPENING_HOURS_PER_DAY * 60 : 0;
+  const utilizationRate = theoreticalMinutes > 0 ? Math.min(1, totalSessionMinutes / theoreticalMinutes) : null;
+
+  const sessionsPerDay = days > 0 ? allSessions.length / days : null;
+  const sessionsPerWeek = sessionsPerDay != null ? sessionsPerDay * 7 : null;
+
+  return { avgFill, minFill, maxFill, utilizationRate, sessionsPerDay, sessionsPerWeek, days };
+}
 
 // Filtre de plage de dates courant — { key, from, to } ; from/to sont des
 // chaines 'YYYY-MM-DD' ou null pour "Depuis le debut". Conserve entre deux
@@ -194,9 +263,12 @@ function updateRangeDisplay() {
   el.textContent = toTxt ? ('Periode affichee : du ' + fromTxt + ' au ' + toTxt) : ('Date affichee : ' + fromTxt);
 }
 
-function kpiBox(lbl, val, sub) {
+// `icon` : simple emoji, optionnel — demande explicitement ("icones simples")
+// pour les 3 tuiles de KPIs globaux, reutilise aussi pour Exploitation piste.
+function kpiBox(lbl, val, sub, icon) {
   return (
     '<div class="card" style="text-align:center;padding:16px">' +
+    (icon ? '<div style="font-size:20px;margin-bottom:4px" aria-hidden="true">' + icon + '</div>' : '') +
     '<div style="font-size:11px;color:var(--mut);text-transform:uppercase;font-weight:700;margin-bottom:6px">' + lbl + '</div>' +
     '<div style="font-size:22px;font-weight:900">' + val + '</div>' +
     (sub ? '<div style="font-size:11px;color:var(--mut);margin-top:4px">' + sub + '</div>' : '') +
@@ -207,13 +279,12 @@ function kpiBox(lbl, val, sub) {
 export async function loadStatsTab(range) {
   currentRange = range || currentRange || { key: 'all', from: null, to: null };
   const kpiGrid = document.getElementById('stats-kpi-grid');
+  const exploitationGrid = document.getElementById('stats-exploitation-grid');
   const topTimesEl = document.getElementById('stats-top-times');
-  const topPilotsEl = document.getElementById('stats-top-pilots');
   const hofKartsEl = document.getElementById('stats-hof-karts');
-  const hofPilotsEl = document.getElementById('stats-hof-pilots');
   if (kpiGrid) kpiGrid.innerHTML = '<div class="empty">Chargement...</div>';
 
-  let sessQuery = db.from('sessions').select('id,session_date,created_at');
+  let sessQuery = db.from('sessions').select('id,session_date,created_at,max_karts');
   if (currentRange.from) sessQuery = sessQuery.gte('session_date', currentRange.from);
   if (currentRange.to) sessQuery = sessQuery.lte('session_date', currentRange.to);
   const sessRes = await sessQuery;
@@ -241,12 +312,47 @@ export async function loadStatsTab(range) {
   lastKpis = { sessions: allSessions.length, pilotsUniques: uniquePilots.size, chronos: allLaps.length };
   if (kpiGrid) {
     kpiGrid.innerHTML =
-      kpiBox('Sessions', allSessions.length) +
-      kpiBox('Pilotes uniques', uniquePilots.size) +
-      kpiBox('Chronos enregistres', allLaps.length);
+      kpiBox('Sessions', allSessions.length, null, '🏁') +
+      kpiBox('Pilotes uniques', uniquePilots.size, null, '👤') +
+      kpiBox('Chronos enregistres', allLaps.length, null, '⏱️');
   }
 
-  // --- Totaux par inscription (pour top temps + classement permanent) --------------------
+  // --- Exploitation piste (Offre 1, MVP) — voir computeExploitationKpis() -----------------
+  const regsCountBySession = new Map();
+  allRegs.forEach((r) => {
+    regsCountBySession.set(r.session_id, (regsCountBySession.get(r.session_id) || 0) + 1);
+  });
+  const exploitation = computeExploitationKpis(allSessions, regsCountBySession, currentRange);
+  lastExploitation = exploitation;
+  if (exploitationGrid) {
+    exploitationGrid.innerHTML =
+      kpiBox(
+        'Remplissage moyen',
+        pct(exploitation.avgFill),
+        exploitation.avgFill != null ? 'min ' + pct(exploitation.minFill) + ' · max ' + pct(exploitation.maxFill) : 'Aucune session avec capacite connue',
+        '🪑'
+      ) +
+      kpiBox(
+        'Utilisation piste (estimee)',
+        pct(exploitation.utilizationRate),
+        'Base : ' + DEFAULT_OPENING_HOURS_PER_DAY + 'h/jour, session ≈' + DEFAULT_AVG_SESSION_MINUTES + 'min',
+        '📈'
+      ) +
+      kpiBox(
+        'Sessions / jour',
+        exploitation.sessionsPerDay != null ? exploitation.sessionsPerDay.toFixed(1) : '--',
+        exploitation.days ? 'sur ' + exploitation.days + ' jour(s)' : null,
+        '📅'
+      ) +
+      kpiBox(
+        'Sessions / semaine',
+        exploitation.sessionsPerWeek != null ? exploitation.sessionsPerWeek.toFixed(1) : '--',
+        null,
+        '🗓️'
+      );
+  }
+
+  // --- Totaux par inscription (pour le top temps) -----------------------------------------
   const regsById = new Map(allRegs.map((r) => [r.id, r]));
   const totalsByReg = new Map();
   allLaps.forEach((l) => {
@@ -274,26 +380,6 @@ export async function loadStatsTab(range) {
       : '<div class="empty">Aucun chrono enregistre.</div>';
   }
 
-  // --- Top 5 pilotes par nombre de sessions jouées ----------------------------------------
-  const sessionsByPilot = new Map();
-  allRegs.forEach((r) => {
-    const key = (r.display_name || '').trim().toLowerCase();
-    if (!key) return;
-    if (!sessionsByPilot.has(key)) sessionsByPilot.set(key, { name: r.display_name, sessions: new Set() });
-    sessionsByPilot.get(key).sessions.add(r.session_id);
-  });
-  const pilotList = Array.from(sessionsByPilot.values()).map((p) => ({ name: p.name, count: p.sessions.size }));
-  pilotList.sort((a, b) => b.count - a.count);
-  lastTopPilots = pilotList.slice(0, 5);
-  if (topPilotsEl) {
-    const top5 = lastTopPilots;
-    topPilotsEl.innerHTML = top5.length
-      ? '<table class="rank-tbl"><thead><tr><th>#</th><th>Nom</th><th>Sessions jouees</th></tr></thead><tbody>' +
-        top5.map((p, i) => '<tr><td>' + (i + 1) + '</td><td>' + p.name + '</td><td>' + p.count + '</td></tr>').join('') +
-        '</tbody></table>'
-      : '<div class="empty">Aucun pilote.</div>';
-  }
-
   // --- Hall of Fame : meilleur temps (au tour) par numero de kart ------------------------
   const bestLapByKart = new Map();
   allLaps.forEach((l) => {
@@ -313,23 +399,6 @@ export async function loadStatsTab(range) {
         kartRows.map((r) => '<tr><td>' + r.kart + '</td><td>' + formatTime(r.time) + '</td><td>' + (r.name || '--') + '</td></tr>').join('') +
         '</tbody></table>'
       : '<div class="empty">Aucun tour enregistre.</div>';
-  }
-
-  // --- Hall of Fame : classement permanent — meilleur temps unique par pilote, top 10 -----
-  const bestByPilot = new Map();
-  timeRows.forEach((r) => {
-    const key = r.name.trim().toLowerCase();
-    const cur = bestByPilot.get(key);
-    if (!cur || r.total < cur.total) bestByPilot.set(key, r);
-  });
-  const permanentTop10 = Array.from(bestByPilot.values()).sort((a, b) => a.total - b.total).slice(0, 10);
-  lastHofPilots = permanentTop10;
-  if (hofPilotsEl) {
-    hofPilotsEl.innerHTML = permanentTop10.length
-      ? '<table class="rank-tbl"><thead><tr><th>#</th><th>Nom</th><th>Meilleur temps</th></tr></thead><tbody>' +
-        permanentTop10.map((r, i) => '<tr><td class="' + (['p1', 'p2', 'p3'][i] || '') + '">' + (i + 1) + '</td><td>' + r.name + '</td><td>' + formatTime(r.total) + '</td></tr>').join('') +
-        '</tbody></table>'
-      : '<div class="empty">Aucun classement disponible.</div>';
   }
 
   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
@@ -467,9 +536,9 @@ function renderFrequencyChart(allSessions, range) {
 // parle"). Utilise SheetJS (déjà chargé globalement dans admin.html, voir la
 // balise <script> xlsx.full.min.js — jusqu'ici seulement utilisé en LECTURE
 // pour l'import de chronos dans results.js) : aucune nouvelle dépendance.
-// Reprend les 5 blocs déjà calculés et affichés par loadStatsTab() pour le
-// filtre en cours (lastKpis/lastTimeRows/lastTopPilots/lastHofKarts/
-// lastHofPilots) — aucune requête DB supplémentaire.
+// Reprend les blocs déjà calculés et affichés par loadStatsTab() pour le
+// filtre en cours (lastKpis/lastTimeRows/lastHofKarts/lastExploitation) —
+// aucune requête DB supplémentaire.
 const RANGE_SLUGS = {
   jour: 'jour', semaine: 'semaine', mois: 'mois', annee: 'annee', personnalise: 'personnalise', all: 'depuis-le-debut',
 };
@@ -507,14 +576,6 @@ export function exportStatsXLSX() {
   ]);
   XLSX.utils.book_append_sheet(wb, topTimesSheet, 'Top temps');
 
-  const topPilotsSheet = XLSX.utils.aoa_to_sheet([
-    ['Top 5 pilotes (nb de sessions jouees) — ' + periodeTxt],
-    [],
-    ['Position', 'Nom', 'Sessions jouees'],
-    ...lastTopPilots.map((p, i) => [i + 1, p.name, p.count]),
-  ]);
-  XLSX.utils.book_append_sheet(wb, topPilotsSheet, 'Top pilotes');
-
   const hofKartsSheet = XLSX.utils.aoa_to_sheet([
     ['Hall of Fame — meilleur temps par kart — ' + periodeTxt],
     [],
@@ -523,13 +584,17 @@ export function exportStatsXLSX() {
   ]);
   XLSX.utils.book_append_sheet(wb, hofKartsSheet, 'HOF karts');
 
-  const hofPilotsSheet = XLSX.utils.aoa_to_sheet([
-    ['Hall of Fame — classement permanent (top 10, meilleur temps unique) — ' + periodeTxt],
+  const e = lastExploitation;
+  const exploitationSheet = XLSX.utils.aoa_to_sheet([
+    ['Exploitation piste — ' + periodeTxt],
     [],
-    ['Position', 'Nom', 'Meilleur temps'],
-    ...lastHofPilots.map((r, i) => [i + 1, r.name, formatTime(r.total)]),
+    ['Indicateur', 'Valeur', 'Detail'],
+    ['Remplissage moyen des sessions', pct(e.avgFill), e.avgFill != null ? 'min ' + pct(e.minFill) + ' / max ' + pct(e.maxFill) : 'Aucune session avec capacite connue'],
+    ['Utilisation piste (estimee)', pct(e.utilizationRate), 'Base : ' + DEFAULT_OPENING_HOURS_PER_DAY + 'h/jour, session ~' + DEFAULT_AVG_SESSION_MINUTES + ' min (estimation)'],
+    ['Sessions par jour (moyenne)', e.sessionsPerDay != null ? e.sessionsPerDay.toFixed(1) : '--', e.days ? 'sur ' + e.days + ' jour(s)' : ''],
+    ['Sessions par semaine (moyenne)', e.sessionsPerWeek != null ? e.sessionsPerWeek.toFixed(1) : '--', ''],
   ]);
-  XLSX.utils.book_append_sheet(wb, hofPilotsSheet, 'HOF pilotes');
+  XLSX.utils.book_append_sheet(wb, exploitationSheet, 'Exploitation piste');
 
   const today = new Date();
   const dateStr = today.getFullYear() + '-' + String(today.getMonth() + 1).padStart(2, '0') + '-' + String(today.getDate()).padStart(2, '0');
