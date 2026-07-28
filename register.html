@@ -257,6 +257,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
       <input type="text" class="nat-search" id="nat-search-1a" placeholder="Rechercher un pays…" autocomplete="off" onfocus="natComboOpen('1a')" oninput="natComboFilter('1a')"/>
       <div class="nat-dropdown" id="nat-dropdown-1a"></div>
     </div>
+    <div class="hint">Ce choix est définitif — il ne te sera plus redemandé lors de tes prochaines inscriptions.</div>
   </div>
 
   <button class="btn btn-primary" id="btn-create-pilot" onclick="createPilot()">Continuer</button>
@@ -274,16 +275,13 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
     <input type="text" id="inp-search" placeholder="ton@email.com ou Le_Furet"/>
   </div>
 
-  <div class="field">
-    <label>🌍 Quel pays veux-tu représenter ?</label>
-    <div class="nat-combo" id="nat-combo-1b">
-      <input type="text" class="nat-search" id="nat-search-1b" placeholder="Rechercher un pays…" autocomplete="off" onfocus="natComboOpen('1b')" oninput="natComboFilter('1b')"/>
-      <div class="nat-dropdown" id="nat-dropdown-1b"></div>
-    </div>
-  </div>
-
   <button class="btn btn-primary" id="btn-search-pilot" onclick="searchPilot()">Rechercher</button>
 
+  <!-- 🆕 v18 : la nationalité choisie à l'inscription est désormais définitive
+       (voir migration v18) — plus de champ ici. Elle n'est réaffichée que si
+       find_pilot_by_query() ne renvoie aucune nationalité déjà enregistrée
+       (profil créé avant v18) ; dans ce cas register.js l'injecte dynamiquement
+       ici, une seule fois, à l'intérieur de #search-result. -->
   <div id="search-result"></div>
 
   <button type="button" class="btn btn-link" onclick="backToScreen0()">&larr; Retour</button>
