@@ -806,12 +806,13 @@ function ensurePdfStyles() {
 .pdfx-summary-row .txt .k{font-size:7.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-summary-row .txt .v{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--c-text);white-space:nowrap}
 .pdfx-summary-row.best .txt .v{color:var(--c-accent)}
-.pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto}
-.pdfx-circuit-text{text-align:right}
-.pdfx-circuit-block .pdfx-c-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12.5px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;white-space:nowrap}
-.pdfx-circuit-meta{display:flex;flex-direction:column;gap:2px;margin-top:2px;align-items:flex-end}
-.pdfx-circuit-meta .item{display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
+.pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex:1 1 90px;min-width:0;max-width:180px;margin-left:auto}
+.pdfx-circuit-text{text-align:right;min-width:0;overflow:hidden;flex:1 1 auto}
+.pdfx-circuit-block .pdfx-c-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12.5px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pdfx-circuit-meta{display:flex;flex-direction:column;gap:2px;margin-top:2px;align-items:flex-end;min-width:0}
+.pdfx-circuit-meta .item{display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap;min-width:0;max-width:100%}
 .pdfx-circuit-meta .item svg{width:10px;height:10px;stroke:var(--c-accent);flex-shrink:0}
+.pdfx-circuit-meta .item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .pdfx-circuit-logo{flex-shrink:0;width:30px;height:30px;border-radius:8px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--pdx-on-accent,#fff)}
 
 /* Tableau des tours */
@@ -858,7 +859,7 @@ function ensurePdfStyles() {
 .pdfx-page.landscape .pdfx-summary-row svg{width:15px;height:15px}
 .pdfx-page.landscape .pdfx-summary-row .txt .k{font-size:9px}
 .pdfx-page.landscape .pdfx-summary-row .txt .v{font-size:19px}
-.pdfx-page.landscape .pdfx-circuit-block{gap:12px}
+.pdfx-page.landscape .pdfx-circuit-block{gap:12px;max-width:340px}
 .pdfx-page.landscape .pdfx-circuit-block .pdfx-c-name{font-size:17px}
 .pdfx-page.landscape .pdfx-circuit-meta{gap:3px;margin-top:4px}
 .pdfx-page.landscape .pdfx-circuit-meta .item{font-size:10.5px;gap:5px}
@@ -1342,8 +1343,8 @@ ${palmaresHTML(palmares)}
 <div class="pdfx-circuit-text">
 <div class="pdfx-c-name">${circuitTxt}</div>
 <div class="pdfx-circuit-meta">
-<div class="item">${PDFX_SVG_CAL}${dateShort}</div>
-<div class="item">${PDFX_SVG_TAG}${sessionTxt}</div>
+<div class="item">${PDFX_SVG_CAL}<span>${dateShort}</span></div>
+<div class="item">${PDFX_SVG_TAG}<span>${sessionTxt}</span></div>
 </div>
 </div>
 <div class="pdfx-circuit-logo">${pdfxInitial((sessionInfo && sessionInfo.circuit_name) || 'Trinisette')}</div>

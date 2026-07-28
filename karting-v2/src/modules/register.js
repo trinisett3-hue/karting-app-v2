@@ -99,22 +99,86 @@ const FALLBACK_CONFIG = {
   logo_url: null,
 };
 
-// id="nat-grid" est repris tel quel côté HTML mais pointe désormais vers un
-// <select> (liste déroulante) plutôt qu'une grille de boutons : la liste de
-// pays est amenée à s'allonger, une grille de chips n'aurait pas tenu.
-export function renderNats() {
-  const select = document.getElementById('nat-grid');
-  if (!select) return;
-  select.innerHTML = NATS.map(
-    (n) =>
-      '<option value="' + n.code + '"' + (n.code === regState.selectedNat ? ' selected' : '') + '>' +
-      n.flag + ' ' + n.label + '</option>'
-  ).join('');
+// 🆕 v17 : la nationalité est demandée dès le premier écran (création de
+// profil OU recherche de profil existant), plus en toute fin de parcours —
+// et via un combobox réellement recherchable (la liste est amenée à
+// s'allonger, un <select> natif devient vite pénible sur mobile). Deux
+// instances identiques cohabitent (écran 1a et écran 1b, un seul des deux
+// étant visible à la fois selon le chemin choisi par le pilote) ; elles
+// partagent le même état (regState.selectedNat) et restent synchronisées
+// l'une avec l'autre au cas où le pilote navigue entre les deux.
+function natLabel(n) {
+  return n.flag + ' ' + n.label;
 }
 
-// `el` est conservé en second paramètre optionnel pour compatibilité (ancien
-// appel onclick(code, this) sur les chips) mais n'est plus utilisé : le
-// <select> porte lui-même l'état visuel de la sélection.
+function findNat(code) {
+  return NATS.find((n) => n.code === code) || NATS[0];
+}
+
+export function renderNats() {
+  ['1a', '1b'].forEach((suffix) => {
+    const input = document.getElementById('nat-search-' + suffix);
+    if (!input) return;
+    input.value = natLabel(findNat(regState.selectedNat));
+    renderNatOptions(suffix, '');
+  });
+}
+
+function renderNatOptions(suffix, query) {
+  const dropdown = document.getElementById('nat-dropdown-' + suffix);
+  if (!dropdown) return;
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? NATS.filter((n) => n.label.toLowerCase().includes(q) || n.code.toLowerCase().includes(q))
+    : NATS;
+  dropdown.innerHTML = matches.length
+    ? matches.map(
+        (n) =>
+          '<div class="nat-option' + (n.code === regState.selectedNat ? ' sel' : '') +
+          '" data-code="' + n.code + '" onclick="natComboSelect(\'' + suffix + '\',\'' + n.code + '\')">' +
+          n.flag + ' ' + n.label + '</div>'
+      ).join('')
+    : '<div class="nat-empty">Aucun pays trouvé</div>';
+}
+
+export function natComboOpen(suffix) {
+  const dropdown = document.getElementById('nat-dropdown-' + suffix);
+  if (!dropdown) return;
+  renderNatOptions(suffix, document.getElementById('nat-search-' + suffix).value === natLabel(findNat(regState.selectedNat)) ? '' : document.getElementById('nat-search-' + suffix).value);
+  dropdown.classList.add('open');
+  if (!natComboOpen._wired) {
+    natComboOpen._wired = true;
+    document.addEventListener('click', (e) => {
+      ['1a', '1b'].forEach((s) => {
+        const combo = document.getElementById('nat-combo-' + s);
+        if (combo && !combo.contains(e.target)) {
+          const dd = document.getElementById('nat-dropdown-' + s);
+          if (dd) dd.classList.remove('open');
+        }
+      });
+    });
+  }
+}
+
+export function natComboFilter(suffix) {
+  const input = document.getElementById('nat-search-' + suffix);
+  renderNatOptions(suffix, input ? input.value : '');
+  const dropdown = document.getElementById('nat-dropdown-' + suffix);
+  if (dropdown) dropdown.classList.add('open');
+}
+
+export function natComboSelect(suffix, code) {
+  regState.selectedNat = code;
+  ['1a', '1b'].forEach((s) => {
+    const input = document.getElementById('nat-search-' + s);
+    if (input) input.value = natLabel(findNat(code));
+  });
+  const dropdown = document.getElementById('nat-dropdown-' + suffix);
+  if (dropdown) dropdown.classList.remove('open');
+}
+
+// Conservée pour compatibilité (ancien appel onchange direct sur un
+// <select>) — plus utilisée par le HTML actuel mais inoffensive à garder.
 export function selectNat(code) {
   regState.selectedNat = code;
 }
