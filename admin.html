@@ -83,6 +83,16 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .btn-red{background:rgba(255,77,77,.13);color:var(--red);border:1px solid rgba(255,77,77,.3)}
 .stats-range-btn{background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;text-align:center;transition:.15s;color:var(--txt);font-weight:600}
 .stats-range-btn.selected{border-color:var(--acc);background:rgba(255,59,48,.14);color:var(--acc2);font-weight:700}
+/* Sous-onglets (Statistiques / Parametres) — meme rendu que .stats-range-btn (deja
+   connu de l'admin) mais classe dediee pour ne pas se marcher dessus lors du
+   toggle ".selected" (les filtres de plage ET les sous-onglets coexistent dans
+   l'onglet Statistiques). Objectif : reduire la quantite d'info affichee d'un
+   coup — 1 clic pour ouvrir l'onglet, 1 clic de plus pour choisir le sous-onglet. */
+.subtab-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.subtab-btn{background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:9px 16px;font-size:13px;cursor:pointer;transition:.15s;color:var(--txt);font-weight:600;display:flex;align-items:center;gap:6px}
+.subtab-btn.selected{border-color:var(--acc);background:rgba(255,59,48,.14);color:var(--acc2);font-weight:700}
+.subtab-panel{display:none}
+.subtab-panel.active{display:block}
 .reg-search{width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--bord);background:var(--bg);color:var(--txt);font-size:13px;margin-bottom:12px}
 .ins-table-scroll{background:linear-gradient(var(--surf2) 30%,transparent) 0 0,linear-gradient(transparent,var(--surf2) 70%) 0 100%,radial-gradient(farthest-side at 50% 0,rgba(0,0,0,.15),transparent) 0 0,radial-gradient(farthest-side at 50% 100%,rgba(0,0,0,.15),transparent) 0 100%;background-color:var(--surf2);background-repeat:no-repeat;background-size:100% 40px,100% 40px,100% 12px,100% 12px;background-attachment:local,local,scroll,scroll}
 .btn-ghost{background:var(--surf2);color:var(--txt);border:1px solid var(--bord)}
@@ -529,6 +539,21 @@ updateThemeToggleUI();
 </div>
 <div id="stats-range-display" style="font-size:12px;color:var(--mut);margin-top:8px"></div>
 </div>
+<!-- Sous-onglets : chaque bloc etait affiche d'un coup sur cette page, ce qui faisait
+     beaucoup trop d'informations en meme temps. Desormais 1 clic sur "Statistiques"
+     (menu) + 1 clic sur un sous-onglet ci-dessous pour voir un bloc a la fois — voir
+     stats.js > switchStatsSubtab(). Les filtres de plage au-dessus s'appliquent a
+     tous les sous-onglets, pas seulement a celui affiche. -->
+<div class="subtab-bar">
+<div class="subtab-btn selected" data-stab-val="overview" onclick="switchStatsSubtab('overview')">📊 Vue d'ensemble</div>
+<div class="subtab-btn" data-stab-val="hof" onclick="switchStatsSubtab('hof')">🏆 Hall of Fame</div>
+<div class="subtab-btn" data-stab-val="fid" onclick="switchStatsSubtab('fid')">🔁 Fidelisation</div>
+<div class="subtab-btn" data-stab-val="perf" onclick="switchStatsSubtab('perf')">📈 Performance sportive</div>
+<div class="subtab-btn" data-stab-val="qualite" onclick="switchStatsSubtab('qualite')">⭐ Qualite & usage</div>
+</div>
+
+<!-- 1) VUE D'ENSEMBLE — KPIs globaux, exploitation piste, frequentation (Offre 1) -->
+<div class="subtab-panel active" id="stats-subtab-overview">
 <div class="ctitle" style="margin-bottom:10px">KPIs globaux</div>
 <div class="g3" id="stats-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
 
@@ -536,12 +561,14 @@ updateThemeToggleUI();
 <div class="g4" id="stats-exploitation-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:20px">Taux d'utilisation piste : estimation simple basee sur une duree moyenne de session et des horaires d'ouverture par defaut (reglage fin a venir).</div>
 
-<div class="card" style="margin-bottom:16px">
+<div class="card">
 <div class="ctitle" id="stats-freq-title">Frequentation (8 dernieres semaines)</div>
 <canvas id="stats-freq-chart" height="90"></canvas>
 </div>
+</div>
 
-<div class="ctitle" style="margin-bottom:10px">Hall of Fame chronos</div>
+<!-- 2) HALL OF FAME — chronos de base (Offre 1) -->
+<div class="subtab-panel" id="stats-subtab-hof">
 <div class="g2">
 <div class="card">
 <div class="ctitle">Top 10 meilleurs temps absolus</div>
@@ -552,15 +579,16 @@ updateThemeToggleUI();
 <div id="stats-hof-karts"><div class="empty">Chargement...</div></div>
 </div>
 </div>
+</div>
 
 <!-- ============================================================================
      OFFRE 2 — blocs avances (fidelisation, performance sportive, qualite, usage).
-     Separes visuellement de l'Offre 1 ci-dessus par un simple titre de section ;
-     memes filtres de plage (voir stats.js > loadOffre2Blocks()).
+     Memes filtres de plage (voir stats.js > loadOffre2Blocks()), chacun dans son
+     propre sous-onglet.
      ============================================================================ -->
-<div class="pg-title" style="font-size:16px;margin-top:28px;margin-bottom:14px;opacity:.85">Statistiques avancees (Offre 2)</div>
 
-<div class="ctitle" style="margin-bottom:10px">Fidelisation pilotes</div>
+<!-- 3) FIDELISATION PILOTES (Offre 2) -->
+<div class="subtab-panel" id="stats-subtab-fid">
 <div class="g4" id="stats-fid-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
 <div class="g2">
 <div class="card">
@@ -572,8 +600,10 @@ updateThemeToggleUI();
 <div id="stats-fid-top10"><div class="empty">Chargement...</div></div>
 </div>
 </div>
+</div>
 
-<div class="ctitle" style="margin-top:16px;margin-bottom:10px">Performance sportive</div>
+<!-- 4) PERFORMANCE SPORTIVE (Offre 2) -->
+<div class="subtab-panel" id="stats-subtab-perf">
 <div class="g2" style="margin-bottom:16px">
 <div id="stats-perf-kpi-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="empty">Chargement...</div></div>
 <div class="card">
@@ -585,8 +615,11 @@ updateThemeToggleUI();
 <div class="ctitle">Hall of Fame enrichi (chronos + engagement)</div>
 <div id="stats-perf-hof"><div class="empty">Chargement...</div></div>
 </div>
+</div>
 
-<div class="ctitle" style="margin-top:16px;margin-bottom:10px">Experience & qualite</div>
+<!-- 5) EXPERIENCE & QUALITE + USAGE AVANCE & SAISONNALITE (Offre 2) -->
+<div class="subtab-panel" id="stats-subtab-qualite">
+<div class="ctitle" style="margin-bottom:10px">Experience & qualite</div>
 <div class="g4" id="stats-qualite-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
 
 <div class="ctitle" style="margin-bottom:10px">Utilisation avancee & saisonnalite</div>
@@ -594,6 +627,7 @@ updateThemeToggleUI();
 <div class="card" style="margin-top:8px">
 <div class="ctitle">Frequentation par mois (12 derniers mois glissants)</div>
 <div id="stats-usage-saison"><div class="empty">Chargement...</div></div>
+</div>
 </div>
 </div>
 
@@ -615,6 +649,21 @@ updateThemeToggleUI();
 <div class="pg-title">Parametres</div>
 <div class="params-layout">
 <div class="params-col-left">
+
+<!-- Sous-onglets : les 4 blocs de reglages etaient tous affiches d'un coup, ce qui
+     faisait beaucoup trop d'informations en meme temps. Desormais 1 clic sur
+     "Parametres" (menu) + 1 clic sur un sous-onglet ci-dessous pour voir un bloc a la
+     fois — voir settings.js > switchParamsSubtab(). Le bouton "Enregistrer" reste
+     visible sous tous les sous-onglets. -->
+<div class="subtab-bar">
+<div class="subtab-btn selected" data-ptab-val="sessions" onclick="switchParamsSubtab('sessions')">🏁 Sessions</div>
+<div class="subtab-btn" data-ptab-val="identite" onclick="switchParamsSubtab('identite')">🖼️ Identité circuit</div>
+<div class="subtab-btn" data-ptab-val="theme" onclick="switchParamsSubtab('theme')">🎨 Thème</div>
+<div class="subtab-btn" data-ptab-val="avatars" onclick="switchParamsSubtab('avatars')">🧑‍🚀 Avatars</div>
+</div>
+
+<!-- 1) SESSIONS — valeurs par defaut + numeros de karts -->
+<div class="subtab-panel active" id="params-subtab-sessions">
 <div class="card">
 <div class="ctitle">Valeurs par defaut des sessions</div>
 <div class="field"><label>Nombre de karts par defaut</label><input type="number" id="pref-karts" min="1" max="30" oninput="markPrefsDirty()"/></div>
@@ -654,6 +703,24 @@ updateThemeToggleUI();
 </div>
 
 <div class="card">
+<div class="ctitle">Numeros de karts existants</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
+<div class="field">
+<label>Ajouter un numero</label>
+<div class="flex" style="gap:8px">
+<input type="number" id="pref-kart-num-input" min="1" max="999" placeholder="Ex: 7" style="max-width:120px" onkeydown="if(event.key==='Enter'){event.preventDefault();addKartNumber();}"/>
+<button class="btn btn-primary btn-sm" onclick="addKartNumber()">Ajouter</button>
+<button class="btn btn-ghost btn-sm" onclick="autoFillKartNumbers()">Generer 1 a N</button>
+</div>
+</div>
+<div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
+<div class="msg" id="msg-kart-numbers"></div>
+</div>
+</div>
+
+<!-- 2) IDENTITE CIRCUIT — logo + plan piste -->
+<div class="subtab-panel" id="params-subtab-identite">
+<div class="card">
 <div class="ctitle">Identite du circuit</div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:14px">Ces deux images s'affichent sur la page publique de resultats et dans les exports PDF.</div>
 <div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
@@ -690,7 +757,10 @@ Le plan du circuit est reserve au plan <strong>Premium</strong>. Passe au plan s
 <div class="msg" id="msg-trackmap"></div>
 </div>
 </div>
+</div>
 
+<!-- 3) THEME — theme de la page resultats -->
+<div class="subtab-panel" id="params-subtab-theme">
 <div class="card">
 <div class="ctitle">Theme de la page resultats</div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:12px">Couleurs de la page publique et des exports PDF. Apercu en direct a droite &rarr;</div>
@@ -709,7 +779,10 @@ Les thèmes premium sont réservés au plan <strong>Pro</strong>. Passe au plan 
 </div>
 <select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Premium Carbon</option><option value="checkered">Damier Rallye</option><option value="endurance">Endurance Le Mans</option><option value="pitlane">Pit Lane F1</option><option value="champagne">Champagne Gold</option><option value="arctic">Arctic White</option></select>
 </div>
+</div>
 
+<!-- 4) AVATARS — pack graphique + reglages avatars -->
+<div class="subtab-panel" id="params-subtab-avatars">
 <div class="card">
 <div class="ctitle">Avatars des pilotes</div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:12px">Chaque pilote recoit automatiquement l'avatar de son kart : le numero affiche est celui du kart, et la couleur est propre a chaque numero (identique d'une session a l'autre).</div>
@@ -777,26 +850,13 @@ Le pack <strong>Signature</strong> est reserve au plan <strong>Pro</strong>. Il 
 <div id="kart-avatars-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:10px"></div>
 </div>
 </div>
+</div>
 
 <div class="card" style="position:sticky;bottom:12px;z-index:5">
 <button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer les parametres</button>
 <div class="msg" id="msg-prefs"></div>
 </div>
 
-<div class="card">
-<div class="ctitle">Numeros de karts existants</div>
-<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
-<div class="field">
-<label>Ajouter un numero</label>
-<div class="flex" style="gap:8px">
-<input type="number" id="pref-kart-num-input" min="1" max="999" placeholder="Ex: 7" style="max-width:120px" onkeydown="if(event.key==='Enter'){event.preventDefault();addKartNumber();}"/>
-<button class="btn btn-primary btn-sm" onclick="addKartNumber()">Ajouter</button>
-<button class="btn btn-ghost btn-sm" onclick="autoFillKartNumbers()">Generer 1 a N</button>
-</div>
-</div>
-<div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
-<div class="msg" id="msg-kart-numbers"></div>
-</div>
 </div>
 <div class="params-col-right">
 <div class="card">
