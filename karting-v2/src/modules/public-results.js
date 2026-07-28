@@ -19,6 +19,7 @@ const NO_TIME = 999999; // valeur sentinelle : toujours trié en dernier
 
 let allResults = [];
 let sessionInfo = null;
+let resultsToken = null; // jeton public de la session : requis par les RPC token-gated
 let currentPage = 1;
 
 // Réglage « secteurs » (Paramètres › Apparence), lu depuis app_settings.global.
@@ -318,11 +319,15 @@ inscrit apparaît en fin de classement, marqué "Kart libre" ;
 export async function load() {
 const token = new URLSearchParams(window.location.search).get('result');
 if (!token) return fail();
+resultsToken = token;
 // AVANT tout rendu : sinon les avatars se dessinent en repli classique tant que
 // la config n'est pas revenue (course avec initTheme(), memes promesse memoisee).
 await loadSiteConfig();
 
-const { data: session, error: sErr } = await db.from('sessions').select('*').eq('public_results_token', token).maybeSingle();
+// Lecture publique via RPC token-gated : les tables sessions/laps/session_registrations
+// ne sont plus lisibles par la cle anon (fuite RGPD : emails et noms de tous les tenants).
+const { data: bundle, error: sErr } = await db.rpc('public_session_results', { _results_token: token });
+const session = bundle && bundle.session ? bundle.session : null;
 if (sErr || !session) return fail();
 sessionInfo = session;
 
@@ -330,12 +335,9 @@ document.getElementById('circuit-name').textContent = session.circuit_name || 'C
 document.getElementById('session-label').textContent = session.title || '--';
 document.getElementById('session-date').textContent = fmtSessionDate(session.session_date);
 
-const [lapsRes, regsRes, driversRes] = await Promise.all([
-db.from('laps').select('registration_id,lap_index,lap_time_seconds,sector_1_seconds,sector_2_seconds,sector_3_seconds').eq('session_id', session.id),
-db.from('session_registrations').select('*').eq('session_id', session.id),
-db.from('drivers').select('id,nationality,photo_url'),
-]);
-if (lapsRes.error || regsRes.error || driversRes.error) return fail();
+const lapsRes = { data: bundle.laps || [], error: null };
+const regsRes = { data: bundle.registrations || [], error: null };
+const driversRes = { data: bundle.drivers || [], error: null };
 
 const driversById = new Map((driversRes.data || []).map(d => [d.id, d]));
 const totals = new Map(), lapCounts = new Map(), lapDetails = new Map();
@@ -1225,10 +1227,12 @@ ${headLogo}
    avec un historique réel avant mise en prod.
    ================================================================== */
 async function computeSessionRanking(sessionId) {
-  const [{ data: laps }, { data: regs }] = await Promise.all([
-    db.from('laps').select('registration_id,lap_time_seconds').eq('session_id', sessionId),
-    db.from('session_registrations').select('id,display_name,kart_number').eq('session_id', sessionId),
-  ]);
+  const { data: pack } = await db.rpc('public_session_ranking', {
+    _results_token: resultsToken,
+    _session_id: sessionId,
+  });
+  const laps = pack && pack.laps;
+  const regs = pack && pack.registrations;
   if (!laps || !regs) return [];
   const totals = new Map();
   laps.forEach((l) => totals.set(l.registration_id, (totals.get(l.registration_id) || 0) + Number(l.lap_time_seconds || 0)));
@@ -1245,19 +1249,16 @@ export async function getPilotPalmares(name, tenantId) {
   const cleanName = (name || '').trim();
   if (!cleanName) return { podiums: 0, lastPositions: [] };
   try {
-    let query = db
-      .from('session_registrations')
-      .select('id,session_id,display_name,sessions!inner(id,session_date,tenant_id,public_results_token)')
-      .ilike('display_name', cleanName)
-      .not('sessions.public_results_token', 'is', null);
-    if (tenantId) query = query.eq('sessions.tenant_id', tenantId);
-    const { data: allRegs, error } = await query;
+    // Le tenant est deduit du jeton cote SQL : plus besoin de filtrer ici.
+    const { data: allRegs, error } = await db.rpc('public_pilot_sessions', {
+      _results_token: resultsToken,
+      _display_name: cleanName,
+    });
     if (error || !allRegs || !allRegs.length) return { podiums: 0, lastPositions: [] };
 
     const bySession = new Map();
     allRegs.forEach((r) => {
-      if (!r.sessions) return;
-      bySession.set(r.session_id, { date: r.sessions.session_date, regName: r.display_name });
+      bySession.set(r.session_id, { date: r.session_date, regName: r.display_name });
     });
 
     let podiums = 0;
