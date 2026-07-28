@@ -351,15 +351,43 @@ export function signatureAvatarsActive() {
 function ringLayerRaw(vb, shape, cls) {
   const [x, y, w] = vb;
   const sw = w * 0.028;
-  const inset = sw / 2;
+  /* inset = sw (et non sw/2) : à sw/2 le trait est tangent au bord de la
+     viewBox, donc rogné par le clip de la pastille — l'anneau apparaissait
+     ouvert sur les petites pastilles du classement. */
+  const inset = sw;
   const attr = 'fill="none" stroke="#fff" stroke-opacity=".92" stroke-width="' + sw + '"';
   const body = shape === 'square'
-    ? '<rect x="' + (x + inset) + '" y="' + (y + inset) + '" width="' + (w - sw) +
-      '" height="' + (w - sw) + '" rx="' + (w * 0.12) + '" ' + attr + '/>'
+    ? '<rect x="' + (x + inset) + '" y="' + (y + inset) + '" width="' + (w - 2 * inset) +
+      '" height="' + (w - 2 * inset) + '" rx="' + (w * 0.12) + '" ' + attr + '/>'
     : '<circle cx="' + (x + w / 2) + '" cy="' + (y + w / 2) + '" r="' + (w / 2 - inset) +
       '" ' + attr + '/>';
-  return '<svg' + (cls ? ' class="' + cls + '"' : '') + ' viewBox="' + vb.join(' ') +
+  /* x/y/width/height explicites : imbriqué dans un <svg> parent (cas PDF), un
+     <svg> sans position se place à 0,0 — or nos viewBox ont une origine négative
+     (bust : -114). L'anneau était donc décalé et sortait de la pastille. */
+  return '<svg' + (cls ? ' class="' + cls + '"' : '') + ' x="' + x + '" y="' + y +
+    '" width="' + w + '" height="' + w + '" viewBox="' + vb.join(' ') +
     '" aria-hidden="true" preserveAspectRatio="xMidYMid meet">' + body + '</svg>';
+}
+
+/* Découpe de la pastille FAITE DANS LE SVG et non par le CSS du conteneur.
+   iOS Safari n'applique pas de façon fiable border-radius / clip-path sur des
+   enfants en position:absolute (nos couches .sigav__l) : le fond restait carré
+   sur iPhone. Comme le fond est la seule couche qui atteint les bords (le sujet
+   est en object-fit:contain), il suffit de le découper à la source. Bonus : la
+   forme est alors identique à l'écran, en PDF (html2canvas ne gère pas non plus
+   clip-path) et dans n'importe quel autre moteur de rendu. */
+function bgClip(vb, shape) {
+  const [x, y, w] = vb;
+  const id = 'sigclip_' + shape + '_' + Math.round(w) + '_' + Math.round(x) + '_' + Math.round(y);
+  const inner = shape === 'square'
+    ? '<rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + w +
+      '" rx="' + (w * 0.12) + '"/>'
+    : '<circle cx="' + (x + w / 2) + '" cy="' + (y + w / 2) + '" r="' + (w / 2) + '"/>';
+  return {
+    defs: '<clipPath id="' + id + '">' + inner + '</clipPath>',
+    open: '<g clip-path="url(#' + id + ')">',
+    close: '</g>'
+  };
 }
 
 function bgStyleOf(o) {
@@ -379,7 +407,16 @@ const CSS = `
 .sigav--round{border-radius:50%;-webkit-clip-path:circle(50% at 50% 50%);clip-path:circle(50% at 50% 50%)}
 .sigav--square{border-radius:12%;-webkit-clip-path:inset(0 round 12%);clip-path:inset(0 round 12%)}
 .sigav__l{position:absolute;inset:0;width:100%;height:100%;display:block;pointer-events:none}
+/* Ceinture + bretelles : chaque couche porte SON propre arrondi. Un élément
+   clippe toujours son propre contenu par son border-radius, y compris sur iOS —
+   contrairement au clip du parent, ignoré sur les enfants absolus. */
+.sigav--round .sigav__l{border-radius:50%;overflow:hidden}
+.sigav--square .sigav__l{border-radius:12%;overflow:hidden}
 .sigav__sub{object-fit:contain}
+/* Podium : la pastille remplissait toute la largeur de la carte et venait
+   mordre sur le chiffre de position (1/2/3) posé en haut à gauche. On la réduit
+   légèrement et on la décale vers le bas pour dégager le chiffre. */
+.pilot-photo-wrap .sigav{width:84%;margin-top:8%}
 #sigav-defs{position:absolute;width:0;height:0;overflow:hidden}
 `;
 
@@ -489,8 +526,10 @@ export function signatureAvatarHTML(kartNumber, opts) {
   if (style) {
     const part = bgParts(hue, vb, style);
     const shared = !o.inlineDefs && ensureDefs(part);
+    const clip = bgClip(vb, shape);
     bg = '<svg class="sigav__l sigav__bg" viewBox="' + vb.join(' ') + '" aria-hidden="true" ' +
-      'preserveAspectRatio="xMidYMid meet">' + (shared ? '' : part.defs) + part.body + '</svg>';
+      'preserveAspectRatio="xMidYMid meet"><defs>' + clip.defs + '</defs>' +
+      (shared ? '' : part.defs) + clip.open + part.body + clip.close + '</svg>';
   }
 
   const label = o.title || o.alt || ('Kart ' + kartNumber);
@@ -571,7 +610,9 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
   const vb = VIEWBOX[kind];
   const hue = HUES[pilotIdForKart(kartNumber)];
   const num = (o.number !== undefined) ? o.number : kartNumber;
-  const size = o.size || 512;
+  /* 1024 et non 512 : html2canvas rastérise le data URL à sa taille intrinsèque
+     avant de l'agrandir dans la fiche pilote — à 512 l'avatar sortait flou. */
+  const size = o.size || 1024;
 
   let inner;
   try {
@@ -585,7 +626,10 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
   // Il a déjà width/height/viewBox = la viewBox du type, donc x=X y=Y suffit.
   const nested = inner.replace(/^\s*<svg\b/, '<svg x="' + vb[0] + '" y="' + vb[1] + '"');
 
-  const bg = style ? bgGroup(hue, vb, style) : '';
+  const clipD = bgClip(vb, shapeD);
+  const bg = style
+    ? '<defs>' + clipD.defs + '</defs>' + clipD.open + bgGroup(hue, vb, style) + clipD.close
+    : '';
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size +
     '" viewBox="' + vb.join(' ') + '">' + bg + nested +
     (ring ? ringLayerRaw(vb, shapeD, '') : '') + numberLayerRaw(kind, num) + '</svg>';

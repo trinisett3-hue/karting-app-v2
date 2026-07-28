@@ -907,6 +907,10 @@ function pdfxPhotoSrc(photo, kart) {
    doubles -> on cite les URL CSS avec des apostrophes, sinon l'attribut HTML se
    fermerait au premier guillemet de url("...") et le fond disparaitrait. */
 function pdfxCssUrl(u) { return `url('${String(u).replace(/['\\]/g, '\\$&')}')`; }
+/* Options de la grande vignette de la fiche pilote (voir downloadPilotPDF).
+   Partagees entre le prechauffage et le rendu : la cle de cache inclut la forme
+   et la taille, les deux appels doivent donc etre strictement identiques. */
+const PILOT_SHEET_AV_OPTS = { shape: 'square', size: 1024 };
 function pdfxAvatarImg(photo, kart, opts) {
   const real = pdfxValidPhoto(photo);
   const fallback = genAvatarDataURL(kart, opts);
@@ -1160,6 +1164,7 @@ export async function downloadPilotPDF(pilot, btn) {
   try {
     ensurePdfStyles();
     if (signatureAvatarsActive()) {
+      await prewarmSignatureAvatarDataURLs([pilot.kart], PILOT_SHEET_AV_OPTS);
       await prewarmSignatureAvatarDataURLs([pilot.kart]);
     }
     const { jsPDF } = window.jspdf;
@@ -1182,7 +1187,10 @@ export async function downloadPilotPDF(pilot, btn) {
        la grande vignette EST déjà l'avatar et porte le numéro, le badge ferait
        doublon. */
     const hasRealPhoto = !!pdfxValidPhoto(pilot.photo);
-    const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart);
+    /* Pack Signature : la vignette de la fiche pilote reprend exactement les
+       réglages du podium (même type, même fond, même contour) mais en pastille
+       CARRÉE, pour occuper tout le cadre arrondi de l'en-tête. */
+    const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart, PILOT_SHEET_AV_OPTS);
     const kartBadge = hasRealPhoto
       ? `<div class="pdfx-kart-badge"><div class="pdfx-av" style="background-image:${pdfxCssUrl(genAvatarDataURL(pilot.kart))}"></div></div>`
       : '';
