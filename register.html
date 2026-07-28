@@ -145,21 +145,26 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
 .pilot-found-pseudo{font-family:var(--font-display);font-size:27px;font-weight:700;color:var(--acc2);margin-bottom:4px;letter-spacing:.3px}
 .not-found-card{background:var(--surf2);border:1px dashed var(--bord);border-radius:13px;padding:19px;text-align:center;margin-bottom:14px;color:var(--mut);font-size:13px;line-height:1.5}
 
-/* Écran 2 — nationalité (liste déroulante, pensée pour une liste longue) */
-.nat-select-wrap{position:relative}
-.nat-select{
-  appearance:none;-webkit-appearance:none;-moz-appearance:none;
-  padding-right:42px;cursor:pointer;font-weight:600;
-  background-image:
-    linear-gradient(45deg, transparent 50%, var(--mut) 50%),
-    linear-gradient(135deg, var(--mut) 50%, transparent 50%);
-  background-position: calc(100% - 20px) calc(50% - 3px), calc(100% - 14px) calc(50% - 3px);
-  background-size:6px 6px, 6px 6px;
-  background-repeat:no-repeat;
+/* Nationalité — combobox recherchable (liste appelée à s'allonger) */
+.nat-combo{position:relative}
+.nat-search{cursor:text;font-weight:600}
+.nat-search:hover{border-color:var(--gold-soft)}
+.nat-dropdown{
+  display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:20;
+  max-height:238px;overflow-y:auto;
+  background:linear-gradient(180deg,var(--surf2),var(--surf));
+  border:1px solid var(--bord);border-radius:12px;
+  box-shadow:0 18px 40px -14px rgba(0,0,0,.65),0 1px 0 rgba(255,255,255,.04) inset;
+  padding:6px;
 }
-.nat-select:hover{border-color:var(--gold-soft)}
-.nat-select:focus{border-color:var(--acc)}
-.nat-select option{background:var(--surf);color:var(--txt)}
+.nat-dropdown.open{display:block}
+.nat-option{
+  padding:10px 11px;border-radius:8px;font-size:14.5px;font-weight:600;color:var(--txt);
+  cursor:pointer;display:flex;align-items:center;gap:9px;
+}
+.nat-option:hover,.nat-option.hi{background:rgba(255,59,48,.14)}
+.nat-option.sel{color:var(--acc2)}
+.nat-empty{padding:12px;text-align:center;font-size:13px;color:var(--mut-dim)}
 
 /* Écran 2 — carrousel d'avatar */
 .avatar-carousel{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:9px}
@@ -246,6 +251,14 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
     <input type="date" id="inp-birthdate"/>
   </div>
 
+  <div class="field">
+    <label>🌍 Quel pays veux-tu représenter ?</label>
+    <div class="nat-combo" id="nat-combo-1a">
+      <input type="text" class="nat-search" id="nat-search-1a" placeholder="Rechercher un pays…" autocomplete="off" onfocus="natComboOpen('1a')" oninput="natComboFilter('1a')"/>
+      <div class="nat-dropdown" id="nat-dropdown-1a"></div>
+    </div>
+  </div>
+
   <button class="btn btn-primary" id="btn-create-pilot" onclick="createPilot()">Continuer</button>
   <button type="button" class="btn btn-link" onclick="backToScreen0()">&larr; Retour</button>
   <div class="msg" id="msg-1a"></div>
@@ -260,6 +273,15 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
     <label>🔎 Email ou pseudo</label>
     <input type="text" id="inp-search" placeholder="ton@email.com ou Le_Furet"/>
   </div>
+
+  <div class="field">
+    <label>🌍 Quel pays veux-tu représenter ?</label>
+    <div class="nat-combo" id="nat-combo-1b">
+      <input type="text" class="nat-search" id="nat-search-1b" placeholder="Rechercher un pays…" autocomplete="off" onfocus="natComboOpen('1b')" oninput="natComboFilter('1b')"/>
+      <div class="nat-dropdown" id="nat-dropdown-1b"></div>
+    </div>
+  </div>
+
   <button class="btn btn-primary" id="btn-search-pilot" onclick="searchPilot()">Rechercher</button>
 
   <div id="search-result"></div>
@@ -268,17 +290,10 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
   <div class="msg" id="msg-1b"></div>
 </div>
 
-<!-- ÉCRAN 2 — Session : nationalité + avatar -->
+<!-- ÉCRAN 2 — Session : avatar -->
 <div class="card reg-screen" id="screen-2">
   <div class="logo">🏎️ Karting <span>Trinisette</span></div>
   <div class="subtitle" id="screen2-sub">Dernière étape !</div>
-
-  <div class="field">
-    <label>🌍 Nationalité</label>
-    <div class="nat-select-wrap">
-      <select class="nat-select" id="nat-grid" onchange="selectNat(this.value)"></select>
-    </div>
-  </div>
 
   <div class="field">
     <label>🎨 Ton avatar</label>

@@ -493,19 +493,30 @@ updateThemeToggleUI();
 <!-- PANEL: STATISTIQUES -->
 <div class="panel" id="panel-stats">
 <div class="pg-title">Statistiques</div>
-<div class="card" style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:16px">
+<div class="card" style="margin-bottom:16px">
+<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
 <div style="display:flex;flex-wrap:wrap;gap:8px">
 <div class="stats-range-btn selected" data-range-val="all" onclick="selectStatsRange('all')">Depuis le debut</div>
 <div class="stats-range-btn" data-range-val="jour" onclick="selectStatsRange('jour')">Jour</div>
 <div class="stats-range-btn" data-range-val="semaine" onclick="selectStatsRange('semaine')">Semaine</div>
 <div class="stats-range-btn" data-range-val="mois" onclick="selectStatsRange('mois')">Mois</div>
 <div class="stats-range-btn" data-range-val="annee" onclick="selectStatsRange('annee')">Annee</div>
+<div class="stats-range-btn" data-range-val="personnalise" onclick="selectStatsRange('personnalise')">Personnalise</div>
 </div>
-<button class="btn btn-ghost btn-sm" onclick="exportStatsCSV()">Exporter en CSV</button>
+<button class="btn btn-ghost btn-sm" onclick="exportStatsXLSX()">Exporter en Excel (XLSX)</button>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px">
+<input type="month" id="stats-month-input" style="display:none;width:auto" onchange="onStatsMonthPick(this.value)"/>
+<input type="number" id="stats-year-input" placeholder="Annee" style="display:none;width:100px" onchange="onStatsYearPick(this.value)"/>
+<input type="date" id="stats-custom-from" style="display:none;width:auto" onchange="onStatsCustomChange()"/>
+<span id="stats-custom-sep" style="display:none;color:var(--mut);font-size:13px">au</span>
+<input type="date" id="stats-custom-to" style="display:none;width:auto" onchange="onStatsCustomChange()"/>
+</div>
+<div id="stats-range-display" style="font-size:12px;color:var(--mut);margin-top:8px"></div>
 </div>
 <div class="g3" id="stats-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
 <div class="card">
-<div class="ctitle">Frequentation (8 dernieres semaines)</div>
+<div class="ctitle" id="stats-freq-title">Frequentation (8 dernieres semaines)</div>
 <canvas id="stats-freq-chart" height="90"></canvas>
 </div>
 <div class="g2">
