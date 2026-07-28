@@ -310,7 +310,10 @@ removeTrackMap: settings.removeTrackMap,
 savePrefs: settings.savePrefs,
 // Statistiques
 selectStatsRange: stats.selectStatsRange,
-exportStatsCSV: stats.exportStatsCSV,
+onStatsMonthPick: stats.onStatsMonthPick,
+onStatsYearPick: stats.onStatsYearPick,
+onStatsCustomChange: stats.onStatsCustomChange,
+exportStatsXLSX: stats.exportStatsXLSX,
 // Registre
 loadRegistryTab: registry.loadRegistryTab,
 filterRegistry: registry.filterRegistry,

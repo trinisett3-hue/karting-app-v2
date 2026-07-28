@@ -11,6 +11,9 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 Object.assign(window, {
   selectNat: register.selectNat,
+  natComboOpen: register.natComboOpen,
+  natComboFilter: register.natComboFilter,
+  natComboSelect: register.natComboSelect,
   submitForm: register.submitForm,
   goFirstTime: register.goFirstTime,
   goAlreadyPilot: register.goAlreadyPilot,
