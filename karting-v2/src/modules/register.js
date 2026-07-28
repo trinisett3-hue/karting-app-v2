@@ -306,6 +306,7 @@ export async function createPilot() {
       // 🆕 v18 : figée définitivement sur le profil pilote dès la création —
       // plus jamais redemandée ensuite (voir migration v18).
       _nationality: regState.selectedNat,
+      _registration_token: regState.registrationToken,
     });
     if (error) throw error;
     regState.pilot = { id: data, pseudo };
@@ -392,7 +393,7 @@ export async function confirmPilotFound() {
     // choix fait à l'instant dans regState.selectedNat — on la fige côté
     // serveur pour toutes les prochaines fois.
     try {
-      await db.rpc('set_pilot_nationality_if_unset', { _pilot_id: candidate.id, _nationality: regState.selectedNat });
+      await db.rpc('set_pilot_nationality_if_unset', { _pilot_id: candidate.id, _nationality: regState.selectedNat, _registration_token: regState.registrationToken });
     } catch (e) {
       // Non-bloquant : au pire on redemandera à la prochaine reconnexion —
       // ne doit jamais empêcher l'inscription du jour.
@@ -418,7 +419,7 @@ async function initAvatarCarousel() {
   const all = Array.from({ length: AVATAR_COUNT }, (_, i) => i);
   let taken = [];
   try {
-    const { data, error } = await db.rpc('session_taken_avatars', { _session_id: regState.sessionId });
+    const { data, error } = await db.rpc('session_taken_avatars', { _session_id: regState.sessionId, _registration_token: regState.registrationToken });
     if (error) throw error;
     taken = Array.isArray(data) ? data : [];
   } catch (e) {
