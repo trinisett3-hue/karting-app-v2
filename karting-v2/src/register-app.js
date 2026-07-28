@@ -12,4 +12,12 @@ window.addEventListener('DOMContentLoaded', async () => {
 Object.assign(window, {
   selectNat: register.selectNat,
   submitForm: register.submitForm,
+  goFirstTime: register.goFirstTime,
+  goAlreadyPilot: register.goAlreadyPilot,
+  backToScreen0: register.backToScreen0,
+  createPilot: register.createPilot,
+  searchPilot: register.searchPilot,
+  confirmPilotFound: register.confirmPilotFound,
+  avatarPrev: register.avatarPrev,
+  avatarNext: register.avatarNext,
 });
