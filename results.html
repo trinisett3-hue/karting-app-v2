@@ -918,6 +918,11 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   .pos-badge { top: var(--space-1); left: var(--space-2); font-size: clamp(2.3rem, 13vw, 3.7rem); }
   .pilot-avatar-placeholder { min-height: 0; }
   .pilot-avatar-placeholder svg { width: 34px; height: 34px; }
+  /* Mobile : la carte a une hauteur DEFINIE (podium-wrap en dvh), donc ici les
+     pourcentages de hauteur se resolvent — on fait tenir la pastille en hauteur
+     pour qu'elle ne soit plus tranchee par la bande du nom. */
+  .pilot-photo-wrap { display: flex; align-items: center; justify-content: center; min-height: 0; overflow: hidden; container-type: size; }
+  .pilot-photo-wrap .sigav { width: min(96cqw, 100cqh); height: auto; max-width: none; max-height: none; margin: auto; }
   .pilot-name-band { padding: var(--space-2); }
   /* Mobile : le nom du pilote doit tenir sur UNE seule ligne. On reduit la
      taille (clamp plus bas) et on force nowrap + ellipse plutot que le
