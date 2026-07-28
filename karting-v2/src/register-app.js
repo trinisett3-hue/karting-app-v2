@@ -11,6 +11,5 @@ window.addEventListener('DOMContentLoaded', async () => {
 
 Object.assign(window, {
   selectNat: register.selectNat,
-  previewPhoto: register.previewPhoto,
   submitForm: register.submitForm,
 });

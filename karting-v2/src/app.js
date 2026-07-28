@@ -15,6 +15,7 @@ import * as sessions from './modules/sessions.js';
 import * as results from './modules/results.js';
 import * as settings from './modules/settings.js';
 import * as auth from './modules/auth.js';
+import * as stats from './modules/stats.js';
 // Auth branchée (24/07) : l'admin nécessite désormais une session Supabase Auth valide.
 // Voir doLogin()/doLogout() et l'overlay #login-overlay dans admin.html.
 
@@ -22,10 +23,34 @@ import * as auth from './modules/auth.js';
 // Reprend exactement la logique originale : avertit avant de quitter Paramètres si des
 // changements ne sont pas enregistrés.
 
+// Libellés/couleurs des tags de session (Point 10) — valeurs stockées en base
+// dans sessions.session_type (snake_case, voir migration-v13-2026-07-28.sql).
+const SESSION_TYPE_LABELS = {
+  loisir: 'Loisir',
+  competition: 'Competition',
+  initiation: 'Initiation',
+  entrainement: 'Entrainement',
+};
+function sessionTypeBadge(type) {
+  if (!type || !SESSION_TYPE_LABELS[type]) return '';
+  return '<span class="sc-badge" style="background:rgba(236,234,42,.15);color:var(--yel)">' + SESSION_TYPE_LABELS[type] + '</span>';
+}
+
+let archivesCache = [];
+
 async function renderArchivesList() {
-const list = await sessions.loadArchives();
 const el = document.getElementById('arch-list');
 if (!el) return;
+archivesCache = await sessions.loadArchives();
+renderFilteredArchives();
+}
+
+function renderFilteredArchives() {
+const el = document.getElementById('arch-list');
+if (!el) return;
+const filterEl = document.getElementById('arch-type-filter');
+const filterType = filterEl ? filterEl.value : '';
+const list = filterType ? archivesCache.filter((s) => s.session_type === filterType) : archivesCache;
 if (!list.length) {
 el.innerHTML = '<div class="empty">Aucune session archivee.</div>';
 return;
@@ -36,7 +61,7 @@ const d = s.session_date || s.created_at.slice(0, 10);
 if (!groups[d]) groups[d] = [];
 groups[d].push(s);
 });
-const { formatDate } = await import('./modules/ui.js');
+importUiHelpers().then(({ formatDate }) => {
 el.innerHTML = Object.entries(groups)
 .map(
 ([date, dayList]) =>
@@ -45,7 +70,9 @@ dayList
 .map(
 (s) =>
 '<div class="arch-item" onclick="openArchiveDetail(\'' + s.id + '\')">' +
-'<div><div class="arch-title">' + s.title + '</div><div class="arch-meta">' + s.max_karts + ' karts</div></div>' +
+'<div><div class="arch-title">' + s.title +
+(s.internal_notes ? ' <span title="Note interne presente" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--yel);margin-left:4px"></span>' : '') +
+'</div><div class="arch-meta flex" style="gap:6px;margin-top:2px">' + s.max_karts + ' karts' + (sessionTypeBadge(s.session_type) ? ' ' + sessionTypeBadge(s.session_type) : '') + '</div></div>' +
 '<div class="flex">' +
 '<button class="btn btn-ghost btn-sm icon-btn" title="Voir" onclick="event.stopPropagation();openArchiveDetail(\'' + s.id + '\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
 '<button class="btn btn-red btn-sm icon-btn" title="Supprimer" onclick="event.stopPropagation();deleteSession(\'' + s.id + '\').then(loadArchives)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +
@@ -54,6 +81,17 @@ dayList
 .join('')
 )
 .join('');
+});
+}
+
+function filterArchives() {
+renderFilteredArchives();
+}
+
+let _uiHelpersPromise = null;
+function importUiHelpers() {
+  if (!_uiHelpersPromise) _uiHelpersPromise = import('./modules/ui.js');
+  return _uiHelpersPromise;
 }
 
 async function loadArchivesTab() {
@@ -68,7 +106,7 @@ if (!ok) return;
 state.prefsDirty = false;
 settings.loadPrefs();
 }
-const names = ['creer', 'actives', 'archives', 'parametres'];
+const names = ['creer', 'actives', 'archives', 'stats', 'parametres'];
 document.querySelectorAll('.sb-tab').forEach((t, i) => t.classList.toggle('active', names[i] === tab));
 document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
 document.getElementById('panel-' + tab).classList.add('active');
@@ -78,6 +116,7 @@ sessions.backToActivesList();
 sessions.loadActiveSessions();
 }
 if (tab === 'archives') loadArchivesTab();
+if (tab === 'stats') stats.loadStatsTab();
 }
 
 // --- Wrappers qui recollent les morceaux entre modules (remplacent les callbacks
@@ -96,6 +135,7 @@ async function openActiveDetailAndShowResults(id) {
 await sessions.openActiveDetail(id, {
 onOpened: async () => {
 await results.renderResultatsSection();
+results.renderManualChronoTable();
 },
 });
 }
@@ -105,7 +145,12 @@ await sessions.deleteActiveSession({ afterDelete: () => switchTab('actives') });
 }
 
 async function terminerSessionAndGoBack() {
-await sessions.terminerSession({ afterEnd: () => switchTab('actives') });
+const { formatTime } = await importUiHelpers();
+await sessions.terminerSession({
+afterEnd: () => switchTab('actives'),
+loadRanking: results.loadRanking,
+formatTime,
+});
 }
 
 async function loadArchives() {
@@ -209,6 +254,8 @@ markDetailDirty: sessions.markDetailDirty,
 saveDetailMeta: sessions.saveDetailMeta,
 deleteActiveSession: deleteActiveSessionAndGoBack,
 terminerSession: terminerSessionAndGoBack,
+closeRecapModal: sessions.closeRecapModal,
+confirmTerminerSession: sessions.confirmTerminerSession,
 // Inscriptions & karts
 addUnknownParticipant: sessions.addUnknownParticipant,
 loadInscrits: sessions.loadInscrits,
@@ -225,6 +272,8 @@ archCopyLink: results.archCopyLink,
 archTogglePres: results.archTogglePres,
 deleteSession: results.deleteSession,
 loadArchives,
+filterArchives,
+saveArchiveMeta: results.saveArchiveMeta,
 // Résultats & import chronos
 exportCSV: results.exportCSV,
 showPilotHistory: results.showPilotHistory,
@@ -238,6 +287,9 @@ closeZoom: results.closeZoom,
 togglePres: results.togglePres,
 toggleSectorsField: results.toggleSectorsField,
 updateChronoFormat: results.updateChronoFormat,
+exportSessionPDF: results.exportSessionPDF,
+renderManualChronoTable: results.renderManualChronoTable,
+validateManualChrono: results.validateManualChrono,
 // Paramètres
 markPrefsDirty: () => (state.prefsDirty = true),
 addKartNumber: settings.addKartNumber,
