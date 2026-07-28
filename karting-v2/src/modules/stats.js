@@ -181,6 +181,22 @@ export function selectStatsRange(key) {
   loadStatsTab(currentRange);
 }
 
+// Sous-onglets de l'onglet Statistiques (voir admin.html > panel-statistiques) : un
+// seul bloc de contenu visible a la fois pour reduire la quantite d'info affichee.
+// Les filtres de plage (selectStatsRange ci-dessus) restent partages entre tous les
+// sous-onglets — seule la visibilite change ici, aucune donnee n'est rechargee.
+const STATS_SUBTABS = ['overview', 'hof', 'fid', 'perf', 'qualite'];
+export function switchStatsSubtab(tab) {
+  if (!STATS_SUBTABS.includes(tab)) return;
+  STATS_SUBTABS.forEach((key) => {
+    const panel = document.getElementById('stats-subtab-' + key);
+    if (panel) panel.classList.toggle('active', key === tab);
+  });
+  document.querySelectorAll('.subtab-btn[data-stab-val]').forEach((b) => {
+    b.classList.toggle('selected', b.dataset.stabVal === tab);
+  });
+}
+
 // Changement du mois choisi (input type="month", value "YYYY-MM").
 export function onStatsMonthPick(value) {
   if (!value) return;

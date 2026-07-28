@@ -369,18 +369,21 @@ markPrefsDirty();
 showMsg('msg-trackmap', 'Plan retiré. Clique Enregistrer pour confirmer.', 'ok');
 }
 
-export function switchAppearanceSubtab(tab) {
-document.querySelectorAll('.subtab-btn').forEach((b) => {
-const on = b.dataset.subtab === tab;
-b.classList.toggle('active', on);
-b.style.color = on ? 'var(--txt)' : 'var(--mut)';
-b.style.borderBottomColor = on ? 'var(--acc)' : 'transparent';
-});
-const t = document.getElementById('appearance-subtab-theme');
-const a = document.getElementById('appearance-subtab-avatars');
-if (t) t.style.display = tab === 'theme' ? 'block' : 'none';
-if (a) a.style.display = tab === 'avatars' ? 'block' : 'none';
-if (tab === 'avatars') renderKartAvatarGallery();
+// Sous-onglets de l'onglet Parametres (voir admin.html > panel-parametres) : meme
+// convention pastille/.selected que switchStatsSubtab() dans stats.js — un seul bloc
+// de reglages visible a la fois pour reduire la quantite d'info affichee. Remplace
+// l'ancienne fonction switchAppearanceSubtab (jamais reliee a du HTML reel).
+const PARAMS_SUBTABS = ['sessions', 'identite', 'theme', 'avatars'];
+export function switchParamsSubtab(tab) {
+  if (!PARAMS_SUBTABS.includes(tab)) return;
+  PARAMS_SUBTABS.forEach((key) => {
+    const panel = document.getElementById('params-subtab-' + key);
+    if (panel) panel.classList.toggle('active', key === tab);
+  });
+  document.querySelectorAll('.subtab-btn[data-ptab-val]').forEach((b) => {
+    b.classList.toggle('selected', b.dataset.ptabVal === tab);
+  });
+  if (tab === 'avatars') renderKartAvatarGallery();
 }
 
 // --- Entitlement "thèmes premium" (plan Pro) ---------------------------------------
