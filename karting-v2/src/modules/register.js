@@ -236,15 +236,17 @@ export async function initRegisterPage() {
     return;
   }
   regState.registrationToken = token;
-  const { data: sess } = await db.from('sessions').select('id,title').eq('public_registration_token', token).single();
-  if (!sess) {
+  // Plus de lecture directe de public.sessions avec la cle anon : id et titre
+  // viennent desormais du bundle RPC token-gated public_registration_config.
+  const cfg = await loadRegistrationConfig(token);
+  if (!cfg || !cfg.session_id) {
     document.getElementById('session-name').textContent = 'Session introuvable';
     return;
   }
-  regState.sessionId = sess.id;
-  document.getElementById('session-name').textContent = sess.title;
+  regState.sessionId = cfg.session_id;
+  document.getElementById('session-name').textContent = cfg.session_title || '--';
 
-  applyCircuitBranding(await loadRegistrationConfig(token));
+  applyCircuitBranding(cfg);
 }
 
 /* -----------------------------------------------------------------------------
