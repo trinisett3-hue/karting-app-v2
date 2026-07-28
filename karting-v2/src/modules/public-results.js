@@ -794,9 +794,9 @@ function ensurePdfStyles() {
 .pdfx-photo svg{width:28px;height:28px;stroke:var(--c-muted);opacity:.6}
 .pdfx-kart-badge{position:absolute;right:-10px;bottom:-10px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--c-surface);box-shadow:0 2px 8px rgba(0,0,0,.5);background:var(--c-bg);overflow:hidden}
 .pdfx-kart-badge .pdfx-av{width:100%;height:100%}
-.pdfx-id-block{min-width:76px;flex:1 1 76px}
+.pdfx-id-block{min-width:92px;flex:1 1 92px}
 .pdfx-pilot-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text);transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.4}
-.pdfx-id-meta{display:flex;gap:7px;margin-top:3px;flex-wrap:nowrap}
+.pdfx-id-meta{display:flex;gap:7px;row-gap:3px;margin-top:3px;flex-wrap:wrap}
 .pdfx-id-meta .item{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-id-meta .item b{color:var(--c-accent);font-size:1.05em}
 .pdfx-summary-card{background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:9px;padding:6px 9px;display:flex;flex-direction:row;gap:8px;align-items:center;flex-shrink:0}
@@ -806,13 +806,13 @@ function ensurePdfStyles() {
 .pdfx-summary-row .txt .k{font-size:7.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-summary-row .txt .v{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--c-text);white-space:nowrap}
 .pdfx-summary-row.best .txt .v{color:var(--c-accent)}
-.pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex:1 1 90px;min-width:0;max-width:180px;margin-left:auto}
+.pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex:0 1 140px;min-width:90px;max-width:190px;margin-left:auto}
 .pdfx-circuit-text{text-align:right;min-width:0;overflow:hidden;flex:1 1 auto}
 .pdfx-circuit-block .pdfx-c-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12.5px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .pdfx-circuit-meta{display:flex;flex-direction:column;gap:2px;margin-top:2px;align-items:flex-end;min-width:0}
 .pdfx-circuit-meta .item{display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap;min-width:0;max-width:100%}
 .pdfx-circuit-meta .item svg{width:10px;height:10px;stroke:var(--c-accent);flex-shrink:0}
-.pdfx-circuit-meta .item span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.pdfx-circuit-meta .item span{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .pdfx-circuit-logo{flex-shrink:0;width:30px;height:30px;border-radius:8px;background:var(--c-accent);display:flex;align-items:center;justify-content:center;font-family:var(--font-display);font-weight:700;font-size:13px;color:var(--pdx-on-accent,#fff)}
 
 /* Tableau des tours */
@@ -853,13 +853,14 @@ function ensurePdfStyles() {
 .pdfx-page.landscape .pdfx-photo svg{width:34px;height:34px}
 .pdfx-page.landscape .pdfx-kart-badge{width:36px;height:36px}
 .pdfx-page.landscape .pdfx-pilot-name{font-size:28px}
-.pdfx-page.landscape .pdfx-id-meta{gap:16px;margin-top:5px}
+.pdfx-page.landscape .pdfx-id-block{min-width:130px}
+.pdfx-page.landscape .pdfx-id-meta{gap:16px;row-gap:4px;margin-top:5px}
 .pdfx-page.landscape .pdfx-id-meta .item{font-size:12px}
 .pdfx-page.landscape .pdfx-summary-card{padding:9px 20px;gap:22px;border-radius:10px}
 .pdfx-page.landscape .pdfx-summary-row svg{width:15px;height:15px}
 .pdfx-page.landscape .pdfx-summary-row .txt .k{font-size:9px}
 .pdfx-page.landscape .pdfx-summary-row .txt .v{font-size:19px}
-.pdfx-page.landscape .pdfx-circuit-block{gap:12px;max-width:340px}
+.pdfx-page.landscape .pdfx-circuit-block{gap:12px;min-width:140px;max-width:340px}
 .pdfx-page.landscape .pdfx-circuit-block .pdfx-c-name{font-size:17px}
 .pdfx-page.landscape .pdfx-circuit-meta{gap:3px;margin-top:4px}
 .pdfx-page.landscape .pdfx-circuit-meta .item{font-size:10.5px;gap:5px}
@@ -1029,7 +1030,11 @@ ${secCells}
    plein glyphe (« NATHAN PETIT » devenait « NATHAN PETI »). On réduit donc la
    taille de police des libellés à risque jusqu'à ce qu'ils tiennent vraiment.
    Appelé pendant que la page est encore dans le DOM, donc mesurable. */
-const PDFX_FIT_SEL = '.pdfx-pilot-name,.pdfx-p-name,.pdfx-pv-name,.pdfx-rank-row .name,.pdfx-sheet-header-mini .mini-name,.pdfx-rank-header-mini .mini-name';
+// 🆕 v17.1 : le bloc circuit (nom du circuit + date + libellé de session) de la
+// fiche pilote coupait le texte au caractère près sans « … » — cause identique
+// (html2canvas ignore text-overflow), corrigée en ajoutant ces éléments à la
+// liste déjà utilisée pour le nom du pilote.
+const PDFX_FIT_SEL = '.pdfx-pilot-name,.pdfx-p-name,.pdfx-pv-name,.pdfx-rank-row .name,.pdfx-sheet-header-mini .mini-name,.pdfx-rank-header-mini .mini-name,.pdfx-c-name,.pdfx-circuit-meta .item span';
 function pdfxFitTexts(page) {
   page.querySelectorAll(PDFX_FIT_SEL).forEach(el => {
     const start = parseFloat(getComputedStyle(el).fontSize);

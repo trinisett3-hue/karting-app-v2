@@ -35,35 +35,7 @@ import {
   signatureAvatarsActive,
   signatureAvatarHTML,
 } from './signature-avatar.js';
-
-// Liste déroulante (plus adaptée qu'une grille de boutons à une liste qui va
-// grandir) : UE au complet + principaux pays hors UE, "Autre" en repli final.
-// Codes ISO 3166-1 alpha-2 conservés partout où possible.
-const NATS = [
-  { code: 'FR', flag: '🇫🇷', label: 'France' },
-  { code: 'BE', flag: '🇧🇪', label: 'Belgique' },
-  { code: 'DE', flag: '🇩🇪', label: 'Allemagne' },
-  { code: 'IT', flag: '🇮🇹', label: 'Italie' },
-  { code: 'ES', flag: '🇪🇸', label: 'Espagne' },
-  { code: 'GB', flag: '🇬🇧', label: 'Angleterre' },
-  { code: 'NL', flag: '🇳🇱', label: 'Pays-Bas' },
-  { code: 'CH', flag: '🇨🇭', label: 'Suisse' },
-  { code: 'PT', flag: '🇵🇹', label: 'Portugal' },
-  { code: 'PL', flag: '🇵🇱', label: 'Pologne' },
-  { code: 'AT', flag: '🇦🇹', label: 'Autriche' },
-  { code: 'SE', flag: '🇸🇪', label: 'Suède' },
-  { code: 'NO', flag: '🇳🇴', label: 'Norvège' },
-  { code: 'DK', flag: '🇩🇰', label: 'Danemark' },
-  { code: 'FI', flag: '🇫🇮', label: 'Finlande' },
-  { code: 'IE', flag: '🇮🇪', label: 'Irlande' },
-  { code: 'LU', flag: '🇱🇺', label: 'Luxembourg' },
-  { code: 'MA', flag: '🇲🇦', label: 'Maroc' },
-  { code: 'DZ', flag: '🇩🇿', label: 'Algérie' },
-  { code: 'TN', flag: '🇹🇳', label: 'Tunisie' },
-  { code: 'US', flag: '🇺🇸', label: 'États-Unis' },
-  { code: 'CA', flag: '🇨🇦', label: 'Canada' },
-  { code: 'OTHER', flag: '🌍', label: 'Autre' },
-];
+import { NATS } from './countries.js';
 
 const AVATAR_COUNT = 24;
 
@@ -99,14 +71,18 @@ const FALLBACK_CONFIG = {
   logo_url: null,
 };
 
-// 🆕 v17 : la nationalité est demandée dès le premier écran (création de
-// profil OU recherche de profil existant), plus en toute fin de parcours —
-// et via un combobox réellement recherchable (la liste est amenée à
-// s'allonger, un <select> natif devient vite pénible sur mobile). Deux
-// instances identiques cohabitent (écran 1a et écran 1b, un seul des deux
-// étant visible à la fois selon le chemin choisi par le pilote) ; elles
-// partagent le même état (regState.selectedNat) et restent synchronisées
-// l'une avec l'autre au cas où le pilote navigue entre les deux.
+// 🆕 v17 : la nationalité est demandée via un combobox réellement
+// recherchable (la liste est amenée à s'allonger, un <select> natif devient
+// vite pénible sur mobile).
+// 🆕 v18 : le choix est désormais DÉFINITIF, porté par pilots.nationality
+// (voir migration v18) — l'écran 1a (nouveau profil) reste le seul endroit
+// où il est demandé systématiquement. L'écran 1b (profil retrouvé) ne le
+// redemande QUE si find_pilot_by_query() renvoie nationality=null (profil
+// créé avant v18) — dans ce cas, un combobox est injecté dynamiquement dans
+// #search-result par renderFoundCard() ci-dessous, avec le suffixe
+// "1bfound". La liste des instances actives n'est donc plus figée à
+// ['1a','1b'] : on la déduit du DOM (activeNatSuffixes()) pour rester
+// correcte quel que soit le combobox réellement présent à l'écran.
 function natLabel(n) {
   return n.flag + ' ' + n.label;
 }
@@ -115,8 +91,12 @@ function findNat(code) {
   return NATS.find((n) => n.code === code) || NATS[0];
 }
 
+function activeNatSuffixes() {
+  return Array.from(document.querySelectorAll('[id^="nat-combo-"]')).map((el) => el.id.slice('nat-combo-'.length));
+}
+
 export function renderNats() {
-  ['1a', '1b'].forEach((suffix) => {
+  activeNatSuffixes().forEach((suffix) => {
     const input = document.getElementById('nat-search-' + suffix);
     if (!input) return;
     input.value = natLabel(findNat(regState.selectedNat));
@@ -144,12 +124,13 @@ function renderNatOptions(suffix, query) {
 export function natComboOpen(suffix) {
   const dropdown = document.getElementById('nat-dropdown-' + suffix);
   if (!dropdown) return;
-  renderNatOptions(suffix, document.getElementById('nat-search-' + suffix).value === natLabel(findNat(regState.selectedNat)) ? '' : document.getElementById('nat-search-' + suffix).value);
+  const input = document.getElementById('nat-search-' + suffix);
+  renderNatOptions(suffix, input && input.value === natLabel(findNat(regState.selectedNat)) ? '' : (input ? input.value : ''));
   dropdown.classList.add('open');
   if (!natComboOpen._wired) {
     natComboOpen._wired = true;
     document.addEventListener('click', (e) => {
-      ['1a', '1b'].forEach((s) => {
+      activeNatSuffixes().forEach((s) => {
         const combo = document.getElementById('nat-combo-' + s);
         if (combo && !combo.contains(e.target)) {
           const dd = document.getElementById('nat-dropdown-' + s);
@@ -169,7 +150,7 @@ export function natComboFilter(suffix) {
 
 export function natComboSelect(suffix, code) {
   regState.selectedNat = code;
-  ['1a', '1b'].forEach((s) => {
+  activeNatSuffixes().forEach((s) => {
     const input = document.getElementById('nat-search-' + s);
     if (input) input.value = natLabel(findNat(code));
   });
@@ -320,6 +301,9 @@ export async function createPilot() {
       _email: email,
       _pseudo: pseudo,
       _birth_date: birthdate,
+      // 🆕 v18 : figée définitivement sur le profil pilote dès la création —
+      // plus jamais redemandée ensuite (voir migration v18).
+      _nationality: regState.selectedNat,
     });
     if (error) throw error;
     regState.pilot = { id: data, pseudo };
@@ -360,12 +344,31 @@ export async function searchPilot() {
       return;
     }
     regState.foundCandidate = data;
+    // 🆕 v18 : la nationalité choisie à la première inscription est
+    // définitive (voir migration v18) — on ne la redemande PAS ici. Le seul
+    // cas où un champ reapparaît est un profil créé AVANT v18
+    // (data.nationality === null) : on lui laisse la choisir une dernière
+    // fois, et set_pilot_nationality_if_unset() la fige au moment de
+    // confirmer (jamais réécrite ensuite, même via ce même écran).
+    const needsNatPrompt = !data.nationality;
+    const natFieldHTML = needsNatPrompt
+      ? '<div class="field" style="margin-top:14px;text-align:left">' +
+        '<label>🌍 Quel pays veux-tu représenter ?</label>' +
+        '<div class="nat-combo" id="nat-combo-1bfound">' +
+        '<input type="text" class="nat-search" id="nat-search-1bfound" placeholder="Rechercher un pays…" autocomplete="off" onfocus="natComboOpen(\'1bfound\')" oninput="natComboFilter(\'1bfound\')"/>' +
+        '<div class="nat-dropdown" id="nat-dropdown-1bfound"></div>' +
+        '</div>' +
+        '<div class="hint">Profil créé avant l\'ajout de ce choix — il ne te sera plus jamais redemandé après.</div>' +
+        '</div>'
+      : '';
     resultEl.innerHTML =
       '<div class="pilot-found-card">' +
       '<div class="pilot-found-pseudo">🏁 ' + escapeHTML(data.pseudo) + '</div>' +
       '<div class="choice-sub">' + escapeHTML(data.first_name || '') + '</div>' +
       '</div>' +
+      natFieldHTML +
       '<button type="button" class="btn btn-primary" onclick="confirmPilotFound()">C\'est moi, continuer</button>';
+    if (needsNatPrompt) renderNats();
   } catch (e) {
     showMsg('msg-1b', e.message || 'Erreur lors de la recherche.', 'err');
   } finally {
@@ -375,7 +378,25 @@ export async function searchPilot() {
 
 export async function confirmPilotFound() {
   if (!regState.foundCandidate) return;
-  regState.pilot = { id: regState.foundCandidate.id, pseudo: regState.foundCandidate.pseudo };
+  const candidate = regState.foundCandidate;
+  regState.pilot = { id: candidate.id, pseudo: candidate.pseudo };
+  if (candidate.nationality) {
+    // Déjà fixée à une inscription précédente (ou à la création) : on la
+    // reprend telle quelle, silencieusement — c'est tout le sens de la
+    // demande "ne plus jamais redemander".
+    regState.selectedNat = candidate.nationality;
+  } else {
+    // Profil pré-v18 : le combobox "1bfound" (voir searchPilot()) porte le
+    // choix fait à l'instant dans regState.selectedNat — on la fige côté
+    // serveur pour toutes les prochaines fois.
+    try {
+      await db.rpc('set_pilot_nationality_if_unset', { _pilot_id: candidate.id, _nationality: regState.selectedNat });
+    } catch (e) {
+      // Non-bloquant : au pire on redemandera à la prochaine reconnexion —
+      // ne doit jamais empêcher l'inscription du jour.
+      console.warn('[register] set_pilot_nationality_if_unset a échoué — non bloquant.', e);
+    }
+  }
   await enterScreen2();
 }
 
