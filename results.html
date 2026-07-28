@@ -919,13 +919,28 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   .pilot-avatar-placeholder { min-height: 0; }
   .pilot-avatar-placeholder svg { width: 34px; height: 34px; }
   .pilot-name-band { padding: var(--space-2); }
-  .pilot-name { font-size: clamp(.8rem, 5.1vw, 1.15rem); margin-bottom: var(--space-1); }
+  /* Mobile : le nom du pilote doit tenir sur UNE seule ligne. On reduit la
+     taille (clamp plus bas) et on force nowrap + ellipse plutot que le
+     retour a la ligne, sur les trois marches du podium. */
+  .pilot-name {
+    font-size: clamp(.5rem, 3.05vw, .8rem);
+    margin-bottom: var(--space-1);
+    letter-spacing: .02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+  .podium-card.p1 .pilot-name { font-size: clamp(.55rem, 3.45vw, .9rem); }
   .podium-card.p2 .pilot-name,
   .podium-card.p3 .pilot-name {
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
+    display: block;
+    -webkit-line-clamp: none;
+    white-space: nowrap;
     overflow: hidden;
+    text-overflow: ellipsis;
   }
   .pilot-info-bar { gap: var(--space-1); }
   .pilot-kart { font-size: .65rem; letter-spacing: .04em; }
