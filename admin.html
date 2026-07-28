@@ -459,8 +459,17 @@ updateThemeToggleUI();
 <option value="entrainement">Entrainement</option>
 </select>
 </div>
-<div class="field" style="margin-bottom:0"><label>Notes internes <span style="font-weight:500;text-transform:none;color:var(--mut)">(jamais affichees cote pilote)</span></label>
+<div class="field"><label>Notes internes <span style="font-weight:500;text-transform:none;color:var(--mut)">(jamais affichees cote pilote)</span></label>
 <textarea id="arch-notes-input" rows="2"></textarea>
+</div>
+<!-- 🆕 Offre 2 : alimente le KPI "Taux d'incident" / "Temps d'interruption piste" (bloc Experience & qualite de l'onglet Statistiques) — saisie manuelle a la cloture, faute d'un capteur automatique. -->
+<div class="g2" style="margin-bottom:0">
+<div class="field" style="margin-bottom:0"><label>Incidents (nb)</label>
+<input type="number" id="arch-incidents-input" min="0" step="1" value="0"/>
+</div>
+<div class="field" style="margin-bottom:0"><label>Minutes d'arret piste</label>
+<input type="number" id="arch-interruption-input" min="0" step="1" value="0"/>
+</div>
 </div>
 <div class="msg" id="msg-arch-meta"></div>
 </div>
@@ -542,6 +551,49 @@ updateThemeToggleUI();
 <div class="ctitle">Meilleur temps par kart</div>
 <div id="stats-hof-karts"><div class="empty">Chargement...</div></div>
 </div>
+</div>
+
+<!-- ============================================================================
+     OFFRE 2 — blocs avances (fidelisation, performance sportive, qualite, usage).
+     Separes visuellement de l'Offre 1 ci-dessus par un simple titre de section ;
+     memes filtres de plage (voir stats.js > loadOffre2Blocks()).
+     ============================================================================ -->
+<div class="pg-title" style="font-size:16px;margin-top:28px;margin-bottom:14px;opacity:.85">Statistiques avancees (Offre 2)</div>
+
+<div class="ctitle" style="margin-bottom:10px">Fidelisation pilotes</div>
+<div class="g4" id="stats-fid-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
+<div class="g2">
+<div class="card">
+<div class="ctitle">Segmentation (nouveaux / reguliers / fans)</div>
+<div id="stats-fid-segmentation"><div class="empty">Chargement...</div></div>
+</div>
+<div class="card">
+<div class="ctitle">Top 10 pilotes par engagement (nb sessions)</div>
+<div id="stats-fid-top10"><div class="empty">Chargement...</div></div>
+</div>
+</div>
+
+<div class="ctitle" style="margin-top:16px;margin-bottom:10px">Performance sportive</div>
+<div class="g2" style="margin-bottom:16px">
+<div id="stats-perf-kpi-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="empty">Chargement...</div></div>
+<div class="card">
+<div class="ctitle">Repartition par niveau</div>
+<div id="stats-perf-niveaux"><div class="empty">Chargement...</div></div>
+</div>
+</div>
+<div class="card">
+<div class="ctitle">Hall of Fame enrichi (chronos + engagement)</div>
+<div id="stats-perf-hof"><div class="empty">Chargement...</div></div>
+</div>
+
+<div class="ctitle" style="margin-top:16px;margin-bottom:10px">Experience & qualite</div>
+<div class="g4" id="stats-qualite-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
+
+<div class="ctitle" style="margin-bottom:10px">Utilisation avancee & saisonnalite</div>
+<div class="g4" id="stats-usage-kpi-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
+<div class="card" style="margin-top:8px">
+<div class="ctitle">Frequentation par mois (12 derniers mois glissants)</div>
+<div id="stats-usage-saison"><div class="empty">Chargement...</div></div>
 </div>
 </div>
 
