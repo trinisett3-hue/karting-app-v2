@@ -222,6 +222,18 @@ export function renderLogoPreview() {
 const wrap = document.getElementById('pref-logo-preview-wrap');
 const img = document.getElementById('pref-logo-preview');
 const removeBtn = document.getElementById('pref-logo-remove-btn');
+// Point 5 (complément) : le logo n'était jusqu'ici visible que dans l'aperçu
+// des Paramètres et sur results.html — jamais dans l'admin elle-même. On le
+// reflète aussi dans la sidebar, seul endroit visible à tout moment.
+const sbLogo = document.getElementById('sb-circuit-logo');
+if (sbLogo) {
+if (state.prefs.logo_url) {
+sbLogo.src = state.prefs.logo_url;
+sbLogo.style.display = 'block';
+} else {
+sbLogo.style.display = 'none';
+}
+}
 if (!wrap || !img) return;
 if (state.prefs.logo_url) {
 img.src = state.prefs.logo_url;

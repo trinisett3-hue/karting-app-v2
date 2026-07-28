@@ -142,6 +142,28 @@ export async function exportCSV(sess) {
 
 // --- Historique pilote -------------------------------------------------------------------
 
+// 🆕 Palmarès (Point 8a) : meilleur temps absolu, nb sessions jouées, nb de
+// podiums (position ≤ 3 dans le classement complet de chaque session, pas
+// seulement le temps), et un mini sparkline SVG de l'évolution du temps total
+// session par session (les plus anciennes à gauche).
+function sparklineSVG(values) {
+  if (!values.length) return '';
+  const w = 220, h = 40, pad = 4;
+  const min = Math.min(...values), max = Math.max(...values);
+  const span = max - min || 1;
+  const pts = values.map((v, i) => {
+    const x = pad + (i * (w - 2 * pad)) / Math.max(values.length - 1, 1);
+    // inversé : temps plus petit = mieux = plus haut sur le graphe
+    const y = pad + ((v - min) / span) * (h - 2 * pad);
+    return x + ',' + y;
+  });
+  return (
+    '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="display:block">' +
+    '<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--acc)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+    '</svg>'
+  );
+}
+
 export async function showPilotHistory(regId, name) {
   document.getElementById('hist-title').textContent = 'Historique - ' + (name || 'Pilote');
   const contentEl = document.getElementById('hist-content');
@@ -150,22 +172,33 @@ export async function showPilotHistory(regId, name) {
   try {
     const { data: allRegs } = await db
       .from('session_registrations')
-      .select('id,session_id,kart_number,display_name,sessions(title,session_date)')
+      .select('id,session_id,kart_number,display_name,sessions(id,title,session_date)')
       .ilike('display_name', (name || '').trim());
     if (!allRegs || !allRegs.length) {
       contentEl.innerHTML = '<div class="empty">Aucun historique trouve.</div>';
       return;
     }
     const rows = [];
+    let podiums = 0;
     for (const reg of allRegs) {
       const { data: laps } = await db.from('laps').select('lap_time_seconds').eq('registration_id', reg.id);
       if (!laps || !laps.length) continue;
       const total = laps.reduce((a, l) => a + Number(l.lap_time_seconds), 0);
+      // Position réelle dans le classement complet de CETTE session (même logique
+      // que loadRanking), pas seulement le temps — c'est ce qui définit un podium.
+      let position = null;
+      if (reg.sessions && reg.sessions.id) {
+        const sessRanking = await loadRanking({ id: reg.sessions.id });
+        const idx = sessRanking.findIndex((r2) => Math.abs(r2.t - total) < 0.0005 && r2.name.toLowerCase().trim() === (name || '').toLowerCase().trim());
+        position = idx >= 0 ? idx + 1 : null;
+        if (position != null && position <= 3) podiums++;
+      }
       rows.push({
         title: (reg.sessions && reg.sessions.title) || '--',
         date: (reg.sessions && reg.sessions.session_date) || '',
         kart: reg.kart_number,
         time: total,
+        position,
       });
     }
     if (!rows.length) {
@@ -173,9 +206,17 @@ export async function showPilotHistory(regId, name) {
       return;
     }
     rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const best = Math.min(...rows.map((r) => r.time));
+    const sparklineValues = rows.slice().reverse().map((r) => r.time);
     contentEl.innerHTML =
-      '<table class="tbl"><thead><tr><th>Session</th><th>Date</th><th>Kart</th><th>Temps</th></tr></thead><tbody>' +
-      rows.map((r) => '<tr><td>' + r.title + '</td><td>' + (r.date ? formatDate(r.date) : '--') + '</td><td>' + (r.kart || '--') + '</td><td>' + formatTime(r.time) + '</td></tr>').join('') +
+      '<div class="g3" style="margin-bottom:12px">' +
+      '<div style="background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--mut);text-transform:uppercase">Meilleur temps</div><div style="font-size:15px;font-weight:900">' + formatTime(best) + '</div></div>' +
+      '<div style="background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--mut);text-transform:uppercase">Sessions jouees</div><div style="font-size:15px;font-weight:900">' + rows.length + '</div></div>' +
+      '<div style="background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px;text-align:center"><div style="font-size:10px;color:var(--mut);text-transform:uppercase">Podiums</div><div style="font-size:15px;font-weight:900">' + podiums + '</div></div>' +
+      '</div>' +
+      '<div style="margin-bottom:12px;text-align:center">' + sparklineSVG(sparklineValues) + '<div style="font-size:10px;color:var(--mut);margin-top:2px">Evolution du temps total (plus haut = plus rapide), sessions les plus anciennes a gauche</div></div>' +
+      '<table class="tbl"><thead><tr><th>Session</th><th>Date</th><th>Kart</th><th>Pos.</th><th>Temps</th></tr></thead><tbody>' +
+      rows.map((r) => '<tr><td>' + r.title + '</td><td>' + (r.date ? formatDate(r.date) : '--') + '</td><td>' + (r.kart || '--') + '</td><td>' + (r.position ? 'P' + r.position : '--') + '</td><td>' + formatTime(r.time) + '</td></tr>').join('') +
       '</tbody></table>';
   } catch (e) {
     contentEl.innerHTML = '<div class="empty">Erreur: ' + e.message + '</div>';
@@ -230,7 +271,11 @@ export async function importChrono() {
   return importChronoSimple();
 }
 
-async function importChronoSimple() {
+// Exportée (en plus d'être utilisée par importChrono()) pour la saisie manuelle
+// (validateManualChrono ci-dessous) : le tableau "1 ligne par kart" ne saisit
+// jamais de secteurs, donc il doit toujours utiliser ce format-ci, même quand
+// state.prefs.sectors_enabled est activé pour l'import texte/fichier.
+export async function importChronoSimple() {
   if (!state.activeDetailSession) {
     showMsg('msg-chrono', 'Aucune session active.', 'err');
     return;
@@ -477,6 +522,10 @@ export async function openArchiveDetail(id) {
   document.getElementById('arch-list-view').style.display = 'none';
   document.getElementById('arch-detail-view').style.display = 'block';
   document.getElementById('arch-detail-title').textContent = s.title;
+  const typeEl = document.getElementById('arch-type-input');
+  if (typeEl) typeEl.value = s.session_type || 'loisir';
+  const notesEl = document.getElementById('arch-notes-input');
+  if (notesEl) notesEl.value = s.internal_notes || '';
   const results = await loadRanking(s);
   renderRankTable('arch-ranking', results);
   renderSessionStats(results, 'arch-stats-card', 'arch-stats-grid');
@@ -497,6 +546,23 @@ export async function openArchiveDetail(id) {
   } else {
     document.getElementById('arch-qr-wrap').innerHTML = '<div class="empty">Non publie</div>';
   }
+}
+
+// Point 10/11 : type de session + notes internes, éditables aussi depuis une
+// archive (une session peut être requalifiée après coup, ex: "Loisir" ->
+// "Competition" a posteriori, ou une note ajoutée après la course).
+export async function saveArchiveMeta() {
+  if (!state.archiveSession) return;
+  const sessionType = document.getElementById('arch-type-input')?.value || 'loisir';
+  const internalNotes = document.getElementById('arch-notes-input')?.value ?? '';
+  const { error } = await db.from('sessions').update({ session_type: sessionType, internal_notes: internalNotes }).eq('id', state.archiveSession.id);
+  if (error) {
+    showMsg('msg-arch-meta', 'Erreur: ' + error.message, 'err');
+    return;
+  }
+  state.archiveSession.session_type = sessionType;
+  state.archiveSession.internal_notes = internalNotes;
+  showMsg('msg-arch-meta', 'Enregistre.', 'ok');
 }
 
 export function backToArchives() {
@@ -543,6 +609,144 @@ export function toggleSectorsField() {
       ? 'Les secteurs seront proposés à l’import et affichés dans la fiche PDF seulement s’ils sont renseignés.'
       : 'Mode simplifié : import sans secteurs et fiche PDF avec les temps, écarts et résumé de session.';
   updateChronoFormat();
+}
+
+// --- Point 3 : saisie manuelle des chronos (1 ligne par kart) ----------------------------
+// Tableau 1 à max_karts, colonnes N° kart / temps / nom (lecture seule, depuis
+// session_registrations.kart_number / display_name). Le bouton "Valider" réutilise
+// EXACTEMENT le même parsing/import que importChronoSimple()/importChronoWithSectors()
+// (on construit le texte "Nom;Kart;1;Temps" attendu par ces fonctions et on délègue,
+// au lieu de dupliquer la logique de matching/insertion des tours).
+
+export function renderManualChronoTable() {
+  const el = document.getElementById('manual-chrono-table');
+  if (!el) return;
+  if (!state.activeDetailSession) {
+    el.innerHTML = '<div class="empty">Ouvre une session pour saisir les chronos.</div>';
+    return;
+  }
+  const max = state.activeDetailSession.max_karts || 0;
+  const byKart = new Map();
+  (state.inscritsData || []).forEach((r) => {
+    if (r.kart_number != null) byKart.set(Number(r.kart_number), r);
+  });
+  let html = '<table class="tbl"><thead><tr><th>Kart</th><th>Pilote</th><th>Temps (s ou m:ss.mmm)</th></tr></thead><tbody>';
+  for (let k = 1; k <= max; k++) {
+    const reg = byKart.get(k);
+    html +=
+      '<tr>' +
+      '<td><span class="kart-badge assigned">' + k + '</span></td>' +
+      '<td>' + (reg ? reg.display_name : '<span style="color:var(--mut)">Kart libre</span>') + '</td>' +
+      '<td><input class="input-inline kart-inp" style="width:110px" type="text" data-kart="' + k + '" placeholder="--" ' + (reg ? '' : 'disabled') + '/></td>' +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+export async function validateManualChrono() {
+  if (!state.activeDetailSession) {
+    showMsg('msg-manual-chrono', 'Aucune session active.', 'err');
+    return;
+  }
+  const el = document.getElementById('manual-chrono-table');
+  if (!el) return;
+  const inputs = el.querySelectorAll('input[data-kart]');
+  const byKart = new Map();
+  (state.inscritsData || []).forEach((r) => {
+    if (r.kart_number != null) byKart.set(Number(r.kart_number), r);
+  });
+  const lines = [];
+  inputs.forEach((inp) => {
+    const val = inp.value.trim();
+    if (!val) return;
+    const kart = Number(inp.dataset.kart);
+    const reg = byKart.get(kart);
+    if (!reg) return;
+    lines.push(reg.display_name + ';' + kart + ';1;' + val);
+  });
+  if (!lines.length) {
+    showMsg('msg-manual-chrono', 'Aucun temps saisi.', 'err');
+    return;
+  }
+  const raw = document.getElementById('chrono-raw');
+  const previous = raw.value;
+  raw.value = lines.join('\n');
+  // Toujours le format simple (jamais de secteurs en saisie manuelle) — voir
+  // commentaire sur importChronoSimple().
+  await importChronoSimple();
+  raw.value = previous;
+  showMsg('msg-manual-chrono', lines.length + ' temps valides et importes.', 'ok');
+  renderManualChronoTable();
+}
+
+// --- Point 6 : export PDF du classement, côté admin (session active + archive) -----------
+// Réutilise le même pattern jsPDF/html2canvas que public-results.js (déjà chargés dans
+// admin.html), en s'appuyant sur le même conteneur hors-écran #pdf-render-root, plutôt
+// que de réimplémenter un export différent. Rendu volontairement plus simple qu'en public
+// (pas de thème circuit à gérer côté admin) : bandeau titre + tableau de classement complet.
+async function adminSectionToCanvas(node, width) {
+  const holder = document.getElementById('pdf-render-root');
+  if (!holder) return null;
+  holder.innerHTML = '';
+  holder.style.width = width + 'px';
+  const wrap = document.createElement('div');
+  wrap.style.width = width + 'px';
+  wrap.style.background = '#ffffff';
+  wrap.appendChild(node);
+  holder.appendChild(wrap);
+  await new Promise((r) => setTimeout(r, 60));
+  const canvas = await html2canvas(wrap, { backgroundColor: '#ffffff', scale: 2, width, windowWidth: width, useCORS: true });
+  holder.innerHTML = '';
+  return canvas;
+}
+
+export async function exportSessionPDF(sess, btn) {
+  const s = sess;
+  if (!s) {
+    showMsg('msg-res', 'Aucune session.', 'err');
+    return;
+  }
+  const original = btn ? btn.innerHTML : null;
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Export...'; }
+  try {
+    const rankResults = await loadRanking(s);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+    const width = 700;
+    const page = document.createElement('div');
+    page.style.cssText = 'font-family:Arial,sans-serif;padding:24px;width:' + width + 'px;box-sizing:border-box;color:#111';
+    const rowsHTML = rankResults
+      .map((r, i) => {
+        const t = formatTime(r.t);
+        return '<tr style="border-bottom:1px solid #ddd">' +
+          '<td style="padding:6px 8px;font-weight:700">' + (i + 1) + '</td>' +
+          '<td style="padding:6px 8px">' + (r.kart || '--') + '</td>' +
+          '<td style="padding:6px 8px">' + r.name + '</td>' +
+          '<td style="padding:6px 8px">' + t + '</td>' +
+          '</tr>';
+      })
+      .join('');
+    page.innerHTML =
+      '<div style="border-bottom:3px solid #7c74ff;padding-bottom:10px;margin-bottom:16px">' +
+      '<div style="font-size:22px;font-weight:900">' + (s.title || 'Session') + '</div>' +
+      '<div style="font-size:12px;color:#666;margin-top:4px">' + (s.session_date ? formatDate(s.session_date) : '') + (s.session_type ? ' · ' + s.session_type : '') + '</div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+      '<thead><tr style="text-align:left;border-bottom:2px solid #111"><th style="padding:6px 8px">Pos.</th><th style="padding:6px 8px">Kart</th><th style="padding:6px 8px">Nom</th><th style="padding:6px 8px">Temps</th></tr></thead>' +
+      '<tbody>' + (rowsHTML || '<tr><td colspan="4" style="padding:12px;color:#888">Aucun resultat.</td></tr>') + '</tbody>' +
+      '</table>';
+    const canvas = await adminSectionToCanvas(page, width);
+    if (canvas) {
+      const imgW = 190;
+      const imgH = (canvas.height * imgW) / canvas.width;
+      pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, 10, imgW, imgH);
+    }
+    pdf.save((s.title || 'session').replace(/[^a-z0-9]/gi, '_') + '-classement.pdf');
+  } catch (e) {
+    showMsg('msg-res', 'Erreur PDF: ' + e.message, 'err');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = original; }
 }
 
 export function updateChronoFormat() {

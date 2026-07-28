@@ -1,9 +1,20 @@
 // Module d'inscription publique (register.html) — accès par QR code / lien, sans auth.
 //
-// Reprend à l'identique la logique de l'ancien register.html monofichier :
-// résolution de session par public_registration_token, sélection nationalité,
-// upload + compression de photo, création du driver (first_name/last_name
-// requis sur le nouveau schéma) et de l'inscription (session_registrations).
+// Reprend à l'identique la logique de l'ancien register.html monofichier pour la
+// résolution de session (public_registration_token) et la sélection nationalité.
+//
+// 🔧 v13 : formulaire à une seule étape, étape photo retirée (réservée à une
+// offre future Compétition/Séminaires — voir session_type). Plus d'upload vers
+// le bucket driver-photos ni de création de fiche `drivers` : driver_id reste
+// null sur session_registrations (déjà géré ailleurs, cf. avatarHTML() dans
+// public-results.js qui affiche un avatar de substitution par numéro de kart).
+//
+// 🆕 v13 + demande client post-v13 : le champ "nom" du formulaire devient le
+// PSEUDO du pilote — c'est lui qui alimente display_name (déjà le cas
+// aujourd'hui, donc aucune régression côté podium/classement/PDF, qui lisent
+// tous display_name). Prénom/nom réel et email sont des champs séparés,
+// stockés sur session_registrations (email) — aucune fiche `drivers` n'étant
+// plus créée par cette page, c'est le seul endroit qui garantit de les capturer.
 import { db } from '../lib/supabase.js';
 
 const NATS = [
@@ -20,8 +31,11 @@ const NATS = [
 const regState = {
   selectedNat: 'FR',
   sessionId: null,
-  photoFile: null,
 };
+
+// Validation email basique — suffisante pour un formulaire mobile, pas une
+// vérification RFC complète (pas de vérification de délivrabilité côté front).
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function renderNats() {
   const grid = document.getElementById('nat-grid');
@@ -55,41 +69,6 @@ export function selectNat(code, el) {
   el.classList.add('selected');
 }
 
-export function previewPhoto(input) {
-  const file = input.files[0];
-  if (!file) return;
-  regState.photoFile = file;
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    document.getElementById('photo-content').innerHTML =
-      '<img src="' + e.target.result + '" class="photo-preview"/><div class="photo-txt">Appuie pour changer</div>';
-  };
-  reader.readAsDataURL(file);
-}
-
-// Compresse et redimensionne l'image avant upload (max 800px, qualité 0.82)
-function compressImage(file) {
-  return new Promise((resolve) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      const MAX = 800;
-      let w = img.width, h = img.height;
-      if (w > MAX || h > MAX) {
-        if (w > h) { h = Math.round((h * MAX) / w); w = MAX; }
-        else { w = Math.round((w * MAX) / h); h = MAX; }
-      }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(url);
-      canvas.toBlob((blob) => resolve(blob || file), 'image/jpeg', 0.82);
-    };
-    img.onerror = () => resolve(file);
-    img.src = url;
-  });
-}
-
 export function showMsg(msg, type) {
   const el = document.getElementById('msg');
   if (!el) return;
@@ -99,59 +78,33 @@ export function showMsg(msg, type) {
 
 export async function submitForm() {
   if (!regState.sessionId) { showMsg('Session invalide.', 'err'); return; }
-  const name = document.getElementById('inp-name').value.trim();
-  if (!name) { showMsg('Entre ton prénom.', 'err'); return; }
+  // Le pseudo est ce qui alimente display_name — donc ce qui s'affiche
+  // réellement sur le kart, le podium, le classement et les PDF (comme
+  // aujourd'hui : c'était déjà le seul champ "nom" du formulaire).
+  const pseudo = document.getElementById('inp-name').value.trim();
+  const firstName = document.getElementById('inp-firstname').value.trim();
+  const lastName = document.getElementById('inp-lastname').value.trim();
+  const email = document.getElementById('inp-email').value.trim();
+  if (!pseudo) { showMsg('Entre ton pseudo.', 'err'); return; }
+  if (!email) { showMsg('Entre ton email.', 'err'); return; }
+  if (!EMAIL_RE.test(email)) { showMsg('Email invalide.', 'err'); return; }
   const btn = document.getElementById('btn-submit');
   btn.disabled = true; btn.textContent = 'Inscription en cours…';
   try {
-    let photoUrl = null;
-    let driverId = null;
-    if (regState.photoFile) {
-      btn.textContent = 'Upload photo…';
-      try {
-        const compressed = await compressImage(regState.photoFile);
-        const path = 'photos/' + Date.now() + '.jpg';
-        const { error: upErr } = await db.storage
-          .from('driver-photos')
-          .upload(path, compressed, { upsert: true, contentType: 'image/jpeg' });
-        if (upErr) {
-          console.warn('Upload photo echoue:', upErr.message);
-          showMsg('Photo non sauvegardée (' + upErr.message + ') — inscription sans photo.', 'warn');
-          await new Promise((r) => setTimeout(r, 2000));
-        } else {
-          const { data: urlData } = db.storage.from('driver-photos').getPublicUrl(path);
-          photoUrl = urlData.publicUrl;
-        }
-      } catch (imgErr) {
-        console.warn('Erreur compression:', imgErr);
-      }
-      btn.textContent = 'Inscription en cours…';
-    }
-    if (photoUrl) {
-      // La table drivers exige first_name/last_name (NOT NULL) sur le nouveau schéma.
-      // Le formulaire ne collecte qu'un seul champ "nom" — on le découpe simplement.
-      const nameParts = name.split(/\s+/);
-      const firstName = nameParts[0] || name;
-      const lastName = nameParts.slice(1).join(' ') || '';
-      const { data: drv, error: drvErr } = await db
-        .from('drivers')
-        .insert({ first_name: firstName, last_name: lastName, photo_url: photoUrl })
-        .select('id')
-        .single();
-      if (drv) driverId = drv.id;
-      else console.warn('Erreur création driver:', drvErr?.message);
-    }
     const { error } = await db.from('session_registrations').insert({
       session_id: regState.sessionId,
-      display_name: name,
+      display_name: pseudo,
       nationality: regState.selectedNat,
-      driver_id: driverId,
+      email,
+      first_name: firstName || null,
+      last_name: lastName || null,
+      driver_id: null,
       is_unknown: false,
     });
     if (error) throw error;
     document.getElementById('form-card').style.display = 'none';
     document.getElementById('success-card').style.display = 'block';
-    document.getElementById('success-name').textContent = 'Bonne course ' + name + ' !';
+    document.getElementById('success-name').textContent = 'Bonne course ' + pseudo + ' !';
   } catch (e) {
     showMsg('Erreur: ' + e.message, 'err');
     btn.disabled = false; btn.textContent = "S'inscrire à la course 🏁";

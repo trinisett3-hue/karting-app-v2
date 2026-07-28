@@ -1156,6 +1156,102 @@ export async function downloadFullPDF(btn) {
 }
 
 /* ==================================================================
+   🆕 PALMARÈS (Point 8b) — nombre de podiums (toutes sessions publiées) +
+   3 dernières positions, injectés dans la fiche PDF pilote publique.
+
+   Implémentation suggérée par le prompt v13 : on récupère, comme
+   showPilotHistory() côté admin, toutes les session_registrations
+   correspondant au nom (comparaison insensible à la casse), jointure
+   sessions pour la date, puis pour CHAQUE session on recalcule le
+   classement complet (même logique que loadRanking() côté admin — ici
+   réimplémentée localement puisque public-results.js n'importe pas
+   sessions.js) pour trouver la position exacte du pilote.
+
+   ⚠️ Restreint aux sessions PUBLIÉES du même tenant que la session
+   affichée (public_results_token non nul + même tenant_id que
+   sessionInfo) : ce sont les seules lignes qu'un visiteur anonyme peut
+   légitimement lire côté RLS, et le prompt v13 demande explicitement de
+   ne compter que "les sessions publiées".
+
+   ⚠️ Point d'attention perf signalé par le prompt v13 : un pilote très
+   actif fait recalculer le classement complet de CHAQUE session au clic
+   sur le bouton PDF (spinner déjà prévu par downloadPilotPDF). À tester
+   avec un historique réel avant mise en prod.
+   ================================================================== */
+async function computeSessionRanking(sessionId) {
+  const [{ data: laps }, { data: regs }] = await Promise.all([
+    db.from('laps').select('registration_id,lap_time_seconds').eq('session_id', sessionId),
+    db.from('session_registrations').select('id,display_name,kart_number').eq('session_id', sessionId),
+  ]);
+  if (!laps || !regs) return [];
+  const totals = new Map();
+  laps.forEach((l) => totals.set(l.registration_id, (totals.get(l.registration_id) || 0) + Number(l.lap_time_seconds || 0)));
+  const ranking = [];
+  regs.forEach((r) => {
+    const t = totals.get(r.id);
+    if (t != null) ranking.push({ regId: r.id, name: r.display_name || '--', t });
+  });
+  ranking.sort((a, b) => a.t - b.t);
+  return ranking;
+}
+
+export async function getPilotPalmares(name, tenantId) {
+  const cleanName = (name || '').trim();
+  if (!cleanName) return { podiums: 0, lastPositions: [] };
+  try {
+    let query = db
+      .from('session_registrations')
+      .select('id,session_id,display_name,sessions!inner(id,session_date,tenant_id,public_results_token)')
+      .ilike('display_name', cleanName)
+      .not('sessions.public_results_token', 'is', null);
+    if (tenantId) query = query.eq('sessions.tenant_id', tenantId);
+    const { data: allRegs, error } = await query;
+    if (error || !allRegs || !allRegs.length) return { podiums: 0, lastPositions: [] };
+
+    const bySession = new Map();
+    allRegs.forEach((r) => {
+      if (!r.sessions) return;
+      bySession.set(r.session_id, { date: r.sessions.session_date, regName: r.display_name });
+    });
+
+    let podiums = 0;
+    const positioned = [];
+    for (const [sessionId, info] of bySession.entries()) {
+      const ranking = await computeSessionRanking(sessionId);
+      const idx = ranking.findIndex((row) => row.name.toLowerCase().trim() === cleanName.toLowerCase());
+      if (idx < 0) continue;
+      const pos = idx + 1;
+      if (pos <= 3) podiums++;
+      positioned.push({ pos, date: info.date || '' });
+    }
+    positioned.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    const lastPositions = positioned.slice(0, 3);
+    return { podiums, lastPositions };
+  } catch (e) {
+    return { podiums: 0, lastPositions: [] };
+  }
+}
+
+function palmaresHTML(palmares) {
+  if (!palmares || (!palmares.podiums && !palmares.lastPositions.length)) return '';
+  const posTxt = palmares.lastPositions.length
+    ? palmares.lastPositions.map((p) => 'P' + p.pos).join(' · ')
+    : '--';
+  const posTitle = palmares.lastPositions.length
+    ? palmares.lastPositions.map((p) => (p.date ? fmtSessionDate(p.date) : '')).join(' · ')
+    : '';
+  return `
+<div class="pdfx-summary-row">
+${PDFX_SVG_TAG}
+<div class="txt"><span class="k">Podiums (toutes sessions)</span><span class="v">${palmares.podiums}</span></div>
+</div>
+<div class="pdfx-summary-row">
+${PDFX_SVG_CLOCK}
+<div class="txt" title="${escapeHTML(posTitle)}"><span class="k">3 dernieres positions</span><span class="v" style="font-size:12px">${posTxt}</span></div>
+</div>`;
+}
+
+/* ==================================================================
    PDF FICHE PILOTE
    ================================================================== */
 export async function downloadPilotPDF(pilot, btn) {
@@ -1187,6 +1283,10 @@ export async function downloadPilotPDF(pilot, btn) {
        la grande vignette EST déjà l'avatar et porte le numéro, le badge ferait
        doublon. */
     const hasRealPhoto = !!pdfxValidPhoto(pilot.photo);
+    // 🆕 Palmarès (Point 8b) : récupéré juste avant la construction du markup,
+    // sous le spinner déjà affiché par le bouton PDF (voir ensurePdfStyles() plus
+    // haut dans cette fonction / btn.innerHTML = SPIN_ICON en tête de fonction).
+    const palmares = await getPilotPalmares(pilot.name, sessionInfo && sessionInfo.tenant_id);
     /* Pack Signature : la vignette de la fiche pilote reprend exactement les
        réglages du podium (même type, même fond, même contour) mais en pastille
        CARRÉE, pour occuper tout le cadre arrondi de l'en-tête. */
@@ -1214,6 +1314,7 @@ ${kartBadge}
 ${PDFX_SVG_CLOCK}
 <div class="txt"><span class="k">Meilleur tour</span><span class="v">${pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--'}</span></div>
 </div>
+${palmaresHTML(palmares)}
 </div>
 <div class="pdfx-circuit-block">
 <div class="pdfx-circuit-text">
