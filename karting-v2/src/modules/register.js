@@ -335,7 +335,7 @@ export async function searchPilot() {
   btn.disabled = true; btn.textContent = 'Recherche…';
   resultEl.innerHTML = '';
   try {
-    const { data, error } = await db.rpc('find_pilot_by_query', { _query: query });
+    const { data, error } = await db.rpc('find_pilot_by_query', { _query: query, _registration_token: regState.registrationToken });
     if (error) throw error;
     if (!data) {
       regState.foundCandidate = null;
