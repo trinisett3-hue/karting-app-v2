@@ -49,11 +49,11 @@ classic: { bg: '#050608', surf: '#0d0f14', mut: '#7a7d8a', acc: '#ff2a2a', text:
 neon: { bg: '#060810', surf: '#0b0e18', mut: '#6a7a9a', acc: '#00d4ff', text: '#f0f4ff', p2: 'rgba(255,0,128,.5)', p3: 'rgba(255,0,128,.3)', gapBg: '#00d4ff', gapText: '#060810' },
 carbon: { bg: '#111214', surf: '#181a1e', mut: '#8a8880', acc: '#c9a84c', text: '#f5f0e8', p2: 'rgba(180,180,180,.35)', p3: 'rgba(150,110,70,.5)', gapBg: 'transparent', gapText: '#c9a84c' },
 // Thèmes Pro (v15) — mêmes tokens que les blocs [data-theme="..."] de results.html.
-checkered: { bg: '#0a0a0a', surf: '#131313', mut: '#8f8f8f', acc: '#ffffff', text: '#f8f8f8', p2: 'rgba(255,255,255,.4)', p3: 'rgba(255,255,255,.22)', gapBg: '#ffffff', gapText: '#0a0a0a' },
-endurance: { bg: '#04060d', surf: '#080b16', mut: '#6f7793', acc: '#ffb020', text: '#eef1fb', p2: 'rgba(63,169,245,.45)', p3: 'rgba(255,176,32,.28)', gapBg: '#ffb020', gapText: '#04060d' },
-pitlane: { bg: '#0b0c0c', surf: '#141514', mut: '#8b8d82', acc: '#ffd600', text: '#f5f6f0', p2: 'rgba(255,255,255,.32)', p3: 'rgba(255,122,0,.4)', gapBg: '#ffd600', gapText: '#0b0c0c' },
-champagne: { bg: '#0d0b08', surf: '#151109', mut: '#9c9078', acc: '#e6c374', text: '#f7f0e2', p2: 'rgba(220,220,220,.32)', p3: 'rgba(160,120,65,.45)', gapBg: 'transparent', gapText: '#e6c374' },
-arctic: { bg: '#f5f6f8', surf: '#ffffff', mut: '#5b6070', acc: '#1c7ed6', text: '#12141c', p2: 'rgba(10,15,30,.28)', p3: 'rgba(28,126,214,.22)', gapBg: '#1c7ed6', gapText: '#ffffff' },
+checkered: { bg: '#08090b', surf: '#101114', mut: '#9a9a94', acc: '#ece8dd', text: '#f7f6f2', p2: 'rgba(255,255,255,.4)', p3: 'rgba(201,163,93,.35)', gapBg: '#ece8dd', gapText: '#0a0a0a' },
+endurance: { bg: '#03050b', surf: '#070a17', mut: '#7580a6', acc: '#ffb238', text: '#eef1fb', p2: 'rgba(79,178,255,.48)', p3: 'rgba(255,178,56,.3)', gapBg: '#ffb238', gapText: '#04060d' },
+pitlane: { bg: '#0a0b0b', surf: '#131613', mut: '#8d8f80', acc: '#f0c419', text: '#f6f4ea', p2: 'rgba(255,255,255,.32)', p3: 'rgba(255,106,31,.4)', gapBg: '#f0c419', gapText: '#0b0c0c' },
+champagne: { bg: '#0c0a07', surf: '#161009', mut: '#a4937b', acc: '#d9b978', text: '#f8f1e3', p2: 'rgba(224,224,224,.32)', p3: 'rgba(163,122,66,.48)', gapBg: 'transparent', gapText: '#d9b978' },
+arctic: { bg: '#f4f6f9', surf: '#ffffff', mut: '#565c72', acc: '#1a6fbd', text: '#11131c', p2: 'rgba(10,15,30,.3)', p3: 'rgba(26,111,189,.24)', gapBg: '#1a6fbd', gapText: '#ffffff' },
 };
 
 // Slugs des thèmes réservés au plan Pro (entitlement `premium_themes`,
