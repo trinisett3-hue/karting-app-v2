@@ -92,6 +92,8 @@ try {
 const { data } = await db.from('app_settings').select('*').eq('key', 'global').maybeSingle();
 if (data && data.value) {
 setPrefs(data.value);
+state.prefs.level_expert_max_seconds = state.prefs.level_expert_max_seconds || 45;
+state.prefs.level_intermediaire_max_seconds = state.prefs.level_intermediaire_max_seconds || 55;
 }
 } catch (e) {
 // pas de préférences enregistrées pour l'instant — on garde les valeurs par défaut
@@ -114,6 +116,8 @@ await updateTrackMapGating();
 
 document.getElementById('pref-karts').value = state.prefs.default_karts;
 document.getElementById('pref-laps').value = state.prefs.default_laps;
+document.getElementById('pref-level-expert').value = state.prefs.level_expert_max_seconds;
+document.getElementById('pref-level-intermediaire').value = state.prefs.level_intermediaire_max_seconds;
 document.getElementById('pref-time-unit').value = state.prefs.time_unit;
 document.getElementById('pref-laps-enabled').checked = state.prefs.laps_enabled;
 document.getElementById('pref-karts-locked').checked = state.prefs.karts_locked;
@@ -710,6 +714,8 @@ avatar_outline: !!document.getElementById('pref-avatar-outline')?.checked,
 avatar_shape: document.getElementById('pref-avatar-shape')?.value || 'round',
 logo_url: state.prefs.logo_url || null,
 track_map_url: state.prefs.track_map_url || null,
+level_expert_max_seconds: Math.max(1, parseInt(document.getElementById('pref-level-expert')?.value, 10) || 45),
+level_intermediaire_max_seconds: Math.max(1, parseInt(document.getElementById('pref-level-intermediaire')?.value, 10) || 55),
 });
 // Nettoyage de l'ancien système d'avatars (casques) s'il traîne encore dans les prefs.
 delete state.prefs.helmet_choice;
