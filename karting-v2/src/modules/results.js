@@ -311,9 +311,9 @@ export async function importChronoSimple() {
   btn.innerHTML = '<span class="spin"></span>Import en cours...';
   const { data: regs } = await db.from('session_registrations').select('id,display_name,kart_number').eq('session_id', sid);
   const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
-  await db.from('laps').delete().eq('session_id', sid);
   let imported = 0, errors = [];
   const regCache = {};
+  const rowsToImport = [];
   let processed = 0;
   for (const line of lines) {
     processed++;
@@ -356,8 +356,20 @@ export async function importChronoSimple() {
       regCache[cacheKey] = reg;
     }
     if (!reg) continue;
-    await db.from('laps').insert({ session_id: sid, registration_id: reg.id, lap_index: lapIdx, lap_time_seconds: time });
+    rowsToImport.push({ registration_id: reg.id, lap_index: lapIdx, lap_time_seconds: time });
     imported++;
+  }
+  // P0-4 (audit 28/07) : delete + insert des tours en UNE transaction SQL (import_laps),
+  // exécutée seulement après résolution complète des lignes. Un échec de lecture ne
+  // touche plus les tours déjà enregistrés.
+  if (rowsToImport.length) {
+    const { error: rpcErr } = await db.rpc('import_laps', { _session_id: sid, _rows: rowsToImport });
+    if (rpcErr) {
+      showMsg('msg-chrono', "Import annulé : " + rpcErr.message, 'err');
+      btn.disabled = false;
+      btn.innerHTML = originalLabel;
+      return;
+    }
   }
   await db.from('sessions').update({ status: 'chrono_imported' }).eq('id', sid);
   await saveChronoImportHistory(sid, raw, lines.length, imported);
@@ -392,7 +404,6 @@ async function importChronoWithSectors() {
     const cache = {};
     const rows = [];
     const errors = [];
-    await db.from('laps').delete().eq('session_id', sid);
     for (let i = 0; i < lines.length; i++) {
       const v = lines[i].split(';').map((x) => x.trim());
       if (v.length !== 4 + n) {
@@ -422,7 +433,6 @@ async function importChronoWithSectors() {
       }
       cache[key] = reg;
       rows.push({
-        session_id: sid,
         registration_id: reg.id,
         lap_index: lap,
         lap_time_seconds: time,
@@ -435,10 +445,8 @@ async function importChronoWithSectors() {
     if (!rows.length) {
       throw new Error('Aucune ligne valide. Format attendu : Nom;Kart;NumTour;' + Array.from({ length: n }, (_, i) => 'S' + (i + 1)).join(';') + ';Temps');
     }
-    const saved = await db.from('laps').insert(rows);
-    if (saved.error && /sector_/i.test(saved.error.message || '')) {
-      throw new Error('Colonnes secteurs absentes de Supabase : exécute supabase_sectors_migration.sql puis réimporte.');
-    }
+    // P0-4 (audit 28/07) : delete + insert des tours en UNE transaction SQL (import_laps).
+    const saved = await db.rpc('import_laps', { _session_id: sid, _rows: rows });
     if (saved.error) throw saved.error;
     await db.from('sessions').update({ status: 'chrono_imported' }).eq('id', sid);
     await saveChronoImportHistory(sid, raw, lines.length, rows.length);
