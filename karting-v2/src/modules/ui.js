@@ -68,3 +68,42 @@ export function formatDate(d) {
   if (diff === 1) return 'Hier';
   return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
 }
+
+
+// Confirmation destructive avec rappel du contexte (audit 28/07, section 4.1) —
+// remplace les confirm() natifs qui se valident par reflexe et n'affichent aucun
+// detail. Retourne une Promise<boolean> : true si l'utilisateur a confirme.
+export function confirmModal(opts) {
+  const title = (opts && opts.title) || 'Confirmer';
+  const message = (opts && opts.message) || '';
+  const confirmLabel = (opts && opts.confirmLabel) || 'Confirmer';
+  const danger = !opts || opts.danger !== false;
+  return new Promise((resolve) => {
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+    }[c]));
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#181818;border:1px solid #333;border-radius:12px;padding:24px;max-width:420px;width:100%;color:#eee;font-family:inherit;';
+    box.innerHTML =
+      '<div style="font-weight:700;font-size:16px;margin-bottom:10px">' + esc(title) + '</div>' +
+      '<div style="font-size:14px;color:#ccc;margin-bottom:20px;white-space:pre-line">' + esc(message) + '</div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+      '<button type="button" data-act="cancel" style="padding:8px 16px;border-radius:8px;border:1px solid #444;background:transparent;color:#eee;cursor:pointer">Annuler</button>' +
+      '<button type="button" data-act="ok" style="padding:8px 16px;border-radius:8px;border:none;background:' + (danger ? '#dc2626' : '#2563eb') + ';color:#fff;cursor:pointer;font-weight:600">' + esc(confirmLabel) + '</button>' +
+      '</div>';
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+    function close(result) {
+      document.body.removeChild(overlay);
+      resolve(result);
+    }
+    box.querySelector('[data-act="cancel"]').addEventListener('click', () => close(false));
+    box.querySelector('[data-act="ok"]').addEventListener('click', () => close(true));
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(false); });
+    document.addEventListener('keydown', function onKey(e) {
+      if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); close(false); }
+    });
+  });
+}
