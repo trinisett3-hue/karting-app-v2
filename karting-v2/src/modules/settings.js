@@ -58,7 +58,9 @@ arctic: { bg: '#f4f6f9', surf: '#ffffff', mut: '#565c72', acc: '#1a6fbd', text: 
 
 // Slugs des thèmes réservés au plan Pro (entitlement `premium_themes`,
 // cf. public.my_theme_entitlement() dans migration-v15-registre-stats-themes.sql).
-const PREMIUM_THEMES = new Set(['checkered', 'endurance', 'pitlane', 'champagne', 'arctic']);
+// Exportée : source de vérité unique, reprise par stats.js (audit 28/07, section 4.1 —
+// la liste était dupliquée dans les deux fichiers, avec un risque d'oubli à l'ajout d'un thème).
+export const PREMIUM_THEMES = new Set(['checkered', 'endurance', 'pitlane', 'champagne', 'arctic']);
 function isPremiumTheme(val) { return PREMIUM_THEMES.has(val); }
 
 // Libellé du style d'avatar courant, utilisé dans les textes explicatifs pour
