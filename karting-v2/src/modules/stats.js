@@ -12,11 +12,11 @@ import { formatTime, formatDate } from './ui.js';
 import { PREMIUM_THEMES } from './settings.js';
 
 let chartInstance = null;
-// 🆕 v20 : Offre 1 — l'onglet Statistiques reste un pack leger (KPIs globaux,
+// 🆕 v20 : Basique — l'onglet Statistiques reste un pack leger (KPIs globaux,
 // exploitation piste, Hall of Fame chronos compact). Les blocs "Top 5 pilotes
 // (nb sessions jouees)" et "Classement permanent (meilleur temps unique par
 // pilote)" ont ete retires : ce sont des analyses de frequentation/sportives
-// qui relevent de l'Offre 2, pas du pack de base. Le code ci-dessous ne les
+// qui relevent de le pack Premium, pas du pack de base. Le code ci-dessous ne les
 // calcule donc plus (voir git history si besoin de les reprendre).
 //
 // Les blocs de l'onglet Statistiques sont conserves en memoire au fil de
@@ -27,10 +27,10 @@ let lastKpis = { sessions: 0, pilotsUniques: 0, chronos: 0 };
 let lastHofKarts = [];
 let lastExploitation = { avgFill: null, minFill: null, maxFill: null, utilizationRate: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
 
-// --- Exploitation piste (Offre 1, MVP) --------------------------------------------------
+// --- Exploitation piste (Basique, MVP) --------------------------------------------------
 // Ni la table `sessions` ni les Parametres n'ont aujourd'hui de champ "duree
 // de session" ou "horaires d'ouverture" — ajouter un vrai reglage sort du
-// perimetre de cette tache (Offre 1 = pack leger, pas de nouvelle UI de
+// perimetre de cette tache (Basique = pack leger, pas de nouvelle UI de
 // configuration). En attendant, on utilise deux constantes simples et
 // documentees : une duree moyenne de session estimee, et un nombre d'heures
 // d'ouverture par jour par defaut. Le "taux d'utilisation piste" qui en
@@ -62,7 +62,7 @@ function daysInRangeCount(range, allSessions) {
   return Math.max(1, Math.round((to - from) / 86400000) + 1);
 }
 
-// KPIs "Exploitation piste" (Offre 1) : taux de remplissage moyen des
+// KPIs "Exploitation piste" (Basique) : taux de remplissage moyen des
 // sessions (pilotes inscrits / capacite max), taux d'utilisation piste
 // (estimation simple, voir constantes ci-dessus) et sessions par jour/semaine.
 // `regsCountBySession` : Map(session_id -> nb d'inscrits), deja disponible
@@ -334,7 +334,7 @@ export async function loadStatsTab(range) {
       kpiBox('Chronos enregistres', allLaps.length, null, '⏱️');
   }
 
-  // --- Exploitation piste (Offre 1, MVP) — voir computeExploitationKpis() -----------------
+  // --- Exploitation piste (Basique, MVP) — voir computeExploitationKpis() -----------------
   const regsCountBySession = new Map();
   allRegs.forEach((r) => {
     regsCountBySession.set(r.session_id, (regsCountBySession.get(r.session_id) || 0) + 1);
@@ -421,16 +421,16 @@ export async function loadStatsTab(range) {
   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
   renderFrequencyChart(allSessions, currentRange);
 
-  // --- Offre 2 : fidelisation, performance avancee, qualite, utilisation avancee ---------
+  // --- Premium : fidelisation, performance avancee, qualite, utilisation avancee ---------
   // Section entierement separee (voir plus bas dans ce fichier) — ne modifie rien de ce
   // qui precede, se contente de lire allSessions/allRegs/allLaps/timeRows deja charges
-  // pour le filtre en cours. Enveloppee dans un try/catch : un souci sur un bloc Offre 2
+  // pour le filtre en cours. Enveloppee dans un try/catch : un souci sur un bloc Premium
   // (ex. table session_ratings pas encore migree chez un tenant) ne doit jamais casser
-  // l'affichage Offre 1 ci-dessus, deja rendu a ce stade.
+  // l'affichage Basique ci-dessus, deja rendu a ce stade.
   try {
-    await loadOffre2Blocks(allSessions, allRegs, allLaps, timeRows, currentRange);
+    await loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, currentRange);
   } catch (e) {
-    console.warn('[stats] blocs Offre 2 indisponibles.', e);
+    console.warn('[stats] blocs Premium indisponibles.', e);
   }
 }
 
@@ -561,7 +561,7 @@ function renderFrequencyChart(allSessions, range) {
 // =========================================================================================
 // OFFRE 2 — Statistiques avancees (fidelisation, performance sportive, qualite, usage)
 // =========================================================================================
-// Section volontairement separee du reste du fichier (Offre 1 ci-dessus) : fidelisation,
+// Section volontairement separee du reste du fichier (Basique ci-dessus) : fidelisation,
 // performance sportive avancee, experience/qualite et usage avance/saisonnalite sont des
 // analyses qui NE FONT PAS partie du pack de base. Aucun KPI de chiffre d'affaires ici
 // (revenu, panier moyen, CA par type de session) — explicitement hors perimetre.
@@ -573,7 +573,7 @@ function renderFrequencyChart(allSessions, range) {
 // de visites 30/90/365j, saisonnalite 12 mois, reglages du tenant). Chacune de ces
 // requetes est non-bloquante : en cas d'echec (RLS, table pas encore migree chez ce
 // tenant...) le bloc concerne affiche "--" plutot que de faire planter tout l'onglet —
-// voir le try/catch autour de loadOffre2Blocks() dans loadStatsTab().
+// voir le try/catch autour de loadPremiumStatsBlocks() dans loadStatsTab().
 
 let lastFidelisation = { tauxRetour: null, visites30: null, visites90: null, visites365: null, segmentation: { nouveaux: 0, reguliers: 0, fans: 0 }, top10: [] };
 let lastPerformance = { pctProgression: null, progressionMoyenne: null, niveaux: { debutant: 0, intermediaire: 0, expert: 0 }, hofEnrichi: [] };
@@ -581,7 +581,7 @@ let lastQualite = { csatMoyen: null, csatPositifPct: null, nbReponses: 0, tauxIn
 let lastUsageAvance = { pctEnLigne: null, pctSurPlace: null, planPisteActif: false, themeActuel: null, themePremium: false, saisonnalite: { months: [], topHours: [] } };
 
 // Identite d'un pilote a travers plusieurs sessions : meme convention que l'ancien
-// regroupement par pseudo de l'Offre 1 — pas d'identifiant stable pour les pilotes
+// regroupement par pseudo de le pack Basique — pas d'identifiant stable pour les pilotes
 // "Unknown"/sur-place, donc le pseudo normalise reste la seule cle disponible cote client.
 function pilotKey(reg) {
   return (reg.display_name || '').trim().toLowerCase();
@@ -597,7 +597,7 @@ function segmentLabel(count) {
 
 // Seuils de niveau (temps au tour, en secondes) — valeurs par defaut generiques, a
 // affiner par circuit plus tard (pas de reglage dedie cote Parametres pour l'instant,
-// meme logique que DEFAULT_OPENING_HOURS_PER_DAY en Offre 1 : point de config futur,
+// meme logique que DEFAULT_OPENING_HOURS_PER_DAY en Basique : point de config futur,
 // pas une verite universelle — un circuit indoor court n'a pas les memes temps qu'un
 // circuit outdoor long).
 const LEVEL_THRESHOLDS_SECONDS = { expertMax: 45, intermediaireMax: 55 };
@@ -635,7 +635,7 @@ function formatMinutes(min) {
   return h + 'h' + (m ? String(m).padStart(2, '0') : '');
 }
 
-async function loadOffre2Blocks(allSessions, allRegs, allLaps, timeRows, range) {
+async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, range) {
   const regsById = new Map(allRegs.map((r) => [r.id, r]));
   const sessionsById = new Map(allSessions.map((s) => [s.id, s]));
 
@@ -752,7 +752,7 @@ async function loadOffre2Blocks(allSessions, allRegs, allLaps, timeRows, range) 
   const progressionMoyenne = progressCount ? progressionSum / progressCount : null;
 
   // Hall of Fame enrichi : reprend le classement "top temps absolus" deja calcule par
-  // l'Offre 1 (timeRows, trie par temps total croissant) et lui ajoute nb sessions,
+  // le pack Basique (timeRows, trie par temps total croissant) et lui ajoute nb sessions,
   // niveau et badge de regularite — sans recalculer le classement lui-meme.
   const hofEnrichi = timeRows.slice(0, 10).map((r) => {
     const key = r.name.trim().toLowerCase();
@@ -908,7 +908,7 @@ function renderPerformanceBlock(p) {
   if (kpiGrid) {
     kpiGrid.innerHTML =
       kpiBox('Pilotes en progression', pct(p.pctProgression), null, '📈') +
-      // p.progressionMoyenne est toujours positif (voir loadOffre2Blocks : ne cumule que
+      // p.progressionMoyenne est toujours positif (voir loadPremiumStatsBlocks : ne cumule que
       // les deltas > 0) — c'est un gain de temps, affiche avec un signe moins pour bien
       // marquer "plus rapide", jamais un delta negatif/regression.
       kpiBox('Progression moyenne', p.progressionMoyenne != null ? '−' + p.progressionMoyenne.toFixed(2) + ' s' : '--', p.progressionMoyenne != null ? 'Plus rapide entre 1re et derniere session' : 'Entre 1re et derniere session', '⏱️');
@@ -1037,7 +1037,7 @@ export function exportStatsXLSX() {
   ]);
   XLSX.utils.book_append_sheet(wb, exploitationSheet, 'Exploitation piste');
 
-  // --- Offre 2 : 4 feuilles supplementaires, memes principes (aucune requete DB, reprend
+  // --- Premium : 4 feuilles supplementaires, memes principes (aucune requete DB, reprend
   // ce qui est deja affiche a l'ecran via lastFidelisation/lastPerformance/lastQualite/
   // lastUsageAvance) ------------------------------------------------------------------------
   const f = lastFidelisation;
