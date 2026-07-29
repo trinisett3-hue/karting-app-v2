@@ -448,9 +448,10 @@ export function switchParamsSubtab(tab) {
 // --- Entitlement "thèmes premium" (plan Pro) ---------------------------------------
 // Même pattern que avatarEntitlement ci-dessous : rempli une fois au chargement par
 // public.my_theme_entitlement(), utilisé UNIQUEMENT pour l'affichage (griser/verrouiller
-// les thèmes Pro dans le picker). La décision réelle appartient au serveur — voir le
-// commentaire "LACUNE CONNUE" dans migration-v15-registre-stats-themes.sql : la page
-// publique ne revalide pas encore cet entitlement côté serveur.
+// les thèmes Pro dans le picker). La décision réelle appartient au serveur, et elle y est
+// désormais appliquée : le trigger trg_enforce_premium_settings nettoie chaque écriture de
+// app_settings et le RPC public_site_config() re-nettoie à la lecture publique. Un thème
+// Premium forcé par un plan Basique retombe donc sur "classic" côté serveur.
 let themeEntitlement = { entitled: false, plan: 'free' };
 
 export async function loadThemeEntitlement() {
