@@ -201,6 +201,10 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .theme-premium-row.theme-locked{opacity:.5;cursor:not-allowed;filter:grayscale(.3)}
 .theme-premium-row.theme-locked:hover{opacity:.6}
 .theme-premium-row:not(.theme-locked) .theme-lock-icon{display:none}
+.info-ico{position:relative;display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;background:var(--surf2);border:1px solid var(--bord);color:var(--mut);font-size:10px;font-weight:700;font-style:normal;text-transform:none;letter-spacing:0;cursor:help;vertical-align:middle;margin-left:4px}
+.info-ico:hover,.info-ico.open{background:var(--acc);border-color:var(--acc);color:#fff}
+.info-tip{display:none;position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);width:220px;max-width:60vw;background:var(--surf);border:1px solid var(--bord);border-radius:8px;padding:10px 12px;font-size:11px;font-weight:500;color:var(--txt);text-transform:none;line-height:1.4;box-shadow:var(--shadow);z-index:20;text-align:left;white-space:normal}
+.info-ico:hover .info-tip,.info-ico.open .info-tip{display:block}
 </style>
 </head>
 <body>
