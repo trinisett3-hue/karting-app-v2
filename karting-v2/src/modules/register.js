@@ -34,10 +34,20 @@ import {
   wireSignatureAvatarFallback,
   signatureAvatarsActive,
   signatureAvatarHTML,
+SIGNATURE_SCHEME_COUNT,
 } from './signature-avatar.js';
 import { NATS } from './countries.js';
 
+// Nombre de vignettes du pack Classic (24 illustrations). Le pack Signature a
+// SON PROPRE compteur (SIGNATURE_SCHEME_COUNT, 16 depuis le 30/07) : le
+// carrousel doit utiliser l'un ou l'autre selon le pack actif, jamais 24 en
+// dur, sinon les slots 16-23 en Signature rejoueraient les schemas 0-7 tout
+// en étant comptés comme "distincts" par le suivi des avatars pris.
 const AVATAR_COUNT = 24;
+
+function avatarPoolSize() {
+  return signatureAvatarsActive() ? SIGNATURE_SCHEME_COUNT : AVATAR_COUNT;
+}
 
 const regState = {
   selectedNat: 'FR',
@@ -50,7 +60,8 @@ const regState = {
   foundCandidate: null,
   // Schémas 0..23 encore disponibles pour CETTE session (déjà pris exclus).
   avatarPool: [],
-  avatarIndex: 0,
+avatarIndex: 0,
+avatarReused: false,
 };
 
 // Validation email basique — suffisante pour un formulaire mobile, pas une
@@ -416,47 +427,54 @@ async function enterScreen2() {
 }
 
 async function initAvatarCarousel() {
-  const all = Array.from({ length: AVATAR_COUNT }, (_, i) => i);
-  let taken = [];
-  try {
-    const { data, error } = await db.rpc('session_taken_avatars', { _session_id: regState.sessionId, _registration_token: regState.registrationToken });
-    if (error) throw error;
-    taken = Array.isArray(data) ? data : [];
-  } catch (e) {
-    // Le carrousel est un confort, pas un bloquant : si la RPC échoue
-    // (migration pas encore appliquée, réseau...) on retombe sur la liste
-    // complète plutôt que d'empêcher l'inscription.
-    console.warn('[register] avatars pris introuvables — carrousel non filtré.', e);
-  }
-  regState.avatarPool = all.filter((i) => taken.indexOf(i) < 0);
-  if (!regState.avatarPool.length) {
-    // Tous les avatars de cette session sont déjà pris (session très
-    // fréquentée, ou pool corrompu) : on retombe sur la liste complète
-    // plutôt que de bloquer l'inscription — le pire cas est une collision
-    // sur avatar_scheme, déjà gérée par submitForm() (code 23505).
-    regState.avatarPool = all;
-  }
-  regState.avatarIndex = 0;
-  renderAvatarStage();
+const size = avatarPoolSize();
+const all = Array.from({ length: size }, (_, i) => i);
+let taken = [];
+try {
+const { data, error } = await db.rpc('session_taken_avatars', { _session_id: regState.sessionId, _registration_token: regState.registrationToken });
+if (error) throw error;
+taken = Array.isArray(data) ? data : [];
+} catch (e) {
+console.warn('[register] avatars pris introuvables - carrousel non filtre.', e);
+}
+regState.avatarPool = all.filter((i) => taken.indexOf(i) < 0);
+if (!regState.avatarPool.length) {
+// Tous les schemas distincts du pack actif sont deja pris pour cette
+// session (plus de pilotes que de schemas disponibles) : on retombe sur
+// la liste complete plutot que de bloquer l'inscription, avec un INDEX
+// ALEATOIRE (decision produit du 30/07 - plus jamais index 0 systematique)
+// et un flag qui declenche la notice explicite dans renderAvatarStage().
+regState.avatarPool = all;
+regState.avatarIndex = Math.floor(Math.random() * all.length);
+regState.avatarReused = true;
+} else {
+regState.avatarIndex = 0;
+regState.avatarReused = false;
+}
+renderAvatarStage();
 }
 
 function renderAvatarStage() {
-  const stage = document.getElementById('avatar-stage');
-  const status = document.getElementById('avatar-status');
-  if (!stage) return;
-  const scheme = regState.avatarPool[regState.avatarIndex];
-  stage.innerHTML = signatureAvatarsActive()
-    ? signatureAvatarHTML(null, { scheme, size: 140 })
-    : kartAvatarSVG(null, { scheme, size: 140 });
-  if (status) {
-    status.textContent = (regState.avatarIndex + 1) + ' / ' + regState.avatarPool.length +
-      ' disponibles — utilise les flèches pour changer';
-  }
-  const prevBtn = document.getElementById('avatar-prev');
-  const nextBtn = document.getElementById('avatar-next');
-  const single = regState.avatarPool.length <= 1;
-  if (prevBtn) prevBtn.disabled = single;
-  if (nextBtn) nextBtn.disabled = single;
+const stage = document.getElementById('avatar-stage');
+const status = document.getElementById('avatar-status');
+if (!stage) return;
+const scheme = regState.avatarPool[regState.avatarIndex];
+stage.innerHTML = signatureAvatarsActive()
+? signatureAvatarHTML(null, { scheme, size: 140 })
+: kartAvatarSVG(null, { scheme, size: 140 });
+if (status) {
+if (regState.avatarReused) {
+status.textContent = 'Tous les avatars uniques de cette session sont deja pris \u2014 le tien sera attribue au hasard parmi ceux qui existent deja (il pourra ressembler a celui d\'un autre pilote).';
+} else {
+status.textContent = (regState.avatarIndex + 1) + ' / ' + regState.avatarPool.length +
+' disponibles \u2014 utilise les fleches pour changer';
+}
+}
+const prevBtn = document.getElementById('avatar-prev');
+const nextBtn = document.getElementById('avatar-next');
+const single = regState.avatarPool.length <= 1;
+if (prevBtn) prevBtn.disabled = single;
+if (nextBtn) nextBtn.disabled = single;
 }
 
 export function avatarPrev() {
