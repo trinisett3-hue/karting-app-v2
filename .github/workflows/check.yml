@@ -1,0 +1,27 @@
+name: Verification JS
+
+# Verification minimale (audit 28/07, section 4.3 : "aucune integration continue").
+# Ce repo est du HTML + modules ES natifs sans etape de build, donc pas de
+# "build" a proprement parler -- mais chaque fichier .js doit au moins etre
+# syntaxiquement valide avant de merger, ce qui n'etait verifie nulle part.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  syntax-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verifier la syntaxe de tous les modules JS
+        run: |
+          status=0
+          while IFS= read -r -d '' f; do
+            if ! node --check "$f"; then
+              echo "::error file=$f::Erreur de syntaxe"
+              status=1
+            fi
+          done < <(find . -name '*.js' -not -path './node_modules/*' -print0)
+          exit $status
