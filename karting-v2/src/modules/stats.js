@@ -9,6 +9,7 @@
 // pire, pourrait laisser croire à tort qu'il protège quelque chose côté navigateur.
 import { db } from '../lib/supabase.js';
 import { formatTime, formatDate } from './ui.js';
+import { PREMIUM_THEMES } from './settings.js';
 
 let chartInstance = null;
 // 🆕 v20 : Offre 1 — l'onglet Statistiques reste un pack leger (KPIs globaux,
@@ -622,7 +623,9 @@ function stddev(values) {
 // Themes "Pro" — copie volontairement locale de la liste de PREMIUM_THEMES dans
 // settings.js (pas d'import croise entre les deux modules pour ce simple usage en
 // lecture) : settings.js reste la source de verite si la liste doit evoluer.
-const PREMIUM_THEME_SLUGS = new Set(['checkered', 'endurance', 'pitlane', 'champagne', 'arctic']);
+// Ex-doublon corrigé (audit 28/07, section 4.1) : importé depuis settings.js, seule
+// source de vérité désormais.
+const PREMIUM_THEME_SLUGS = PREMIUM_THEMES;
 
 function formatMinutes(min) {
   if (!min) return '0 min';
