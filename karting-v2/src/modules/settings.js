@@ -14,6 +14,7 @@ import { toggleSectorsField } from './results.js';
 import { kartAvatarSVG } from './kart-avatar.js';
 import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature } from './plan.js';
+import { qrSVG } from './qr.js';
 import {
 configureSignatureAvatars,
 signatureAvatarHTML,
@@ -109,10 +110,24 @@ state.prefs.avatar_small_type = state.prefs.avatar_small_type || 'helmet';
 state.prefs.avatar_background = state.prefs.avatar_background || 'studio';
 state.prefs.avatar_outline = state.prefs.avatar_outline !== false;
 state.prefs.avatar_shape = state.prefs.avatar_shape || 'round';
+state.prefs.card_qr_url = state.prefs.card_qr_url || '';
+state.prefs.card_tagline = String(state.prefs.card_tagline || '').slice(0, CARD_TAGLINE_MAX);
+if (!Array.isArray(state.prefs.card_position_picks)) state.prefs.card_position_picks = [];
+state.prefs.card_position_picks = state.prefs.card_position_picks.slice(0, CARD_POSITION_MAX);
+if (!state.prefs.card_record_picks || typeof state.prefs.card_record_picks !== 'object') {
+state.prefs.card_record_picks = {};
+}
 
 renderLogoPreview();
 renderTrackMapPreview();
 await updateTrackMapGating();
+
+const elUrl = document.getElementById('pref-card-url');
+if (elUrl) elUrl.value = state.prefs.card_qr_url || '';
+const elTag = document.getElementById('pref-card-tagline');
+if (elTag) elTag.value = state.prefs.card_tagline || '';
+updateTaglineCount();
+renderCardQR();
 
 document.getElementById('pref-karts').value = state.prefs.default_karts;
 document.getElementById('pref-laps').value = state.prefs.default_laps;
@@ -438,7 +453,7 @@ showMsg('msg-trackmap', 'Plan retiré. Clique Enregistrer pour confirmer.', 'ok'
 // convention pastille/.selected que switchStatsSubtab() dans stats.js — un seul bloc
 // de reglages visible a la fois pour reduire la quantite d'info affichee. Remplace
 // l'ancienne fonction switchAppearanceSubtab (jamais reliee a du HTML reel).
-const PARAMS_SUBTABS = ['sessions', 'identite', 'theme', 'avatars'];
+const PARAMS_SUBTABS = ['sessions', 'identite', 'theme', 'avatars', 'cartes'];
 export function switchParamsSubtab(tab) {
   if (!PARAMS_SUBTABS.includes(tab)) return;
   PARAMS_SUBTABS.forEach((key) => {
@@ -449,6 +464,7 @@ export function switchParamsSubtab(tab) {
     b.classList.toggle('selected', b.dataset.ptabVal === tab);
   });
   if (tab === 'avatars') renderKartAvatarGallery();
+  if (tab === 'cartes') renderCardsTab();
 }
 
 // --- Entitlement "thèmes premium" (plan Pro) ---------------------------------------
@@ -508,6 +524,8 @@ document.querySelectorAll('.theme-option-row').forEach((r) => {
 r.style.borderColor = r.dataset.themeVal === val ? 'var(--acc)' : 'var(--bord)';
 });
 renderResultsPreview(val);
+state.prefs.results_theme = val;   // les vignettes de cartes suivent le theme choisi
+renderCardsTab();
 markPrefsDirty();
 }
 
@@ -712,6 +730,10 @@ avatar_background: document.getElementById('pref-avatar-bg-on')?.checked
 : 'none',
 avatar_outline: !!document.getElementById('pref-avatar-outline')?.checked,
 avatar_shape: document.getElementById('pref-avatar-shape')?.value || 'round',
+card_qr_url: (document.getElementById('pref-card-url')?.value || '').trim().slice(0, 179),
+card_tagline: (document.getElementById('pref-card-tagline')?.value || '').trim().slice(0, CARD_TAGLINE_MAX),
+card_position_picks: (state.prefs.card_position_picks || []).slice(0, CARD_POSITION_MAX),
+card_record_picks: state.prefs.card_record_picks || {},
 logo_url: state.prefs.logo_url || null,
 track_map_url: state.prefs.track_map_url || null,
 level_expert_max_seconds: Math.max(1, parseInt(document.getElementById('pref-level-expert')?.value, 10) || 45),
@@ -757,4 +779,141 @@ const now = new Date();
 const roundedMin = now.getMinutes() < 30 ? '00' : '30';
 const cur = String(now.getHours()).padStart(2, '0') + ':' + roundedMin;
 sel.value = cur;
+}
+
+
+// =====================================================================================
+// Cartes resultat partageables (onglet Parametres > Cartes partageables)
+// =====================================================================================
+// Les visuels sont generes hors ligne (voir gen3.js dans le depot de design) et livres
+// sous forme de vignettes /assets/cards/<concept>__<theme>.jpg : la vignette affichee
+// suit donc automatiquement le theme choisi dans l'onglet Theme.
+//
+// Deux familles de cartes :
+//   - POSITION  : jusqu'a 5 visuels coches ; a la fin d'une session chaque pilote en
+//                 recoit UN, tire au hasard parmi les coches (varie d'une session a
+//                 l'autre sans intervention de l'organisateur).
+//   - RECORD    : un seul visuel par portee (piste / semaine / mois / perso). L'envoi
+//                 est declenche par le serveur des qu'un chrono bat la reference, jamais
+//                 a la main. Un pilote qui bat plusieurs records recoit plusieurs cartes,
+//                 toujours accompagnees de sa carte de position.
+
+export const CARD_TAGLINE_MAX = 46;   // 642 px utiles / ~14 px par glyphe Mono 20 px
+export const CARD_POSITION_MAX = 5;
+
+const CARD_CATALOG = {
+position: [
+{ id: '01-track-hero', name: 'Track Hero' },
+{ id: '02-avatar-central', name: 'Avatar Central' },
+{ id: '03-chrono-editorial', name: 'Chrono Editorial' },
+{ id: '04-split-diagonal', name: 'Split Diagonal' },
+{ id: '05-telemetrie', name: 'Telemetrie' },
+{ id: '06-bloc-massif', name: 'Bloc Massif' },
+{ id: '07-damier-dissous', name: 'Damier Dissous' },
+{ id: '08-ligne-arrivee', name: "Ligne d'Arrivee" },
+{ id: '09-grille-indice', name: 'Grille Indice' },
+{ id: '10-filigrane', name: 'Filigrane Numero' },
+],
+perso: [
+{ id: '01r-track-record', name: 'Track Hero — Record' },
+{ id: '02r-avatar-record', name: 'Avatar Central — Record' },
+],
+piste: [{ id: '11r-record-piste', name: 'Record de la Piste' }],
+semaine: [{ id: '12r-record-semaine', name: 'Record de la Semaine' }],
+mois: [{ id: '13r-record-mois', name: 'Record du Mois' }],
+};
+
+const SCOPE_LABELS = {
+perso: 'Record personnel du pilote',
+piste: 'Record de la piste (absolu)',
+semaine: 'Record de la semaine',
+mois: 'Record du mois',
+};
+
+const cardThumb = (id) =>
+'assets/cards/' + id + '__' + (state.prefs.results_theme || 'classic') + '.jpg';
+
+function cardTile(item, on, dimmed) {
+return '<div class="card-pick' + (on ? ' on' : '') + (dimmed ? ' off' : '') +
+'" data-card-id="' + item.id + '">' +
+'<img loading="lazy" src="' + cardThumb(item.id) + '" alt="' + item.name + '"/>' +
+'<div class="cp-tick">&check;</div>' +
+'<div class="cp-name">' + item.name + '</div></div>';
+}
+
+export function renderCardsTab() {
+const picks = state.prefs.card_position_picks || [];
+const grid = document.getElementById('cards-grid-position');
+if (grid) {
+const full = picks.length >= CARD_POSITION_MAX;
+grid.innerHTML = CARD_CATALOG.position
+.map((c) => cardTile(c, picks.includes(c.id), full && !picks.includes(c.id)))
+.join('');
+grid.querySelectorAll('.card-pick').forEach((el) => {
+el.onclick = () => togglePositionCard(el.dataset.cardId);
+});
+}
+
+const box = document.getElementById('cards-record-scopes');
+if (box) {
+const chosen = state.prefs.card_record_picks || {};
+box.innerHTML = Object.keys(SCOPE_LABELS).map((scope) =>
+'<div class="scope-block"><h4>' + SCOPE_LABELS[scope] + '</h4>' +
+'<div class="cards-grid">' +
+CARD_CATALOG[scope].map((c) => cardTile(c, chosen[scope] === c.id, false)).join('') +
+'</div></div>'
+).join('');
+box.querySelectorAll('.scope-block').forEach((blk, i) => {
+const scope = Object.keys(SCOPE_LABELS)[i];
+blk.querySelectorAll('.card-pick').forEach((el) => {
+el.onclick = () => pickRecordCard(scope, el.dataset.cardId);
+});
+});
+}
+renderCardQR();
+updateTaglineCount();
+}
+
+function togglePositionCard(id) {
+const picks = state.prefs.card_position_picks || (state.prefs.card_position_picks = []);
+const i = picks.indexOf(id);
+if (i >= 0) picks.splice(i, 1);
+else if (picks.length < CARD_POSITION_MAX) picks.push(id);
+else { showMsg('msg-prefs', CARD_POSITION_MAX + ' cartes de position au maximum.', false); return; }
+markPrefsDirty();
+renderCardsTab();
+}
+
+function pickRecordCard(scope, id) {
+const picks = state.prefs.card_record_picks || (state.prefs.card_record_picks = {});
+picks[scope] = picks[scope] === id ? null : id;   // un second clic retire la carte
+markPrefsDirty();
+renderCardsTab();
+}
+
+export function updateTaglineCount() {
+const el = document.getElementById('pref-card-tagline');
+const out = document.getElementById('tagline-count');
+if (el && out) out.textContent = String(el.value.length);
+}
+
+// QR genere localement (module qr.js) : aucun appel a un service tiers, donc l'URL du
+// circuit ne fuite pas et les cartes restent generables hors ligne.
+export function renderCardQR() {
+const box = document.getElementById('card-qr-preview');
+const note = document.getElementById('card-qr-note');
+if (!box) return;
+const url = (document.getElementById('pref-card-url')?.value || '').trim();
+if (!url) {
+box.innerHTML = '';
+if (note) note.textContent = 'Sans URL, les cartes sont generees sans QR code.';
+return;
+}
+try {
+box.innerHTML = qrSVG(url);
+if (note) note.textContent = 'QR valide — ' + url.length + '/179 caracteres.';
+} catch (e) {
+box.innerHTML = '';
+if (note) note.textContent = 'URL trop longue pour un QR lisible (179 caracteres maximum).';
+}
 }
