@@ -257,6 +257,55 @@ if (removeBtn) removeBtn.style.display = 'none';
 }
 }
 
+// --- Stockage : chemins scopes par tenant -----------------------------------------------------
+// Historiquement les visuels etaient ecrits a plat ('logos/<timestamp>.png'). Aucune policy RLS
+// ne pouvait alors distinguer les fichiers d'un circuit de ceux d'un autre : n'importe quel admin
+// authentifie pouvait ecraser ou supprimer le logo d'un concurrent. On prefixe desormais par
+// l'identifiant du tenant, ce qui permet aux policies de verifier (storage.foldername(name))[2].
+let _tenantIdCache = null;
+async function currentTenantId() {
+  if (_tenantIdCache) return _tenantIdCache;
+  // La RLS de public.tenants limite deja la selection au tenant de l'admin connecte.
+  const { data, error } = await db.from('tenants').select('id').limit(1).maybeSingle();
+  if (error || !data || !data.id) return null;
+  _tenantIdCache = data.id;
+  return _tenantIdCache;
+}
+
+// Retrouve le chemin interne d'un objet a partir de son URL publique
+// (.../storage/v1/object/public/org-logos/<chemin>), pour pouvoir le supprimer.
+function storagePathFromPublicUrl(url, bucket) {
+  if (!url) return null;
+  const marker = '/storage/v1/object/public/' + bucket + '/';
+  const i = String(url).indexOf(marker);
+  if (i === -1) return null;
+  return decodeURIComponent(String(url).slice(i + marker.length).split('?')[0]);
+}
+
+// Supprime les fichiers du dossier du tenant qui ne sont plus references par les preferences.
+// Appele UNIQUEMENT apres un enregistrement reussi : tant que l'admin n'a pas clique
+// "Enregistrer", l'ancien visuel est encore celui publie en ligne, il ne faut pas y toucher.
+async function cleanupOrphanStorage() {
+  try {
+    const tenantId = await currentTenantId();
+    if (!tenantId) return;
+    const keep = [state.prefs.logo_url, state.prefs.track_map_url]
+      .map((u) => storagePathFromPublicUrl(u, 'org-logos'))
+      .filter(Boolean);
+    for (const folder of ['logos', 'tracks']) {
+      const prefix = folder + '/' + tenantId;
+      const { data, error } = await db.storage.from('org-logos').list(prefix, { limit: 100 });
+      if (error || !data) continue;
+      const doomed = data
+        .map((f) => prefix + '/' + f.name)
+        .filter((p) => keep.indexOf(p) === -1);
+      if (doomed.length) await db.storage.from('org-logos').remove(doomed);
+    }
+  } catch (e) {
+    // Best effort : un menage rate ne doit jamais faire echouer l'enregistrement.
+  }
+}
+
 export async function uploadLogo(input) {
 const file = input.files && input.files[0];
 if (!file) return;
@@ -264,7 +313,12 @@ const msgId = 'msg-logo';
 try {
 showMsg(msgId, 'Upload du logo…', 'ok');
 const compressed = await compressLogo(file);
-const path = 'logos/' + Date.now() + '.png';
+const tenantId = await currentTenantId();
+if (!tenantId) {
+  showMsg(msgId, 'Session admin expiree : reconnecte-toi avant d\'envoyer un logo.', 'err');
+  return;
+}
+const path = 'logos/' + tenantId + '/' + Date.now() + '.png';
 const { error: upErr } = await db.storage.from('org-logos').upload(path, compressed, {
 upsert: true,
 contentType: 'image/png',
@@ -341,7 +395,12 @@ return;
 try {
 showMsg(msgId, 'Upload du plan du circuit…', 'ok');
 const compressed = await compressLogo(file, 1200);
-const path = 'tracks/' + Date.now() + '.png';
+const tenantId = await currentTenantId();
+if (!tenantId) {
+  showMsg(msgId, 'Session admin expiree : reconnecte-toi avant d\'envoyer un plan.', 'err');
+  return;
+}
+const path = 'tracks/' + tenantId + '/' + Date.now() + '.png';
 const { error: upErr } = await db.storage.from('org-logos').upload(path, compressed, {
 upsert: true,
 contentType: 'image/png',
@@ -668,6 +727,7 @@ showMsg('msg-prefs', 'Parametres enregistres !', 'ok');
 showMsg('msg-kart-numbers', 'Numeros de karts enregistres !', 'ok');
 updateDefaultsInfo();
 state.prefsDirty = false;
+await cleanupOrphanStorage();
 } catch (e) {
 showMsg('msg-prefs', 'Erreur: ' + e.message, 'err');
 }
