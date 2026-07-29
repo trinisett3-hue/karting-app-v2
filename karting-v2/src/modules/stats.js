@@ -577,7 +577,6 @@ function renderFrequencyChart(allSessions, range) {
 
 let lastFidelisation = { tauxRetour: null, visites30: null, visites90: null, visites365: null, segmentation: { nouveaux: 0, reguliers: 0, fans: 0 }, top10: [] };
 let lastPerformance = { pctProgression: null, progressionMoyenne: null, niveaux: { debutant: 0, intermediaire: 0, expert: 0 }, hofEnrichi: [] };
-let lastQualite = { csatMoyen: null, csatPositifPct: null, nbReponses: 0, tauxIncident: null, interruptionMinutes: 0 };
 let lastUsageAvance = { pctEnLigne: null, pctSurPlace: null, planPisteActif: false, themeActuel: null, themePremium: false, saisonnalite: { months: [], topHours: [] } };
 
 // Identite d'un pilote a travers plusieurs sessions : meme convention que l'ancien
@@ -766,31 +765,6 @@ async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, r
   lastPerformance = { pctProgression, progressionMoyenne, niveaux, hofEnrichi };
   renderPerformanceBlock(lastPerformance);
 
-  // ---------------------------------------------------------------------------------------
-  // 3) EXPERIENCE CLIENT & QUALITE
-  // ---------------------------------------------------------------------------------------
-  const incidentsTotal = allSessions.reduce((a, s) => a + (Number(s.incident_count) || 0), 0);
-  const interruptionTotal = allSessions.reduce((a, s) => a + (Number(s.interruption_minutes) || 0), 0);
-  const tauxIncident = allSessions.length ? (incidentsTotal / allSessions.length) * 100 : null;
-
-  let csatMoyen = null, csatPositifPct = null, nbReponses = 0;
-  try {
-    const sessionIds = allSessions.map((s) => s.id);
-    if (sessionIds.length) {
-      const { data: ratings } = await db.from('session_ratings').select('rating').in('session_id', sessionIds);
-      const list = (ratings || []).map((r) => Number(r.rating)).filter((n) => n >= 1 && n <= 5);
-      nbReponses = list.length;
-      if (nbReponses) {
-        csatMoyen = list.reduce((a, b) => a + b, 0) / nbReponses;
-        csatPositifPct = list.filter((n) => n >= 4).length / nbReponses;
-      }
-    }
-  } catch (e) {
-    // table pas encore migree chez ce tenant, ou aucune note enregistree : pas bloquant
-  }
-
-  lastQualite = { csatMoyen, csatPositifPct, nbReponses, tauxIncident, interruptionMinutes: interruptionTotal };
-  renderQualiteBlock(lastQualite);
 
   // ---------------------------------------------------------------------------------------
   // 4) UTILISATION AVANCEE & SAISONNALITE
@@ -934,15 +908,6 @@ function renderPerformanceBlock(p) {
   }
 }
 
-function renderQualiteBlock(q) {
-  const kpiGrid = document.getElementById('stats-qualite-kpi-grid');
-  if (!kpiGrid) return;
-  // Toutes les tuiles de qualite/usage retirees le 29/07 : aucune n'a jamais
-  // ete remplie en conditions reelles. CSAT/Avis positifs car session_ratings
-  // vide (widget public absent), Taux d'incident/Interruption car jamais saisies
-  // via #arch-incidents-input/#arch-interruption-input en admin.html (existe
-  // mais n'est pas utilise en pratique).
-}
 
 function renderUsageAvanceBlock(u) {
   const kpiGrid = document.getElementById('stats-usage-kpi-grid');
@@ -1078,18 +1043,6 @@ export function exportStatsXLSX() {
     ...p.hofEnrichi.map((r, i) => [i + 1, r.name, formatTime(r.total), r.sessions, NIVEAU_LABELS_XLSX[r.niveau] || '--', r.regulier ? 'Oui' : 'Non']),
   ]);
   XLSX.utils.book_append_sheet(wb, perfSheet, 'Performance sportive');
-
-  const q = lastQualite;
-  const qualiteSheet = XLSX.utils.aoa_to_sheet([
-    ['Experience & qualite — ' + periodeTxt],
-    [],
-    ['Indicateur', 'Valeur', 'Detail'],
-    ['CSAT moyen', q.csatMoyen != null ? q.csatMoyen.toFixed(1) + ' / 5' : '--', q.nbReponses + ' reponse(s)'],
-    ['Avis positifs (4-5)', pct(q.csatPositifPct), ''],
-    ["Taux d'incident", q.tauxIncident != null ? q.tauxIncident.toFixed(1) + ' / 100 sessions' : '--', ''],
-    ['Interruption piste (cumul)', formatMinutes(q.interruptionMinutes), ''],
-  ]);
-  XLSX.utils.book_append_sheet(wb, qualiteSheet, 'Experience qualite');
 
   const u = lastUsageAvance;
   const usageSheet = XLSX.utils.aoa_to_sheet([
