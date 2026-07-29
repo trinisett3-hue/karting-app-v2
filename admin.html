@@ -472,7 +472,7 @@ updateThemeToggleUI();
 <div class="field"><label>Notes internes <span style="font-weight:500;text-transform:none;color:var(--mut)">(jamais affichees cote pilote)</span></label>
 <textarea id="arch-notes-input" rows="2"></textarea>
 </div>
-<!-- 🆕 Offre 2 : alimente le KPI "Taux d'incident" / "Temps d'interruption piste" (bloc Experience & qualite de l'onglet Statistiques) — saisie manuelle a la cloture, faute d'un capteur automatique. -->
+<!-- 🆕 Premium : alimente le KPI "Taux d'incident" / "Temps d'interruption piste" (bloc Experience & qualite de l'onglet Statistiques) — saisie manuelle a la cloture, faute d'un capteur automatique. -->
 <div class="g2" style="margin-bottom:0">
 <div class="field" style="margin-bottom:0"><label>Incidents (nb)</label>
 <input type="number" id="arch-incidents-input" min="0" step="1" value="0"/>
@@ -552,7 +552,7 @@ updateThemeToggleUI();
 <div class="subtab-btn" data-stab-val="qualite" onclick="switchStatsSubtab('qualite')">⭐ Qualite & usage</div>
 </div>
 
-<!-- 1) VUE D'ENSEMBLE — KPIs globaux, exploitation piste, frequentation (Offre 1) -->
+<!-- 1) VUE D'ENSEMBLE — KPIs globaux, exploitation piste, frequentation (Basique) -->
 <div class="subtab-panel active" id="stats-subtab-overview">
 <div class="ctitle" style="margin-bottom:10px">KPIs globaux</div>
 <div class="g3" id="stats-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
@@ -567,7 +567,7 @@ updateThemeToggleUI();
 </div>
 </div>
 
-<!-- 2) HALL OF FAME — chronos de base (Offre 1) -->
+<!-- 2) HALL OF FAME — chronos de base (Basique) -->
 <div class="subtab-panel" id="stats-subtab-hof">
 <div class="g2">
 <div class="card">
@@ -583,11 +583,11 @@ updateThemeToggleUI();
 
 <!-- ============================================================================
      OFFRE 2 — blocs avances (fidelisation, performance sportive, qualite, usage).
-     Memes filtres de plage (voir stats.js > loadOffre2Blocks()), chacun dans son
+     Memes filtres de plage (voir stats.js > loadPremiumStatsBlocks()), chacun dans son
      propre sous-onglet.
      ============================================================================ -->
 
-<!-- 3) FIDELISATION PILOTES (Offre 2) -->
+<!-- 3) FIDELISATION PILOTES (Premium) -->
 <div class="subtab-panel" id="stats-subtab-fid">
 <div class="g4" id="stats-fid-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
 <div class="g2">
@@ -602,7 +602,7 @@ updateThemeToggleUI();
 </div>
 </div>
 
-<!-- 4) PERFORMANCE SPORTIVE (Offre 2) -->
+<!-- 4) PERFORMANCE SPORTIVE (Premium) -->
 <div class="subtab-panel" id="stats-subtab-perf">
 <div class="g2" style="margin-bottom:16px">
 <div id="stats-perf-kpi-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="empty">Chargement...</div></div>
@@ -617,7 +617,7 @@ updateThemeToggleUI();
 </div>
 </div>
 
-<!-- 5) EXPERIENCE & QUALITE + USAGE AVANCE & SAISONNALITE (Offre 2) -->
+<!-- 5) EXPERIENCE & QUALITE + USAGE AVANCE & SAISONNALITE (Premium) -->
 <div class="subtab-panel" id="stats-subtab-qualite">
 <div class="ctitle" style="margin-bottom:10px">Experience & qualite</div>
 <div class="g4" id="stats-qualite-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
