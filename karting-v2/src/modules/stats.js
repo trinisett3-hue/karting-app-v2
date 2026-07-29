@@ -937,9 +937,17 @@ function renderPerformanceBlock(p) {
 function renderQualiteBlock(q) {
   const kpiGrid = document.getElementById('stats-qualite-kpi-grid');
   if (!kpiGrid) return;
+  // CSAT moyen / Avis positifs retires le 29/07 (audit du 28/07, section 7.3) :
+  // aucun widget de notation cote pilote n'a jamais ete construit (verifie sur
+  // results.html), donc session_ratings reste vide et ces deux tuiles
+  // afficheraient eternellement "--". Un tableau de bord a moitie vide donne
+  // une impression de produit inacheve -- on les retire tant que le widget
+  // public n'existe pas, plutot que d'afficher une promesse non tenue.
+  // Taux d'incident / Interruption piste restent : ils ont une vraie saisie
+  // manuelle a la cloture de session (#arch-incidents-input,
+  // #arch-interruption-input dans admin.html), simplement pas toujours
+  // utilisee -- ce n'est pas la meme situation.
   kpiGrid.innerHTML =
-    kpiBox('CSAT moyen', q.csatMoyen != null ? q.csatMoyen.toFixed(1) + ' / 5' : '--', q.nbReponses ? q.nbReponses + ' reponse(s)' : 'Aucune note recue', '⭐') +
-    kpiBox('Avis positifs (4-5)', pct(q.csatPositifPct), null, '👍') +
     kpiBox("Taux d'incident", q.tauxIncident != null ? q.tauxIncident.toFixed(1) + ' / 100 sessions' : '--', null, '⚠️') +
     kpiBox('Interruption piste', formatMinutes(q.interruptionMinutes), 'Cumul sur la periode', '⏸️');
 }
