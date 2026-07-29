@@ -282,15 +282,38 @@ function updateRangeDisplay() {
 
 // `icon` : simple emoji, optionnel — demande explicitement ("icones simples")
 // pour les 3 tuiles de KPIs globaux, reutilise aussi pour Exploitation piste.
-function kpiBox(lbl, val, sub, icon) {
-  return (
-    '<div class="card" style="text-align:center;padding:16px">' +
-    (icon ? '<div style="font-size:20px;margin-bottom:4px" aria-hidden="true">' + icon + '</div>' : '') +
-    '<div style="font-size:11px;color:var(--mut);text-transform:uppercase;font-weight:700;margin-bottom:6px">' + lbl + '</div>' +
-    '<div style="font-size:22px;font-weight:900">' + val + '</div>' +
-    (sub ? '<div style="font-size:11px;color:var(--mut);margin-top:4px">' + sub + '</div>' : '') +
-    '</div>'
-  );
+// `info` : texte d'aide optionnel (picto (i), hover ou clic/tap) expliquant la
+// metrique et son calcul — ajoute le 29/07 suite a une demande de clarification
+// sur les onglets Vue d'ensemble / Fidelisation (voir .info-ico/.info-tip dans
+// admin.html pour le style, et le listener global juste en-dessous pour la
+// fermeture au clic exterieur sur mobile/tactile).
+function kpiBox(lbl, val, sub, icon, info) {
+ensureInfoTipListener();
+const infoHtml = info
+? ' <span class="info-ico" tabindex="0" onclick="event.stopPropagation();this.classList.toggle(\'open\')" aria-label="Explication">i<span class="info-tip">' + info + '</span></span>'
+: '';
+return (
+'<div class="card" style="text-align:center;padding:16px">' +
+(icon ? '<div style="font-size:20px;margin-bottom:4px" aria-hidden="true">' + icon + '</div>' : '') +
+'<div style="font-size:11px;color:var(--mut);text-transform:uppercase;font-weight:700;margin-bottom:6px">' + lbl + infoHtml + '</div>' +
+'<div style="font-size:22px;font-weight:900">' + val + '</div>' +
+(sub ? '<div style="font-size:11px;color:var(--mut);margin-top:4px">' + sub + '</div>' : '') +
+'</div>'
+);
+}
+
+// Ferme tous les tooltips (.info-ico.open) au clic en dehors — necessaire pour
+// le mode tactile (pas de hover sur mobile/tablette), n'ajoute le listener
+// qu'une seule fois meme si kpiBox() est appelee des dizaines de fois.
+let _infoTipListenerAdded = false;
+function ensureInfoTipListener() {
+if (_infoTipListenerAdded) return;
+_infoTipListenerAdded = true;
+document.addEventListener('click', (e) => {
+if (!e.target.closest('.info-ico')) {
+document.querySelectorAll('.info-ico.open').forEach((el) => el.classList.remove('open'));
+}
+});
 }
 
 export async function loadStatsTab(range) {
@@ -329,9 +352,9 @@ export async function loadStatsTab(range) {
   lastKpis = { sessions: allSessions.length, pilotsUniques: uniquePilots.size, chronos: allLaps.length };
   if (kpiGrid) {
     kpiGrid.innerHTML =
-      kpiBox('Sessions', allSessions.length, null, '🏁') +
-      kpiBox('Pilotes uniques', uniquePilots.size, null, '👤') +
-      kpiBox('Chronos enregistres', allLaps.length, null, '⏱️');
+      kpiBox('Sessions', allSessions.length, null, '🏁', 'Nombre de sessions sur la periode selectionnee (filtre en haut de page).') +
+      kpiBox('Pilotes uniques', uniquePilots.size, null, '👤', 'Nombre de pseudos differents (normalises) ayant participe au moins une fois sur la periode. Deux orthographes differentes du meme pilote comptent comme 2 pilotes.') +
+      kpiBox('Chronos enregistres', allLaps.length, null, '⏱️', 'Nombre total de tours chronometres enregistres sur la periode.');
   }
 
   // --- Exploitation piste (Basique, MVP) — voir computeExploitationKpis() -----------------
@@ -347,25 +370,25 @@ export async function loadStatsTab(range) {
         'Remplissage moyen',
         pct(exploitation.avgFill),
         exploitation.avgFill != null ? 'min ' + pct(exploitation.minFill) + ' · max ' + pct(exploitation.maxFill) : 'Aucune session avec capacite connue',
-        '🪑'
+        '🪑', 'Moyenne du taux de remplissage (inscrits / places max) des sessions ayant une capacite renseignee. Les sessions sans capacite definie sont ignorees dans ce calcul.'
       ) +
       kpiBox(
         'Utilisation piste (estimee)',
         pct(exploitation.utilizationRate),
         'Base : ' + DEFAULT_OPENING_HOURS_PER_DAY + 'h/jour, session ≈' + DEFAULT_AVG_SESSION_MINUTES + 'min',
-        '📈'
+        '📈', 'Estimation simple : (nb sessions x 15 min) / (nb jours de la periode x 8h d\'ouverture). Basee sur des valeurs par defaut, pas sur de vrais horaires configures -- a affiner si besoin.'
       ) +
       kpiBox(
         'Sessions / jour',
         exploitation.sessionsPerDay != null ? exploitation.sessionsPerDay.toFixed(1) : '--',
         exploitation.days ? 'sur ' + exploitation.days + ' jour(s)' : null,
-        '📅'
+        '📅', 'Nombre de sessions divise par le nombre de jours couverts par la periode selectionnee.'
       ) +
       kpiBox(
         'Sessions / semaine',
         exploitation.sessionsPerWeek != null ? exploitation.sessionsPerWeek.toFixed(1) : '--',
         null,
-        '🗓️'
+        '🗓️', 'Sessions / jour x 7.'
       );
   }
 
@@ -852,10 +875,10 @@ function renderFidelisationBlock(f) {
   const kpiGrid = document.getElementById('stats-fid-kpi-grid');
   if (kpiGrid) {
     kpiGrid.innerHTML =
-      kpiBox('Taux de retour', pct(f.tauxRetour), f.tauxRetour == null ? 'Non calculable sur "Depuis le debut"' : null, '🔁') +
-      kpiBox('Visites / pilote (30j)', f.visites30 != null ? f.visites30.toFixed(1) : '--', null, '📆') +
-      kpiBox('Visites / pilote (90j)', f.visites90 != null ? f.visites90.toFixed(1) : '--', null, '📆') +
-      kpiBox('Visites / pilote (1 an)', f.visites365 != null ? f.visites365.toFixed(1) : '--', null, '📆');
+      kpiBox('Taux de retour', pct(f.tauxRetour), f.tauxRetour == null ? 'Non calculable sur "Depuis le debut"' : null, '🔁', 'Part des pilotes de la periode deja vus AVANT le debut de cette periode. Non calculable sur "Depuis le debut" car il n\'y a pas de "avant" a comparer.') +
+      kpiBox('Visites / pilote (30j)', f.visites30 != null ? f.visites30.toFixed(1) : '--', null, '📆', 'Nombre moyen de sessions par pilote unique sur les 30 derniers jours glissants (aujourd\'hui inclus) -- independant du filtre de periode choisi en haut de page.') +
+      kpiBox('Visites / pilote (90j)', f.visites90 != null ? f.visites90.toFixed(1) : '--', null, '📆', 'Nombre moyen de sessions par pilote unique sur les 90 derniers jours glissants -- independant du filtre de periode choisi en haut de page.') +
+      kpiBox('Visites / pilote (1 an)', f.visites365 != null ? f.visites365.toFixed(1) : '--', null, '📆', 'Nombre moyen de sessions par pilote unique sur les 365 derniers jours glissants -- independant du filtre de periode choisi en haut de page.');
   }
   const segEl = document.getElementById('stats-fid-segmentation');
   if (segEl) {
@@ -864,7 +887,7 @@ function renderFidelisationBlock(f) {
       '<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>' + lbl + '</span><span>' + n + ' (' + (total ? Math.round((n / total) * 100) : 0) + '%)</span></div>' +
       '<div style="height:8px;border-radius:4px;background:var(--surf2);overflow:hidden"><div style="height:100%;width:' + (total ? Math.round((n / total) * 100) : 0) + '%;background:' + color + '"></div></div></div>';
     segEl.innerHTML = total
-      ? row('Nouveaux (1 session)', f.segmentation.nouveaux, '#7c74ff') + row('Reguliers (2-4 sessions)', f.segmentation.reguliers, '#f0c419') + row('Fans (5+ sessions)', f.segmentation.fans, '#ff3b30')
+      ? row('Nouveaux (1 session)', f.segmentation.nouveaux, '#7c74ff') + row('Reguliers (2-4 sessions)', f.segmentation.reguliers, '#f0c419') + row('Fans (5+ sessions)', f.segmentation.fans, '#ff3b30') + '<div style="font-size:11px;color:var(--mut);margin-top:6px">Segmentation basee sur le nombre de sessions du pilote sur la periode selectionnee : 1 = nouveau, 2 a 4 = regulier, 5 et plus = fan.</div>'
       : '<div class="empty">Aucun pilote sur la periode.</div>';
   }
   const topEl = document.getElementById('stats-fid-top10');
