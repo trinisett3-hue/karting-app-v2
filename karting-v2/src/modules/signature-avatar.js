@@ -58,13 +58,21 @@ import { kartAvatarSVG, schemeForKart, AVATAR_SCHEME_COUNT } from './kart-avatar
    -------------------------------------------------------------------------- */
 
 export const SIGNATURE_PACK_VERSION = 1;
-export const SIGNATURE_SCHEME_COUNT = 24;
+// Reduit de 24 a 16 le 30/07 (decision produit) : a 24 teintes, plusieurs paires
+// n'avaient que 10deg d'ecart de teinte et etaient indistinguables en petit format
+// (audit du 28/07, section 8). 16 teintes espacees d'environ 22.5deg se distinguent
+// nettement les unes des autres. Les schemas Signature (pilotIdForKart/pidForOpts
+// ci-dessous) utilisent CE compteur, independant du pack Classic (kart-avatar.js,
+// qui garde ses 24 illustrations).
+export const SIGNATURE_SCHEME_COUNT = 16;
 export const SIGNATURE_KINDS = ['bust', 'helmet', 'kart', 'kartpilot'];
 
+// 16 teintes reparties a ~22.5deg d'ecart (360/16), ordonnees pour alterner chaud/
+// froid entre voisins directs (schema i et i+1 ne sont jamais dans la meme famille
+// de couleur) plutot que par simple ordre croissant.
 const HUES = {
-  1: 0, 2: 210, 3: 40, 4: 145, 5: 275, 6: 190, 7: 20, 8: 320, 9: 95, 10: 255,
-  11: 170, 12: 60, 13: 300, 14: 230, 15: 10, 16: 120, 17: 285, 18: 200, 19: 50,
-  20: 335, 21: 160, 22: 265, 23: 80, 24: 220
+1: 0, 2: 203, 3: 45, 4: 248, 5: 90, 6: 293, 7: 135, 8: 338,
+9: 180, 10: 23, 11: 225, 12: 68, 13: 270, 14: 113, 15: 315, 16: 158
 };
 
 const VIEWBOX = {
@@ -477,7 +485,9 @@ function esc(s) {
 
 /** pid 1..24 — c'est le numéro de fichier du pack. schemeForKart() rend 0..23. */
 export function pilotIdForKart(kartNumber) {
-  return schemeForKart(kartNumber) + 1;
+const n = Number(kartNumber);
+if (!Number.isFinite(n)) return 1;
+return ((Math.round(n) - 1) % SIGNATURE_SCHEME_COUNT + SIGNATURE_SCHEME_COUNT) % SIGNATURE_SCHEME_COUNT + 1;
 }
 
 /* pid (1..24) pour un appel donné : si opts.scheme est fourni (0..23, comme
@@ -489,10 +499,10 @@ export function pilotIdForKart(kartNumber) {
  * l'avatar #i indépendamment de tout numéro de kart. Repli identique à
  * kartAvatarSVG : un index hors 0..23 est ramené dans l'intervalle par modulo. */
 function pidForOpts(kartNumber, o) {
-  if (o && o.scheme != null) {
-    return ((Math.round(o.scheme) % AVATAR_SCHEME_COUNT) + AVATAR_SCHEME_COUNT) % AVATAR_SCHEME_COUNT + 1;
-  }
-  return pilotIdForKart(kartNumber);
+if (o && o.scheme != null) {
+return ((Math.round(o.scheme) % SIGNATURE_SCHEME_COUNT) + SIGNATURE_SCHEME_COUNT) % SIGNATURE_SCHEME_COUNT + 1;
+}
+return pilotIdForKart(kartNumber);
 }
 
 export function signatureAvatarURL(kartNumber, kind, variant, opts) {
@@ -530,7 +540,7 @@ export function signatureAvatarHTML(kartNumber, opts) {
   const kind = SIGNATURE_KINDS.indexOf(o.kind) >= 0
     ? o.kind : (o.small ? cfg.small_type : cfg.type);
   const style = bgStyleOf(o);
-  const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
+  const outline = false;
   // Toujours la variante plain : le contour est désormais un anneau (ringLayerRaw)
   // et n'a de sens que sur un fond, sinon il flotterait sur la page.
   const variant = 'plain';
@@ -623,7 +633,7 @@ export async function signatureAvatarDataURL(kartNumber, opts) {
   const kind = SIGNATURE_KINDS.indexOf(o.kind) >= 0
     ? o.kind : (o.small ? cfg.small_type : cfg.type);
   const style = bgStyleOf(o);
-  const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
+  const outline = false; // Outlines supprimes (decision produit du 30/07)
   const variant = 'plain';
   const ring = (style && outline);
   const rawShapeD = o.shape || cfg.shape;
@@ -674,7 +684,7 @@ function dataUrlKey(kartNumber, opts) {
   const kind = SIGNATURE_KINDS.indexOf(o.kind) >= 0
     ? o.kind : (o.small ? cfg.small_type : cfg.type);
   const style = bgStyleOf(o);
-  const outline = (o.outline !== undefined ? o.outline : cfg.outline) !== false;
+  const outline = false; // Outlines supprimes (decision produit du 30/07)
   const num = (o.number !== undefined) ? o.number : kartNumber;
   const shape = (o.shape || cfg.shape) === 'square' ? 'square' : 'round';
   // La clé doit distinguer deux avatars qui partagent le même kartNumber mais
