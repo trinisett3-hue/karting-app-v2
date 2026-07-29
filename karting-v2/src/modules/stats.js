@@ -617,12 +617,29 @@ function segmentLabel(count) {
   return 'nouveaux';
 }
 
-// Seuils de niveau (temps au tour, en secondes) — valeurs par defaut generiques, a
-// affiner par circuit plus tard (pas de reglage dedie cote Parametres pour l'instant,
-// meme logique que DEFAULT_OPENING_HOURS_PER_DAY en Basique : point de config futur,
-// pas une verite universelle — un circuit indoor court n'a pas les memes temps qu'un
-// circuit outdoor long).
-const LEVEL_THRESHOLDS_SECONDS = { expertMax: 45, intermediaireMax: 55 };
+// Seuils de niveau (temps au tour, en secondes) — desormais configurables par
+// tenant (Parametres > Seuils de niveau, voir refreshLevelThresholds() ci-dessous) :
+// un circuit indoor court n'a pas les memes temps qu'un circuit outdoor long, ces
+// valeurs par defaut generiques (45s / 55s) ne conviennent pas a tout le monde.
+let LEVEL_THRESHOLDS_SECONDS = { expertMax: 45, intermediaireMax: 55 };
+// Rendus configurables le 29/07 (Parametres > Seuils de niveau, voir settings.js
+// savePrefs()/loadPrefs()) -- reste en 'let' avec ces valeurs par defaut generiques
+// tant qu'aucun reglage tenant n'est charge. refreshLevelThresholds() est appelee
+// au debut de la section Performance dans loadPremiumStatsBlocks(), avant le calcul
+// des niveaux, pour que la classification utilise les seuils du tenant.
+async function refreshLevelThresholds() {
+try {
+const { data: cfg } = await db.from('app_settings').select('value').eq('key', 'global').maybeSingle();
+if (cfg && cfg.value) {
+LEVEL_THRESHOLDS_SECONDS = {
+expertMax: Number(cfg.value.level_expert_max_seconds) || 45,
+intermediaireMax: Number(cfg.value.level_intermediaire_max_seconds) || 55,
+};
+}
+} catch (e) {
+// pas bloquant : on garde les valeurs par defaut
+}
+}
 function levelForBestLap(bestLapSeconds) {
   if (bestLapSeconds == null) return null;
   if (bestLapSeconds <= LEVEL_THRESHOLDS_SECONDS.expertMax) return 'expert';
@@ -714,6 +731,7 @@ async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, r
 
   lastFidelisation = { tauxRetour, visites30: visites.j30, visites90: visites.j90, visites365: visites.j365, segmentation, top10: top10Engagement };
   renderFidelisationBlock(lastFidelisation);
+await refreshLevelThresholds();
 
   // ---------------------------------------------------------------------------------------
   // 2) PERFORMANCE SPORTIVE AVANCEE
@@ -904,11 +922,11 @@ function renderPerformanceBlock(p) {
   const kpiGrid = document.getElementById('stats-perf-kpi-grid');
   if (kpiGrid) {
     kpiGrid.innerHTML =
-      kpiBox('Pilotes en progression', pct(p.pctProgression), null, '📈') +
+      kpiBox('Pilotes en progression', pct(p.pctProgression), null, '📈', 'Part des pilotes ayant au moins 2 sessions chronometrees sur la periode ET dont le meilleur tour s\'est ameliore entre la 1ere et la derniere. Les pilotes avec une seule session ne comptent pas (rien a comparer).') +
       // p.progressionMoyenne est toujours positif (voir loadPremiumStatsBlocks : ne cumule que
       // les deltas > 0) — c'est un gain de temps, affiche avec un signe moins pour bien
       // marquer "plus rapide", jamais un delta negatif/regression.
-      kpiBox('Progression moyenne', p.progressionMoyenne != null ? '−' + p.progressionMoyenne.toFixed(2) + ' s' : '--', p.progressionMoyenne != null ? 'Plus rapide entre 1re et derniere session' : 'Entre 1re et derniere session', '⏱️');
+      kpiBox('Progression moyenne', p.progressionMoyenne != null ? '−' + p.progressionMoyenne.toFixed(2) + ' s' : '--', p.progressionMoyenne != null ? 'Plus rapide entre 1re et derniere session' : 'Entre 1re et derniere session', '⏱️', 'Gain de temps moyen entre le meilleur tour de la 1ere session et celui de la derniere, pour les pilotes en progression uniquement -- ne tient pas compte des sessions intermediaires.');
   }
   const nivEl = document.getElementById('stats-perf-niveaux');
   if (nivEl) {
@@ -917,7 +935,7 @@ function renderPerformanceBlock(p) {
       ? '<table class="rank-tbl"><thead><tr><th>Niveau</th><th>Pilotes</th><th>Part</th></tr></thead><tbody>' +
         [['Debutant', p.niveaux.debutant], ['Intermediaire', p.niveaux.intermediaire], ['Expert', p.niveaux.expert]]
           .map((pair) => '<tr><td>' + pair[0] + '</td><td>' + pair[1] + '</td><td>' + Math.round((pair[1] / total) * 100) + '%</td></tr>').join('') +
-        '</tbody></table>'
+        '</tbody></table>' + '<div style="font-size:11px;color:var(--mut);margin-top:8px">Niveau base sur le meilleur tour du pilote sur la periode : Expert &le; ' + LEVEL_THRESHOLDS_SECONDS.expertMax + 's, Intermediaire &le; ' + LEVEL_THRESHOLDS_SECONDS.intermediaireMax + 's, Debutant au-dela. Seuils ajustables dans Parametres.</div>'
       : '<div class="empty">Aucun temps enregistre.</div>';
   }
   const hofEl = document.getElementById('stats-perf-hof');
