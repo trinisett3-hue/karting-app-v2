@@ -126,6 +126,12 @@ const SUIT_TONE = [
 // tailles tout en restant parfaitement opaque au centre (le « 08 » disparaît).
 const PLATE = { x: 44, y: 111.5, w: 27, h: 21 };
 
+/* Échappement XML : le numéro de kart et le titre viennent de la base,
+   ils ne doivent jamais pouvoir injecter de balise dans le SVG. */
+const esc = (v) => String(v == null ? '' : v)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
 function platePiece(num, hide, idx, sfx) {
   if (!num && !hide) return '';
   const s = num ? String(num).slice(0, 3) : '';
@@ -134,7 +140,7 @@ function platePiece(num, hide, idx, sfx) {
   const text = s
     ? `<text x="${cx}" y="128.5" text-anchor="middle" font-family="Arial,Helvetica,sans-serif" ` +
       `font-weight="900" font-style="italic" font-size="${fs}" fill="#fff" ` +
-      `letter-spacing="-0.5">${s}</text>`
+      `letter-spacing="-0.5">${esc(s)}</text>`
     : '';
   return `<defs><filter id="pl${sfx}" x="-40%" y="-40%" width="180%" height="180%">` +
     `<feGaussianBlur stdDeviation="1.15"/></filter></defs>` +
@@ -158,13 +164,13 @@ export function pilotAvatarSVG(seed, kartNumber, opts = {}) {
     : schemeForPilot(seed);
   const num = (kartNumber == null || kartNumber === '') ? '' : String(kartNumber);
   const dims = opts.size ? `width="${opts.size}" height="${opts.size}"` : 'width="100%" height="100%"';
-  const title = opts.title ? `<title>${opts.title}</title>` : '';
+  const title = opts.title ? `<title>${esc(opts.title)}</title>` : '';
   const sfx = 'p' + (++__uid).toString(36);
   return template(idx)
     .split('__SFX__').join(sfx)
-    .replace('{{DIMS}}', dims)
-    .replace('{{TITLE}}', title)
-    .split('{{NUM}}').join(num)
+    .replace('{{DIMS}}', () => dims)
+    .replace('{{TITLE}}', () => title)
+    .split('{{NUM}}').join(esc(num))
     .replace('{{PLATE}}', platePiece(num, !!opts.hidePlate, idx, sfx));
 }
 
