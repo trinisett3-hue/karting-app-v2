@@ -7,7 +7,7 @@
 // RPC SECURITY DEFINER qui fait elle-même l'agrégation par tenant_users côté serveur (voir
 // la migration) — le front ne fait que consommer ce qu'elle renvoie.
 import { db } from '../lib/supabase.js';
-import { formatDate, showMsg } from './ui.js';
+import { formatDate, showMsg, confirmModal } from './ui.js';
 import { NATS } from './countries.js';
 
 let registryCache = [];
@@ -207,9 +207,11 @@ export function filterRegistry() {
 }
 
 export async function confirmDeletePilot(pilotId, pseudo) {
-  const ok = window.confirm(
-    'Supprimer definitivement ' + pseudo + ' et tout son historique de courses (y compris sur les autres circuits) ? Cette action est irreversible.'
-  );
+  const ok = await confirmModal({
+    title: 'Supprimer ce pilote ?',
+    message: pseudo + ' et tout son historique de courses (y compris sur les autres circuits) seront supprimés définitivement.',
+    confirmLabel: 'Supprimer définitivement',
+  });
   if (!ok) return;
   const { error } = await db.rpc('delete_pilot_completely', { _pilot_id: pilotId });
   if (error) {
@@ -225,9 +227,11 @@ export async function confirmDeleteLegacy(registrationId, email) {
     showMsg('msg-registre', 'Inscription introuvable.', 'err');
     return;
   }
-  const ok = window.confirm(
-    'Supprimer definitivement les donnees de ' + email + ' (inscription et historique de courses) ? Cette action est irreversible.'
-  );
+  const ok = await confirmModal({
+    title: 'Supprimer ces données ?',
+    message: 'Inscription et historique de courses de ' + email + ' seront supprimés définitivement.',
+    confirmLabel: 'Supprimer définitivement',
+  });
   if (!ok) return;
   const { error } = await db.rpc('delete_legacy_registration', { _registration_id: registrationId });
   if (error) {
