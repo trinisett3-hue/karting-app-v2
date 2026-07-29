@@ -3,8 +3,29 @@
 // résolution de session par public_results_token, classement (temps total), podium,
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
-import { kartAvatarSVG, kartAvatarDataURL } from './kart-avatar.js';
-import { pilotAvatarSVG, pilotAvatarDataURL } from './pilot-avatar.js';
+// Chargement paresseux (30/07, audit du 28/07 section 1.2) : kart-avatar.js
+// (486 Ko) et pilot-avatar.js (161 Ko) ne sont plus importes statiquement ici --
+// un tenant donne n'utilise jamais qu'un seul des deux (avatar_mode), l'autre
+// etait du poids mort telecharge par CHAQUE visiteur qui scanne un QR, avant
+// meme qu'une seule donnee de course n'apparaisse. ensureAvatarModuleLoaded()
+// importe dynamiquement le seul module necessaire une fois PDF_AVATAR_MODE
+// connu (voir load(), juste apres await loadSiteConfig() -- meme ordre garanti
+// que pour le theme/logo, cf. commentaire "AVANT tout rendu" plus bas).
+let kartAvatarSVG, kartAvatarDataURL, pilotAvatarSVG, pilotAvatarDataURL;
+let _avatarModuleLoaded = false;
+async function ensureAvatarModuleLoaded() {
+  if (_avatarModuleLoaded) return;
+  if (PDF_AVATAR_MODE === 'pilot_kart' || PDF_AVATAR_MODE === 'pilot') {
+    const m = await import('./pilot-avatar.js');
+    pilotAvatarSVG = m.pilotAvatarSVG;
+    pilotAvatarDataURL = m.pilotAvatarDataURL;
+  } else {
+    const m = await import('./kart-avatar.js');
+    kartAvatarSVG = m.kartAvatarSVG;
+    kartAvatarDataURL = m.kartAvatarDataURL;
+  }
+  _avatarModuleLoaded = true;
+}
 import { loadSiteConfig } from './site-config.js';
 import {
   signatureAvatarsActive,
@@ -51,18 +72,18 @@ function genAvatarDataURL(kart, opts) {
     const sig = signatureAvatarDataURLSync(kart, opts);
     if (sig) return sig;
   }
-  if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarDataURL(kart, kart);
-  if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarDataURL(kart, null, { hidePlate: true });
+  if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarDataURL ? pilotAvatarDataURL(kart, kart) : null;
+  if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarDataURL ? pilotAvatarDataURL(kart, null, { hidePlate: true }) : null;
   // avatar_scheme (session_registrations) prioritaire : opts.scheme, déjà
   // supporté par kartAvatarSVG/kartAvatarDataURL, doit être transmis ici —
   // avant ce correctif il était silencieusement perdu (opts non transmis).
-  return kartAvatarDataURL(kart, opts);
+  return kartAvatarDataURL ? kartAvatarDataURL(kart, opts) : null;
 }
 // Même chose en SVG inline (utilisé pour les placeholders sans photo sur la page web).
 function genAvatarSVG(kart, opts) {
-  if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarSVG(kart, kart, opts);
-  if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarSVG(kart, null, { ...opts, hidePlate: true });
-  return kartAvatarSVG(kart, opts);
+  if (PDF_AVATAR_MODE === 'pilot_kart') return pilotAvatarSVG ? pilotAvatarSVG(kart, kart, opts) : '';
+  if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarSVG ? pilotAvatarSVG(kart, null, { ...opts, hidePlate: true }) : '';
+  return kartAvatarSVG ? kartAvatarSVG(kart, opts) : '';
 }
 
 /* ------------------------------------------------------------------
@@ -323,6 +344,10 @@ resultsToken = token;
 // AVANT tout rendu : sinon les avatars se dessinent en repli classique tant que
 // la config n'est pas revenue (course avec initTheme(), memes promesse memoisee).
 await loadSiteConfig();
+// PDF_AVATAR_MODE est deja connu a ce stade (initTheme() est appele en premier
+// par results-app.js et attache son .then() a la MEME promesse memoisee avant
+// que ce await ne s'y attache a son tour -- meme garantie d'ordre que ci-dessus).
+await ensureAvatarModuleLoaded();
 
 // Lecture publique via RPC token-gated : les tables sessions/laps/session_registrations
 // ne sont plus lisibles par la cle anon (fuite RGPD : emails et noms de tous les tenants).
