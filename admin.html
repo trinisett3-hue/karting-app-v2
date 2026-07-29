@@ -472,15 +472,6 @@ updateThemeToggleUI();
 <div class="field"><label>Notes internes <span style="font-weight:500;text-transform:none;color:var(--mut)">(jamais affichees cote pilote)</span></label>
 <textarea id="arch-notes-input" rows="2"></textarea>
 </div>
-<!-- 🆕 Premium : alimente le KPI "Taux d'incident" / "Temps d'interruption piste" (bloc Experience & qualite de l'onglet Statistiques) — saisie manuelle a la cloture, faute d'un capteur automatique. -->
-<div class="g2" style="margin-bottom:0">
-<div class="field" style="margin-bottom:0"><label>Incidents (nb)</label>
-<input type="number" id="arch-incidents-input" min="0" step="1" value="0"/>
-</div>
-<div class="field" style="margin-bottom:0"><label>Minutes d'arret piste</label>
-<input type="number" id="arch-interruption-input" min="0" step="1" value="0"/>
-</div>
-</div>
 <div class="msg" id="msg-arch-meta"></div>
 </div>
 
@@ -549,7 +540,7 @@ updateThemeToggleUI();
 <div class="subtab-btn" data-stab-val="hof" onclick="switchStatsSubtab('hof')">🏆 Hall of Fame</div>
 <div class="subtab-btn" data-stab-val="fid" onclick="switchStatsSubtab('fid')">🔁 Fidelisation</div>
 <div class="subtab-btn" data-stab-val="perf" onclick="switchStatsSubtab('perf')">📈 Performance sportive</div>
-<div class="subtab-btn" data-stab-val="qualite" onclick="switchStatsSubtab('qualite')">⭐ Qualite & usage</div>
+<div class="subtab-btn" data-stab-val="qualite" onclick="switchStatsSubtab('qualite')">📶 Usage avance</div>
 </div>
 
 <!-- 1) VUE D'ENSEMBLE — KPIs globaux, exploitation piste, frequentation (Basique) -->
@@ -617,11 +608,10 @@ updateThemeToggleUI();
 </div>
 </div>
 
-<!-- 5) EXPERIENCE & QUALITE + USAGE AVANCE & SAISONNALITE (Premium) -->
+<!-- 5) USAGE AVANCE & SAISONNALITE (Premium) -- le bloc Experience & qualite (CSAT,
+     taux d'incident, interruption piste) a ete retire le 29/07 : jamais alimente en
+     conditions reelles (voir Nettoyage-audit-restant-2026-07-29.md). -->
 <div class="subtab-panel" id="stats-subtab-qualite">
-<div class="ctitle" style="margin-bottom:10px">Experience & qualite</div>
-<div class="g4" id="stats-qualite-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
-
 <div class="ctitle" style="margin-bottom:10px">Utilisation avancee & saisonnalite</div>
 <div class="g4" id="stats-usage-kpi-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
 <div class="card" style="margin-top:8px">
