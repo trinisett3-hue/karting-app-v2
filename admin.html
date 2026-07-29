@@ -676,6 +676,11 @@ updateThemeToggleUI();
 </div>
 <div class="g2" style="gap:10px">
 <div class="field" id="pref-laps-wrap"><label>Nombre de tours par defaut</label><input type="number" id="pref-laps" min="1" max="200" oninput="markPrefsDirty()"/></div>
+<div class="g2" style="margin-top:8px">
+<div class="field" style="margin-bottom:0"><label>Seuil "Expert" (meilleur tour, secondes)</label><input type="number" id="pref-level-expert" min="1" step="0.1" oninput="markPrefsDirty()"/></div>
+<div class="field" style="margin-bottom:0"><label>Seuil "Intermediaire" (meilleur tour, secondes)</label><input type="number" id="pref-level-intermediaire" min="1" step="0.1" oninput="markPrefsDirty()"/></div>
+</div>
+<div style="font-size:11px;color:var(--mut);margin-top:-6px;margin-bottom:8px">Utilises dans Statistiques &gt; Performance sportive pour classer les pilotes (meilleur tour &le; seuil Expert = Expert, &le; seuil Intermediaire = Intermediaire, au-dela = Debutant). Valeurs par defaut generiques (45s / 55s) -- ajuste-les selon les temps reels de ton circuit.</div>
 <div class="field"><label>Unite de temps</label>
 <select id="pref-time-unit" onchange="markPrefsDirty()">
 <option value="seconds">Secondes</option>
