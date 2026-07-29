@@ -6,7 +6,7 @@
 // (l'onglet "Session active"), les séparer artificiellement aurait cassé ce couplage.
 import { db } from '../lib/supabase.js';
 import { state } from '../state.js';
-import { showMsg, randomCode4, qrSrc, avatarColor, avatarInitial } from './ui.js';
+import { showMsg, randomCode4, qrSrc, avatarColor, avatarInitial, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 
 // --- Liste des sessions actives ---------------------------------------------------
@@ -172,23 +172,18 @@ export async function refreshOccupation() {
 
 export async function deleteActiveSession({ afterDelete } = {}) {
   if (!state.activeDetailSession) return;
-  if (
-    !confirm(
-      'Supprimer definitivement la session "' + state.activeDetailSession.title + '" et toutes ses donnees (inscrits, chronos) ? Cette action est irreversible.'
-    )
-  )
-    return;
+  const ok = await confirmModal({
+    title: 'Supprimer cette session ?',
+    message: '« ' + state.activeDetailSession.title + ' »\nInscrits et chronos seront supprimés définitivement.',
+    confirmLabel: 'Supprimer définitivement',
+  });
+  if (!ok) return;
   const id = state.activeDetailSession.id;
-  try {
-    await db.from('laps').delete().eq('session_id', id);
-    await db.from('session_registrations').delete().eq('session_id', id);
-    const { error } = await db.from('sessions').delete().eq('id', id);
-    if (error) {
-      showMsg('msg-ins', 'Erreur: ' + error.message, 'err');
-      return;
-    }
-  } catch (e) {
-    showMsg('msg-ins', 'Erreur: ' + e.message, 'err');
+  // Suppression atomique (audit 28/07, section 4.1) : une seule transaction SQL
+  // (delete_session_cascade) au lieu de 3 delete séquentiels sans rollback.
+  const { error } = await db.rpc('delete_session_cascade', { _session_id: id });
+  if (error) {
+    showMsg('msg-ins', 'Erreur: ' + error.message, 'err');
     return;
   }
   state.activeDetailSession = null;
@@ -316,9 +311,19 @@ export async function addUnknownParticipant() {
 }
 
 export async function deleteReg(rid, name, { onDeleted } = {}) {
-  if (!confirm('Supprimer ' + name + ' de la session ?')) return;
-  await db.from('laps').delete().eq('registration_id', rid);
-  await db.from('session_registrations').delete().eq('id', rid);
+  const ok = await confirmModal({
+    title: 'Retirer ce pilote ?',
+    message: name + ' sera retiré de la session, avec tous ses tours enregistrés.',
+    confirmLabel: 'Retirer',
+  });
+  if (!ok) return;
+  // Suppression atomique (audit 28/07, section 4.1) : delete_registration_cascade
+  // fait laps + session_registrations dans une seule transaction SQL.
+  const { error } = await db.rpc('delete_registration_cascade', { _registration_id: rid });
+  if (error) {
+    showMsg('msg-ins', 'Erreur: ' + error.message, 'err');
+    return;
+  }
   await loadInscrits();
   await refreshOccupation();
   renderKartGrid();
@@ -467,7 +472,12 @@ export async function reassignKart(kartNum) {
   if (!state.selectedPilotId) return;
   const occ = state.inscritsData.find((r) => Number(r.kart_number) === kartNum);
   if (occ && occ.id === state.selectedPilotId) return;
-  const ok = confirm('Le kart ' + kartNum + " est deja attribue a " + (occ ? occ.display_name : "quelqu'un") + '. Le reattribuer ?');
+  const ok = await confirmModal({
+    title: 'Kart déjà attribué',
+    message: 'Le kart ' + kartNum + ' est déjà attribué à ' + (occ ? occ.display_name : "quelqu'un") + '.',
+    confirmLabel: 'Réattribuer',
+    danger: false,
+  });
   if (!ok) return;
   await assignKartToPilot(kartNum);
 }
