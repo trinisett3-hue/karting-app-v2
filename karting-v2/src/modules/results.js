@@ -9,7 +9,7 @@
 // Les deux fonctions sont maintenant réellement implémentées ci-dessous.
 import { db } from '../lib/supabase.js';
 import { state } from '../state.js';
-import { showMsg, qrSrc, formatTime, formatDate, randomCode4 } from './ui.js';
+import { showMsg, qrSrc, formatTime, formatDate, randomCode4, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid } from './sessions.js';
 
@@ -186,17 +186,35 @@ export async function showPilotHistory(regId, name) {
       contentEl.innerHTML = '<div class="empty">Aucun historique trouve.</div>';
       return;
     }
+    // Correction N+1 (audit 28/07) : une seule requête laps + une seule requête
+    // session_registrations pour TOUTES les sessions concernées, au lieu d'une
+    // requête laps et d'un loadRanking() (2 requêtes de plus) par inscription.
+    const sessionIds = Array.from(new Set(allRegs.map((r) => r.sessions && r.sessions.id).filter(Boolean)));
+    const regIds = allRegs.map((r) => r.id);
+    const [lapsRes, allSessionRegsRes] = await Promise.all([
+      db.from('laps').select('registration_id,lap_time_seconds').in('registration_id', regIds.length ? regIds : ['00000000-0000-0000-0000-000000000000']),
+      db.from('session_registrations').select('id,session_id,display_name').in('session_id', sessionIds.length ? sessionIds : ['00000000-0000-0000-0000-000000000000']),
+    ]);
+    const totalsByReg = new Map();
+    (lapsRes.data || []).forEach((l) => {
+      totalsByReg.set(l.registration_id, (totalsByReg.get(l.registration_id) || 0) + Number(l.lap_time_seconds));
+    });
+    const allSessionRegs = allSessionRegsRes.data || [];
+
     const rows = [];
     let podiums = 0;
     for (const reg of allRegs) {
-      const { data: laps } = await db.from('laps').select('lap_time_seconds').eq('registration_id', reg.id);
-      if (!laps || !laps.length) continue;
-      const total = laps.reduce((a, l) => a + Number(l.lap_time_seconds), 0);
+      const total = totalsByReg.get(reg.id);
+      if (total == null) continue;
       // Position réelle dans le classement complet de CETTE session (même logique
       // que loadRanking), pas seulement le temps — c'est ce qui définit un podium.
       let position = null;
       if (reg.sessions && reg.sessions.id) {
-        const sessRanking = await loadRanking({ id: reg.sessions.id });
+        const sessRanking = allSessionRegs
+          .filter((r) => r.session_id === reg.sessions.id)
+          .map((r) => ({ name: r.display_name || '--', t: totalsByReg.get(r.id) }))
+          .filter((r) => r.t != null)
+          .sort((a, b) => a.t - b.t);
         const idx = sessRanking.findIndex((r2) => Math.abs(r2.t - total) < 0.0005 && r2.name.toLowerCase().trim() === (name || '').toLowerCase().trim());
         position = idx >= 0 ? idx + 1 : null;
         if (position != null && position <= 3) podiums++;
@@ -546,10 +564,20 @@ export function togglePres(sess) {
 // --- Archives ------------------------------------------------------------------------------
 
 export async function deleteSession(id) {
-  if (!confirm('Supprimer cette session et toutes ses donnees ?')) return;
-  await db.from('laps').delete().eq('session_id', id);
-  await db.from('session_registrations').delete().eq('session_id', id);
-  await db.from('sessions').delete().eq('id', id);
+  const { data: s } = await db.from('sessions').select('title').eq('id', id).maybeSingle();
+  const { count: regCount } = await db.from('session_registrations').select('id', { count: 'exact', head: true }).eq('session_id', id);
+  const ok = await confirmModal({
+    title: 'Supprimer cette session ?',
+    message: '« ' + (s && s.title ? s.title : 'Session') + ' »\n' + (regCount || 0) + ' inscription(s) et tous les tours seront supprimés définitivement.',
+    confirmLabel: 'Supprimer définitivement',
+  });
+  if (!ok) return;
+  // Suppression atomique (audit 28/07, section 4.1) : les 3 delete sont maintenant
+  // dans une seule transaction SQL (delete_session_cascade), plus d'orphelins possibles.
+  const { error } = await db.rpc('delete_session_cascade', { _session_id: id });
+  if (error) {
+    showMsg('msg-chrono', 'Suppression annulée : ' + error.message, 'err');
+  }
 }
 
 export async function openArchiveDetail(id) {
