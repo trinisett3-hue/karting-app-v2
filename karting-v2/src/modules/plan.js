@@ -15,19 +15,13 @@ let cachedPlanCode = null;
 
 export async function getCurrentPlanCode() {
 if (cachedPlanCode) return cachedPlanCode;
-const { data: tenantRow, error: tenantErr } = await db
-.from('tenants')
-.select('id, organization_id')
-.limit(1)
-.maybeSingle();
-if (tenantErr || !tenantRow?.organization_id) return null;
-const { data: org, error: orgErr } = await db
-.from('organizations')
-.select('plan_code, status')
-.eq('id', tenantRow.organization_id)
-.maybeSingle();
-if (orgErr || !org) return null;
-cachedPlanCode = org.plan_code || 'starter';
+// P0-2 (audit 28/07) : organizations.plan_code n'est qu'un cache d'affichage (voir
+// migration document_plan_source_of_verite du 29/07). La vraie source est
+// private.tenant_plan_code(), exposee via my_plan_code() -- meme logique que celle
+// appliquee cote serveur pour les themes et le plan du circuit.
+const { data, error } = await db.rpc('my_plan_code');
+if (error || !data) return 'starter';
+cachedPlanCode = data;
 return cachedPlanCode;
 }
 
