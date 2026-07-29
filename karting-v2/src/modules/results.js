@@ -13,6 +13,14 @@ import { showMsg, qrSrc, formatTime, formatDate, randomCode4 } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid } from './sessions.js';
 
+// Echappement HTML minimal pour tout texte saisi par le public (display_name, etc.)
+// avant injection dans innerHTML — protection XSS (audit du 28/07, section 4.1).
+function escapeHTML(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 // --- Parsing des temps saisis à l'import --------------------------------------------
 
 // Accepte "44.980" (secondes) ou "1:14.900" (minutes:secondes) — cette fonction
@@ -77,7 +85,7 @@ export function renderRankTable(elId, results) {
   el.innerHTML =
     '<table class="rank-tbl"><thead><tr><th>Pos.</th><th>Kart</th><th>Nom</th><th>Temps</th></tr></thead><tbody>' +
     results
-      .map((r, i) => '<tr><td class="' + (pc[i] || '') + '">' + (i + 1) + '</td><td>' + (r.kart || '--') + '</td><td>' + r.name + '</td><td>' + formatTime(r.t) + '</td></tr>')
+      .map((r, i) => '<tr><td class="' + (pc[i] || '') + '">' + (i + 1) + '</td><td>' + (r.kart || '--') + '</td><td>' + escapeHTML(r.name) + '</td><td>' + formatTime(r.t) + '</td></tr>')
       .join('') +
     '</tbody></table>';
 }
@@ -99,7 +107,7 @@ export function renderSessionStats(results, cardId, gridId) {
   const bestDriver = results.find((r) => r.t === best);
   const gapLeader = results.length > 1 ? results[1].t - results[0].t : 0;
   grid.innerHTML =
-    statBox('Meilleur temps', formatTime(best), bestDriver ? bestDriver.name : '') +
+    statBox('Meilleur temps', formatTime(best), bestDriver ? escapeHTML(bestDriver.name) : '') +
     statBox('Temps moyen', formatTime(avg), results.length + ' pilotes') +
     statBox('Ecart 1er/2eme', results.length > 1 ? formatTime(gapLeader) : '--', '');
 }
@@ -570,7 +578,7 @@ export async function openArchiveDetail(id) {
   } else {
     ri.innerHTML =
       '<table class="tbl"><thead><tr><th>Kart</th><th>Nom</th><th>Nat.</th></tr></thead><tbody>' +
-      regs.map((r) => '<tr><td>' + (r.kart_number || '--') + '</td><td>' + (r.display_name || '--') + '</td><td>' + (r.nationality || '--') + '</td></tr>').join('') +
+      regs.map((r) => '<tr><td>' + (r.kart_number || '--') + '</td><td>' + escapeHTML(r.display_name || '--') + '</td><td>' + escapeHTML(r.nationality || '--') + '</td></tr>').join('') +
       '</tbody></table>';
   }
   if (s.public_results_token) {
