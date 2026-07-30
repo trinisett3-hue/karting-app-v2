@@ -187,16 +187,20 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .kart-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 8px;border-radius:7px;font-weight:800;font-size:13px;background:var(--surf2);border:1px solid var(--bord)}
 .kart-badge.assigned{background:rgba(255,59,48,.15);color:var(--acc2);border-color:rgba(255,59,48,.35)}
 .kart-badge.unassigned{color:var(--mut);font-weight:600;font-size:11px}
-/* Paramètres : refonte en 8 sous-onglets a isolation totale (aucun composant partage
-   entre onglets — voir settings.js > switchParamsSubtab()). Chaque sous-onglet occupe
-   toute la largeur ; seul l'onglet Podium garde une mise en page a deux colonnes pour
-   son apercu en direct, qui n'existe donc plus qu'a cet endroit. */
+/* Paramètres : 5 sous-onglets (refonte 30/07 : fusion "Podium" dans "Apparence" > volet
+   "Résultats" — voir settings.js > switchParamsSubtab()). Chaque sous-onglet occupe
+   toute la largeur. */
 .params-subtab-bar{display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;white-space:nowrap;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 .params-subtab-bar::-webkit-scrollbar{height:6px}
 .params-subtab-bar .subtab-btn{flex:0 0 auto}
 .params-tabpanel{display:none}
 .params-tabpanel.active{display:block}
 .params-col-left .card{max-width:none}
+/* Grille des 3 apercus reels du volet Apparence > Résultats : podium + classement cote a
+   cote, fiche pilote en pleine largeur en dessous — puis empilement vertical responsive. */
+.appearance-preview-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:860px){.appearance-preview-grid{grid-template-columns:1fr}}
+.appearance-preview-cell{max-width:none}
 /* Mise en page a deux colonnes, reservee au sous-onglet Podium (apercu en direct). */
 .params-layout{display:flex;gap:20px;align-items:flex-start}
 .params-col-left{flex:0 0 clamp(360px,42vw,540px);min-width:0}
@@ -715,7 +719,6 @@ updateThemeToggleUI();
 <div class="subtab-btn selected" data-ptab-val="general" onclick="switchParamsSubtab('general')">⚙️ Général</div>
 <div class="subtab-btn" data-ptab-val="sessions" onclick="switchParamsSubtab('sessions')">🏁 Sessions</div>
 <div class="subtab-btn" data-ptab-val="apparence" onclick="switchParamsSubtab('apparence')">🎨 Apparence</div>
-<div class="subtab-btn" data-ptab-val="podium" onclick="switchParamsSubtab('podium')">🏆 Podium</div>
 <div class="subtab-btn" data-ptab-val="pdf" onclick="switchParamsSubtab('pdf')">📄 PDF &amp; export</div>
 <div class="subtab-btn" data-ptab-val="compte" onclick="switchParamsSubtab('compte')">👤 Compte</div>
 </div>
@@ -942,51 +945,57 @@ Le pack <strong>Signature</strong> est reserve au plan <strong>Premium</strong>.
 </label>
 <div id="outline-note" style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">N'a d'effet que lorsqu'un fond est affiche.</div>
 </div>
-<div id="kart-avatars-intro" style="font-size:11px;color:var(--mut);line-height:1.5;margin:14px 0 8px"></div>
+</div>
+
+<!-- Galerie visuelle des avatars de la flotte : commune aux deux packs (Classic ET
+     Signature) — ajout 30/07 du visuel Classic, qui n'existait auparavant que pour
+     Signature (nichee dans #avatar-signature-options). Meme composant pour les deux,
+     renderKartAvatarGallery() adapte deja son texte au pack courant. -->
+<div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--bord)">
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Aperçu visuel de la flotte</div>
+<div id="kart-avatars-intro" style="font-size:11px;color:var(--mut);line-height:1.5;margin-bottom:8px"></div>
 <div id="kart-avatars-gallery" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(74px,1fr));gap:10px"></div>
 </div>
 </div>
+
+<!-- 4) RESULTATS — volet fusionne (ex-sous-onglet "Podium", 30/07) : QR, accroche, cartes,
+     ET les 3 apercus reels (podium / classement / fiche pilote). Ne casse pas les ids
+     existants, simple deplacement dans Apparence. Voir refreshAppearancePreviews(). -->
+<div class="card" id="apparence-resultats-panel">
+<div class="ctitle">Résultats — configuration visuelle des rendus publics</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:14px">
+Centralise tout ce qui touche au rendu du podium, du classement final, de la fiche pilote/temps
+et des cartes partageables. Ces réglages suivent le thème et les avatars choisis ci-dessus.
 </div>
 
-<!-- 4) PODIUM — QR, accroche, cartes, ET apercu en direct : rien de tout cela n'apparait
-     ailleurs dans le panel (isolation totale demandee). -->
-<div class="params-tabpanel" id="params-subtab-podium" data-tab="podium">
-<div class="params-layout">
-<div class="params-col-left">
-
-<div class="card">
-<div class="ctitle">Lien du QR code</div>
-<div class="field">
+<div class="g2" style="gap:14px;align-items:start">
+<div class="field" style="margin:0">
 <label>URL encodee dans le QR de chaque carte</label>
 <input type="url" id="pref-card-url" maxlength="179" placeholder="https://mon-karting.fr/resultats" oninput="markPrefsDirty();renderCardQR()"/>
 <div style="font-size:11px;color:var(--mut);margin-top:4px">179 caracteres maximum. Le QR est genere hors ligne et reste scannable a l'impression comme a l'ecran.</div>
-</div>
 <div style="display:flex;align-items:center;gap:14px;margin-top:10px">
 <div id="card-qr-preview" style="width:104px;height:104px;background:#fff;border-radius:8px;padding:7px;flex:none"></div>
 <div id="card-qr-note" style="font-size:11px;color:var(--mut);line-height:1.5"></div>
 </div>
 </div>
-
-<div class="card">
-<div class="ctitle">Accroche affichee sur les cartes</div>
-<div class="field">
-<label>Texte libre, sous le nom du circuit</label>
+<div class="field" style="margin:0">
+<label>Accroche affichee sur les cartes (sous le nom du circuit)</label>
 <input type="text" id="pref-card-tagline" maxlength="46" placeholder="Reservez votre prochaine session en ligne" oninput="markPrefsDirty();updateTaglineCount()"/>
 <div style="font-size:11px;color:var(--mut);margin-top:4px"><span id="tagline-count">0</span>/46 caracteres. Au-dela, la ligne deborderait sur le QR code.</div>
 </div>
 </div>
 
-<div class="card">
-<div class="ctitle">Cartes de position &mdash; 5 maximum</div>
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--bord)">
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Cartes de position &mdash; 5 maximum</div>
 <div style="font-size:11px;color:var(--mut);line-height:1.5;margin-bottom:12px">
 Chaque pilote recoit une carte tiree au hasard parmi celles cochees, a la fin de sa session.
-Les apercus suivent le theme choisi dans l'onglet Apparence.
+Les apercus suivent le theme choisi ci-dessus.
 </div>
 <div id="cards-grid-position" class="cards-grid"></div>
 </div>
 
-<div class="card">
-<div class="ctitle">Cartes record &mdash; une seule par categorie</div>
+<div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--bord)">
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Cartes record &mdash; une seule par categorie</div>
 <div style="font-size:11px;color:var(--mut);line-height:1.5;margin-bottom:12px">
 Envoi automatique des qu'un record tombe, jamais manuel. Le pilote recoit alors sa carte de position
 <em>et</em> la carte record correspondante ; s'il bat plusieurs records, il les recoit toutes.
@@ -994,11 +1003,26 @@ Envoi automatique des qu'un record tombe, jamais manuel. Le pilote recoit alors 
 <div id="cards-record-scopes"></div>
 </div>
 
+<div style="margin-top:22px;padding-top:16px;border-top:1px solid var(--bord)">
+<div style="font-size:13px;font-weight:800;color:var(--txt);margin-bottom:2px">Aperçus en direct</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">
+Rendus réels, générés avec les mêmes fonctions/données que la page publique — pas de maquette statique.
+Ils se mettent à jour immédiatement à chaque changement de thème ou d'avatar ci-dessus.
+Basés sur une session de démonstration (ou la dernière session archivée si disponible).
 </div>
-<div class="params-col-right">
-<div class="card">
-<div class="ctitle">Aperçu en direct — page résultats (podium)</div>
+<div class="appearance-preview-grid">
+<div class="card appearance-preview-cell">
+<div class="ctitle" style="font-size:12px">Aperçu Podium</div>
 <div id="results-live-preview"></div>
+</div>
+<div class="card appearance-preview-cell">
+<div class="ctitle" style="font-size:12px">Aperçu Classement final</div>
+<div id="results-classement-preview"></div>
+</div>
+</div>
+<div class="card appearance-preview-cell" style="margin-top:12px">
+<div class="ctitle" style="font-size:12px">Aperçu Fiche pilote / temps</div>
+<div id="results-fiche-preview"></div>
 </div>
 </div>
 </div>

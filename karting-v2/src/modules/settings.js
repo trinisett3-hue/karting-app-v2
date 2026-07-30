@@ -475,7 +475,13 @@ showMsg('msg-trackmap', 'Plan retiré. Clique Enregistrer pour confirmer.', 'ok'
 // "Flotte" sont retires de cette liste et leur contenu HTML deplace dans le bloc
 // "sessions" (voir admin.html) — ids et comportement JS inchanges, seul le
 // regroupement visuel change.
-const PARAMS_SUBTABS = ['general', 'sessions', 'apparence', 'podium', 'pdf', 'compte'];
+//
+// Refonte 30/07 (client, meme jour, 2e passe) : 6 -> 5 sous-onglets. "Podium" n'existe
+// plus en tant qu'onglet autonome : son contenu (QR, accroche, cartes, apercu en direct)
+// est desormais le volet "Résultats" a l'interieur de "apparence" (voir admin.html —
+// #apparence-resultats-panel). Tous les ids sont conserves a l'identique, seul le
+// regroupement visuel change. Voir refreshAppearancePreviews().
+const PARAMS_SUBTABS = ['general', 'sessions', 'apparence', 'pdf', 'compte'];
 export function switchParamsSubtab(tab) {
   if (!PARAMS_SUBTABS.includes(tab)) return;
   PARAMS_SUBTABS.forEach((key) => {
@@ -485,8 +491,7 @@ export function switchParamsSubtab(tab) {
   document.querySelectorAll('.subtab-btn[data-ptab-val]').forEach((b) => {
     b.classList.toggle('selected', b.dataset.ptabVal === tab);
   });
-  if (tab === 'apparence') renderKartAvatarGallery();
-  if (tab === 'podium') { renderCardsTab(); renderResultsPreview(); }
+  if (tab === 'apparence') { renderKartAvatarGallery(); renderCardsTab(); refreshAppearancePreviews(undefined, true); }
   if (tab === 'pdf') refreshPdfPreview();
   if (tab === 'compte') renderAccountTab();
 }
@@ -547,9 +552,9 @@ if (sel) sel.value = val;
 document.querySelectorAll('.theme-option-row').forEach((r) => {
 r.style.borderColor = r.dataset.themeVal === val ? 'var(--acc)' : 'var(--bord)';
 });
-renderResultsPreview(val);
 state.prefs.results_theme = val;   // les vignettes de cartes suivent le theme choisi
 renderCardsTab();
+refreshAppearancePreviews(val);
 markPrefsDirty();
 }
 
@@ -595,6 +600,79 @@ markPrefsDirty();
 renderSignatureControls();
 }
 
+// Cache de la session reelle utilisee par les 3 apercus Apparence (podium/classement/
+// fiche). Rempli une seule fois par ouverture du sous-onglet (voir switchParamsSubtab),
+// puis reutilise par tous les recalculs "visuels seuls" (changement de theme/avatar) qui
+// n'ont pas besoin de retourner interroger Supabase — seul un nouveau requetage explicite
+// (reouverture du sous-onglet) rafraichit la donnee. Meme table de sessions archivees que
+// refreshPdfPreview() (voir fetchPdfPreviewSessions/loadRanking plus bas), donc meme
+// perimetre RLS/tenant : aucune requete supplementaire n'est inventee ici.
+let appearancePreviewRanking = null;   // tableau normalise (reel ou DEMO_RANKING), null = pas encore charge
+let appearancePreviewFetchInFlight = null;   // Promise en cours, pour eviter les requetes concurrentes
+
+// Transforme le resultat brut de loadRanking() (name/kart/t) en la forme attendue par les
+// 3 apercus (pos/kart/name/t/gap/best/s1/s2/s3). loadRanking() ne calcule ni meilleur tour
+// ni secteurs (le total par pilote seulement) : ces deux champs retombent donc sur le temps
+// total, ce qui reste un rendu "reel" fidele au classement plutot qu'une fabrication --
+// seuls s1/s2/s3 (non disponibles agreges dans loadRanking) affichent '--'.
+function normalizeRealRanking(rows) {
+if (!rows || !rows.length) return null;
+const sorted = rows.slice().sort((a, b) => a.t - b.t);
+const leader = sorted[0].t;
+return sorted.map((r, i) => ({
+pos: i + 1,
+kart: r.kart,
+name: r.name,
+t: formatTime(r.t),
+gap: i === 0 ? '—' : '+' + formatTime(r.t - leader),
+best: formatTime(r.t),
+s1: '--', s2: '--', s3: '--',
+}));
+}
+
+// Recupere la session reelle la plus recente (meme logique que refreshPdfPreview) et la
+// convertit au format attendu par les apercus. Retombe sur DEMO_RANKING si aucune session
+// archivee n'existe encore ou si la requete echoue -- jamais d'ecran vide.
+async function fetchAppearancePreviewRanking() {
+try {
+const sessions = await fetchPdfPreviewSessions();
+if (sessions.length) {
+const rows = await loadRanking(sessions[0]);
+const normalized = normalizeRealRanking(rows);
+if (normalized) return normalized;
+}
+} catch (e) {
+// Pas de session exploitable / erreur reseau : on retombe silencieusement sur la
+// demo plutot que de casser l'onglet Apparence.
+}
+return DEMO_RANKING;
+}
+
+// Recalcule les 3 apercus reels du volet Apparence > Résultats (podium, classement final,
+// fiche pilote/temps) a partir du theme et des reglages avatar courants du formulaire.
+// Fonction centrale appelee depuis tout changement de theme ou d'avatar (voir
+// selectResultsTheme/selectAvatarPack/selectAvatarMode/renderSignatureControls), et a
+// l'ouverture du sous-onglet Apparence (switchParamsSubtab) pour un rendu immediat sans
+// attendre une premiere modification.
+//
+// `refetch` (reserve a l'ouverture du sous-onglet) force un nouveau requetage de la
+// derniere session archivee ; tous les autres appels (theme/avatar) reutilisent le cache
+// en memoire pour ne pas re-interroger Supabase a chaque clic sur une pastille de theme.
+export async function refreshAppearancePreviews(theme, refetch) {
+if (refetch || !appearancePreviewRanking) {
+if (!appearancePreviewFetchInFlight) {
+appearancePreviewFetchInFlight = fetchAppearancePreviewRanking().finally(() => {
+appearancePreviewFetchInFlight = null;
+});
+}
+appearancePreviewRanking = await appearancePreviewFetchInFlight;
+}
+const ranking = appearancePreviewRanking || DEMO_RANKING;
+renderResultsPreview(theme, ranking);
+renderClassementPreview(theme, ranking);
+renderFichePreview(theme, ranking);
+}
+
 // Applique l'etat du formulaire a l'ecran : surlignage des pastilles de pack,
 // affichage des deux blocs d'options, encart Premium, bande d'apercu, galerie.
 export function renderSignatureControls() {
@@ -620,7 +698,7 @@ const note = document.getElementById('outline-note');
 if (note) note.style.opacity = bgOn ? '1' : '.5';
 
 if (pack === 'signature') renderSignaturePreview();
-renderResultsPreview();
+refreshAppearancePreviews();
 renderKartAvatarGallery();
 }
 
@@ -646,26 +724,25 @@ if (sel) sel.value = val;
 document.querySelectorAll('.avatar-mode-row').forEach((r) => {
 r.style.borderColor = r.dataset.avatarVal === val ? 'var(--acc)' : 'var(--bord)';
 });
-renderResultsPreview();
+refreshAppearancePreviews();
 renderKartAvatarGallery();
 markPrefsDirty();
 }
 
 // Aperçu en direct de la PAGE 1 des résultats (podium + top) avec le thème choisi et les
 // vrais avatars kart — rendu dans la zone de droite des Paramètres.
-export function renderResultsPreview(theme) {
+export function renderResultsPreview(theme, ranking) {
 const box = document.getElementById('results-live-preview');
 if (!box) return;
 const t = THEME_COLORS[theme || document.getElementById('pref-results-theme')?.value || state.prefs.results_theme || 'classic'] || THEME_COLORS.classic;
+const data = ranking || DEMO_RANKING;
+const byPos = (n) => data.find((d) => d.pos === n);
 const podium = [
-{ pos: 2, kart: 4, name: 'PILOTE 2', gap: '+2.197', border: t.p2 },
-{ pos: 1, kart: 1, name: 'PILOTE 1', gap: '1:02.345', border: t.acc, first: true },
-{ pos: 3, kart: 7, name: 'PILOTE 3', gap: '+7.131', border: t.p3 },
-];
-const rows = [
-{ pos: 4, kart: 9, name: 'PILOTE 4', gap: '+9.4' },
-{ pos: 5, kart: 2, name: 'PILOTE 5', gap: '+12.1' },
-];
+byPos(2) && { ...byPos(2), border: t.p2 },
+byPos(1) && { ...byPos(1), gap: byPos(1).t, border: t.acc, first: true },
+byPos(3) && { ...byPos(3), border: t.p3 },
+].filter(Boolean);
+const rows = data.slice(3, 5);
 const av = (k) => `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center">${previewAvatarSVG(k)}</div>`;
 const podHTML = podium.map((d) => `
 <div style="display:flex;flex-direction:column;background:${t.surf};border:1px solid ${d.border};border-radius:8px;overflow:hidden;${d.first ? 'box-shadow:0 0 16px ' + t.acc + '55;' : 'margin-top:14px;'}">
@@ -697,6 +774,77 @@ box.innerHTML = `
 <div style="display:grid;grid-template-columns:1fr 1.15fr 1fr;gap:6px;align-items:end;margin-bottom:10px">${podHTML}</div>
 <div style="background:${t.surf};border:1px solid rgba(255,255,255,.08);border-radius:6px;overflow:hidden">${rowsHTML}</div>
 <div style="margin-top:8px;font-size:8px;color:${t.mut};text-transform:uppercase;letter-spacing:.08em">Aperçu fidèle — chaque pilote affiche ${avatarModeLabel().apercu}</div>`;
+}
+
+// Jeu de demonstration partage par les 3 apercus (podium/classement/fiche) quand aucune
+// session n'est utilisee comme reference — mêmes noms/karts/temps/ecarts pour que les 3
+// rendus racontent une seule et même course cohérente.
+const DEMO_RANKING = [
+{ pos: 1, kart: 1, name: 'PILOTE 1', t: '1:02.345', gap: '—', best: '1:02.345', s1: '0:20.11', s2: '0:21.02', s3: '0:21.22' },
+{ pos: 2, kart: 4, name: 'PILOTE 2', t: '1:04.542', gap: '+2.197', best: '1:04.201', s1: '0:20.55', s2: '0:21.40', s3: '0:22.55' },
+{ pos: 3, kart: 7, name: 'PILOTE 3', t: '1:09.476', gap: '+7.131', best: '1:07.980', s1: '0:21.10', s2: '0:22.02', s3: '0:26.36' },
+{ pos: 4, kart: 9, name: 'PILOTE 4', t: '1:11.745', gap: '+9.4', best: '1:09.512', s1: '0:21.40', s2: '0:22.90', s3: '0:27.41' },
+{ pos: 5, kart: 2, name: 'PILOTE 5', t: '1:14.445', gap: '+12.1', best: '1:11.033', s1: '0:22.02', s2: '0:23.60', s3: '0:28.83' },
+];
+
+// Aperçu en direct du CLASSEMENT FINAL complet (tableau, avec avatars et écarts) — même
+// palette THEME_COLORS et même fonction d'avatar (previewAvatarSVG) que le podium, pour
+// rester un vrai rendu et non une maquette indépendante.
+export function renderClassementPreview(theme, ranking) {
+const box = document.getElementById('results-classement-preview');
+if (!box) return;
+const t = THEME_COLORS[theme || document.getElementById('pref-results-theme')?.value || state.prefs.results_theme || 'classic'] || THEME_COLORS.classic;
+const data = ranking || DEMO_RANKING;
+const rowsHTML = data.map((d) => `
+<div style="display:grid;grid-template-columns:20px 30px 1fr auto auto;gap:7px;align-items:center;padding:6px 8px;border-top:1px solid rgba(255,255,255,.06)">
+<span style="font-weight:900;font-style:italic;font-size:12px;color:${d.pos <= 3 ? t.acc : t.mut}">${d.pos}</span>
+<div style="width:30px;height:30px;border-radius:50%;overflow:hidden;background:${t.bg};display:flex;align-items:center;justify-content:center">${previewAvatarSVG(d.kart)}</div>
+<div><div style="font-weight:800;font-style:italic;font-size:11px;color:${t.text}">${d.name}</div><div style="font-size:8px;color:${t.mut}">KART ${d.kart} · ${d.t}</div></div>
+<span style="font-size:9px;font-weight:800;color:${t.gapText};background:${t.gapBg};border:1px solid ${t.acc};padding:2px 6px;border-radius:4px">${d.gap}</span>
+<span style="font-size:8px;color:${t.mut}">meilleur ${d.best}</span>
+</div>`).join('');
+box.style.cssText = `background:${t.bg};border:1px solid ${t.acc}44;border-radius:12px;padding:10px`;
+box.innerHTML = `
+<div style="display:flex;justify-content:space-between;align-items:center;border:1px solid ${t.acc}66;background:${t.surf};padding:8px 10px;border-radius:6px;margin-bottom:8px">
+<div><div style="font-weight:900;font-size:13px;text-transform:uppercase;color:${t.text}">Classement final</div><div style="font-size:8px;color:${t.mut};margin-top:1px">CIRCUIT DE TRINISETTE · APERÇU</div></div>
+</div>
+<div style="background:${t.surf};border:1px solid rgba(255,255,255,.08);border-radius:6px;overflow:hidden">${rowsHTML}</div>
+<div style="margin-top:8px;font-size:8px;color:${t.mut};text-transform:uppercase;letter-spacing:.08em">Aperçu fidèle — chaque pilote affiche ${avatarModeLabel().apercu}</div>`;
+}
+
+// Aperçu en direct de la FICHE PILOTE / TEMPS — reprend les mêmes champs que la fiche
+// individuelle publique (nom, kart, meilleur tour, écart au leader, secteurs si activés).
+export function renderFichePreview(theme, ranking) {
+const box = document.getElementById('results-fiche-preview');
+if (!box) return;
+const t = THEME_COLORS[theme || document.getElementById('pref-results-theme')?.value || state.prefs.results_theme || 'classic'] || THEME_COLORS.classic;
+const data = ranking || DEMO_RANKING;
+const d = data[1] || data[0]; // pilote non-leader : l'écart au leader a du sens dans l'aperçu
+const sectorsOn = !!document.getElementById('pref-sectors-enabled')?.checked;
+const sectorsHTML = sectorsOn ? `
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px">
+${[['S1', d.s1], ['S2', d.s2], ['S3', d.s3]].map(([lbl, v]) => `
+<div style="background:${t.surf};border:1px solid rgba(255,255,255,.08);border-radius:6px;padding:8px;text-align:center">
+<div style="font-size:9px;color:${t.mut};text-transform:uppercase;letter-spacing:.06em">${lbl}</div>
+<div style="font-size:13px;font-weight:800;color:${t.text};margin-top:2px">${v}</div>
+</div>`).join('')}
+</div>` : '';
+box.style.cssText = `background:${t.bg};border:1px solid ${t.acc}44;border-radius:12px;padding:16px`;
+box.innerHTML = `
+<div style="display:flex;gap:16px;align-items:center">
+<div style="width:96px;height:96px;flex:none;border-radius:${document.getElementById('pref-avatar-shape')?.value === 'square' ? '18px' : '50%'};overflow:hidden;background:${t.surf};display:flex;align-items:center;justify-content:center;border:2px solid ${t.acc}">${previewAvatarSVG(d.kart)}</div>
+<div style="flex:1">
+<div style="font-weight:900;font-style:italic;font-size:20px;color:${t.text}">${d.name}</div>
+<div style="font-size:11px;color:${t.mut};margin-top:2px">KART ${d.kart} · POSITION ${d.pos}</div>
+<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+<span style="font-size:11px;font-weight:800;color:${t.text};background:${t.surf};border:1px solid ${t.acc};padding:3px 8px;border-radius:5px">Meilleur tour ${d.best}</span>
+<span style="font-size:11px;font-weight:800;color:${t.gapText};background:${t.gapBg};border:1px solid ${t.acc};padding:3px 8px;border-radius:5px">Écart leader ${d.gap}</span>
+<span style="font-size:11px;font-weight:700;color:${t.mut};background:${t.surf};border:1px solid rgba(255,255,255,.1);padding:3px 8px;border-radius:5px">Temps total ${d.t}</span>
+</div>
+</div>
+</div>
+${sectorsHTML}
+<div style="margin-top:10px;font-size:8px;color:${t.mut};text-transform:uppercase;letter-spacing:.08em">Aperçu fidèle — même avatar, mêmes champs que la fiche pilote publique${sectorsOn ? '' : ' (secteurs desactives dans Sessions)'}</div>`;
 }
 
 // Galerie des avatars de la flotte (numéros de karts configurés, sinon 1→défaut).
