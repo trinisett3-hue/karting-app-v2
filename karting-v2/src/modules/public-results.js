@@ -75,7 +75,7 @@ let PDF_LOGO_URL = null;
 // (par session) reste le repli pour les sessions plus anciennes ou tant que ce
 // reglage global n'a pas ete rempli — voir l'ecrasement juste apres la lecture de
 // `session` dans load() ci-dessous.
-let SITE_CIRCUIT_NAME = null;
+let SITE_CIRCUIT_NAME = null; let CARD_POSITION_PICKS = []; let CARD_RECORD_PICKS = {}; let CARD_TAGLINE = '';
 
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
 // <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
@@ -131,7 +131,7 @@ if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'cl
 
 const logoUrl = data.value && data.value.logo_url;
 PDF_LOGO_URL = logoUrl || null;
-SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null;
+SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null; CARD_POSITION_PICKS = Array.isArray(data.value && data.value.card_position_picks) ? data.value.card_position_picks : []; CARD_RECORD_PICKS = (data.value && data.value.card_record_picks) || {}; CARD_TAGLINE = (data.value && data.value.card_tagline) || '';
 if (logoUrl) {
 const header = document.querySelector('.circuit-header');
 if (header && !document.getElementById('circuit-logo')) {
