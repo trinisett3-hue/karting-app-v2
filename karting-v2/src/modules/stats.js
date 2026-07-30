@@ -7,7 +7,7 @@
 // les policies RLS "*_auth" (voir migration-v2.sql) filtrent déjà automatiquement
 // sur le tenant de l'admin connecté — un filtre client-side serait redondant et,
 // pire, pourrait laisser croire à tort qu'il protège quelque chose côté navigateur.
-import { db } from '../lib/supabase.js';
+import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { formatTime, formatDate } from './ui.js';
 import { PREMIUM_THEMES } from './settings.js';
 
@@ -324,10 +324,16 @@ export async function loadStatsTab(range) {
   const hofKartsEl = document.getElementById('stats-hof-karts');
   if (kpiGrid) kpiGrid.innerHTML = '<div class="empty">Chargement...</div>';
 
-  let sessQuery = db.from('sessions').select('id,session_date,created_at,max_karts,starts_at,incident_count,interruption_minutes');
-  if (currentRange.from) sessQuery = sessQuery.gte('session_date', currentRange.from);
-  if (currentRange.to) sessQuery = sessQuery.lte('session_date', currentRange.to);
-  const sessRes = await sessQuery;
+  // P0-5 (audit 30/07) : toutes les lectures de masse passent par fetchAll/fetchAllIn.
+  // Sans .range(), PostgREST plafonnait chaque réponse à 1000 lignes SANS erreur :
+  // au-delà d'une cinquantaine de sessions, les statistiques devenaient fausses en
+  // silence (chronos manquants, pilotes uniques sous-comptés).
+  const sessRes = await fetchAll(() => {
+    let q = db.from('sessions').select('id,session_date,created_at,max_karts,starts_at,incident_count,interruption_minutes');
+    if (currentRange.from) q = q.gte('session_date', currentRange.from);
+    if (currentRange.to) q = q.lte('session_date', currentRange.to);
+    return q;
+  });
   const allSessions = sessRes.data || [];
   const sessionIds = allSessions.map((s) => s.id);
 
@@ -337,13 +343,13 @@ export async function loadStatsTab(range) {
   // .in('session_id', ...) plutôt que de filtrer côté client — plus proche
   // du style existant (filtres appliqués côté requête) et ça évite de
   // retélécharger des lignes qui seront de toute façon jetées.
-  let regsQuery = db.from('session_registrations').select('id,session_id,display_name,kart_number,nationality,is_unknown,created_at');
-  let lapsQuery = db.from('laps').select('registration_id,lap_time_seconds,session_id');
-  if (currentRange.from || currentRange.to) {
-    regsQuery = regsQuery.in('session_id', sessionIds.length ? sessionIds : ['00000000-0000-0000-0000-000000000000']);
-    lapsQuery = lapsQuery.in('session_id', sessionIds.length ? sessionIds : ['00000000-0000-0000-0000-000000000000']);
-  }
-  const [regsRes, lapsRes] = await Promise.all([regsQuery, lapsQuery]);
+  const regsSelect = () => db.from('session_registrations').select('id,session_id,display_name,kart_number,nationality,is_unknown,created_at');
+  const lapsSelect = () => db.from('laps').select('registration_id,lap_time_seconds,session_id');
+  const filtered = !!(currentRange.from || currentRange.to);
+  const [regsRes, lapsRes] = await Promise.all([
+    filtered ? fetchAllIn(regsSelect, 'session_id', sessionIds) : fetchAll(regsSelect),
+    filtered ? fetchAllIn(lapsSelect, 'session_id', sessionIds) : fetchAll(lapsSelect),
+  ]);
   const allRegs = regsRes.data || [];
   const allLaps = lapsRes.data || [];
 
@@ -709,10 +715,10 @@ async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, r
   let tauxRetour = null;
   if (range && range.from) {
     try {
-      const { data: priorSessions } = await db.from('sessions').select('id').lt('session_date', range.from);
+      const { data: priorSessions } = await fetchAll(() => db.from('sessions').select('id').lt('session_date', range.from));
       const priorIds = (priorSessions || []).map((s) => s.id);
       if (priorIds.length) {
-        const { data: priorRegs } = await db.from('session_registrations').select('display_name').in('session_id', priorIds);
+        const { data: priorRegs } = await fetchAllIn(() => db.from('session_registrations').select('display_name'), 'session_id', priorIds);
         const priorKeys = new Set((priorRegs || []).map((r) => (r.display_name || '').trim().toLowerCase()).filter(Boolean));
         const pilotsInRange = Array.from(byPilot.keys());
         const returning = pilotsInRange.filter((k) => priorKeys.has(k)).length;
@@ -845,10 +851,10 @@ async function computeVisitesPresets() {
       const from = new Date(today);
       from.setDate(from.getDate() - presets[key]);
       const fromStr = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0') + '-' + String(from.getDate()).padStart(2, '0');
-      const { data: sess } = await db.from('sessions').select('id').gte('session_date', fromStr);
+      const { data: sess } = await fetchAll(() => db.from('sessions').select('id').gte('session_date', fromStr));
       const ids = (sess || []).map((s) => s.id);
       if (!ids.length) { out[key] = null; continue; }
-      const { data: regs } = await db.from('session_registrations').select('display_name').in('session_id', ids);
+      const { data: regs } = await fetchAllIn(() => db.from('session_registrations').select('display_name'), 'session_id', ids);
       const uniq = new Set((regs || []).map((r) => (r.display_name || '').trim().toLowerCase()).filter(Boolean));
       out[key] = uniq.size ? (regs || []).length / uniq.size : null;
     } catch (e) {
@@ -867,7 +873,7 @@ async function computeSaisonnalite12Mois() {
     const from = new Date(today);
     from.setDate(from.getDate() - 365);
     const fromStr = from.getFullYear() + '-' + String(from.getMonth() + 1).padStart(2, '0') + '-' + String(from.getDate()).padStart(2, '0');
-    const { data: sess } = await db.from('sessions').select('session_date,starts_at').gte('session_date', fromStr);
+    const { data: sess } = await fetchAll(() => db.from('sessions').select('session_date,starts_at').gte('session_date', fromStr));
     const list = sess || [];
     const byMonth = new Map();
     const byHour = new Map();

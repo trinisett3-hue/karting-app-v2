@@ -7,7 +7,7 @@
 // projet — `parseTime()` et `loadDetailSession()`. Résultat : dès qu'un organisateur
 // activait les secteurs et importait des temps, l'app plantait avec une ReferenceError.
 // Les deux fonctions sont maintenant réellement implémentées ci-dessous.
-import { db } from '../lib/supabase.js';
+import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { state } from '../state.js';
 import { showMsg, qrSrc, formatTime, formatDate, randomCode4, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
@@ -62,8 +62,15 @@ export async function renderResultatsSection() {
 export async function loadRanking(sess) {
   const s = sess;
   if (!s) return [];
-  const { data: laps } = await db.from('laps').select('*').eq('session_id', s.id);
-  const { data: regs } = await db.from('session_registrations').select('*').eq('session_id', s.id);
+  // P0-5 (audit 30/07) : pagination obligatoire. Sans .range(), PostgREST tronquait
+  // silencieusement à 1000 lignes — une session de 60 pilotes x 20 tours suffit à
+  // fausser le classement, sans le moindre message d'erreur.
+  const [lapsRes, regsRes] = await Promise.all([
+    fetchAll(() => db.from('laps').select('*').eq('session_id', s.id)),
+    fetchAll(() => db.from('session_registrations').select('*').eq('session_id', s.id)),
+  ]);
+  const laps = lapsRes.data;
+  const regs = regsRes.data;
   if (!laps || !regs) return [];
   const totals = new Map();
   laps.forEach((l) => totals.set(l.registration_id, (totals.get(l.registration_id) || 0) + Number(l.lap_time_seconds)));
@@ -180,10 +187,12 @@ export async function showPilotHistory(regId, name) {
   contentEl.innerHTML = '<div class="empty">Chargement...</div>';
   document.getElementById('hist-overlay').classList.add('show');
   try {
-    const { data: allRegs } = await db
-      .from('session_registrations')
-      .select('id,session_id,kart_number,display_name,sessions(id,title,session_date)')
-      .ilike('display_name', (name || '').trim());
+    const { data: allRegs } = await fetchAll(() =>
+      db
+        .from('session_registrations')
+        .select('id,session_id,kart_number,display_name,sessions(id,title,session_date)')
+        .ilike('display_name', (name || '').trim())
+    );
     if (!allRegs || !allRegs.length) {
       contentEl.innerHTML = '<div class="empty">Aucun historique trouve.</div>';
       return;
@@ -193,9 +202,11 @@ export async function showPilotHistory(regId, name) {
     // requête laps et d'un loadRanking() (2 requêtes de plus) par inscription.
     const sessionIds = Array.from(new Set(allRegs.map((r) => r.sessions && r.sessions.id).filter(Boolean)));
     const regIds = allRegs.map((r) => r.id);
+    // P0-5 (audit 30/07) : pagination + découpage des listes `.in()` (au-delà de
+    // ~600 UUID dans l'URL, PostgREST répond 414 Request-URI Too Large).
     const [lapsRes, allSessionRegsRes] = await Promise.all([
-      db.from('laps').select('registration_id,lap_time_seconds').in('registration_id', regIds.length ? regIds : ['00000000-0000-0000-0000-000000000000']),
-      db.from('session_registrations').select('id,session_id,display_name').in('session_id', sessionIds.length ? sessionIds : ['00000000-0000-0000-0000-000000000000']),
+      fetchAllIn(() => db.from('laps').select('registration_id,lap_time_seconds'), 'registration_id', regIds),
+      fetchAllIn(() => db.from('session_registrations').select('id,session_id,display_name'), 'session_id', sessionIds),
     ]);
     const totalsByReg = new Map();
     (lapsRes.data || []).forEach((l) => {

@@ -81,6 +81,17 @@ let cache = null;
 
 // On ne recharge la RPC que si necessaire : l'utilisateur clique souvent
 // CSV puis XLSX pour comparer.
+//
+// Pagination (audit P0-5 du 30/07) : PAS de fetchAll ici, et c'est volontaire.
+// `admin_archived_sessions_export` est declaree `returns jsonb` (verifie via
+// pg_get_function_result) : elle renvoie UNE seule ligne contenant un tableau
+// JSON. Le plafond `max_rows` de PostgREST compte des LIGNES — il ne peut donc
+// pas tronquer ce tableau. Seules les fonctions `returns setof` / `returns
+// table(...)` sont concernees (c'est le cas de `tenant_pilot_registry`, qui est
+// bien paginee dans registry.js). Idem pour public_session_results,
+// public_session_ranking et public_pilot_sessions : toutes en `returns jsonb`.
+// Ne pas ajouter .range() ici : sur une fonction scalaire, limit/offset
+// s'appliqueraient a la ligne unique et non au contenu du tableau.
 async function fetchRows(force) {
   if (cache && !force) return cache;
   const { data, error } = await db.rpc('admin_archived_sessions_export', {

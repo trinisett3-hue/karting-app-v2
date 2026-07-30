@@ -4,7 +4,7 @@
 // Supabase. Volontairement regroupé avec les inscriptions/karts : dans l'app d'origine,
 // une session, ses pilotes inscrits et ses karts forment un seul écran indissociable
 // (l'onglet "Session active"), les séparer artificiellement aurait cassé ce couplage.
-import { db } from '../lib/supabase.js';
+import { db, fetchAll } from '../lib/supabase.js';
 import { state } from '../state.js';
 import { showMsg, randomCode4, qrSrc, avatarColor, avatarInitial, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
@@ -12,12 +12,14 @@ import { APP_CONFIG } from '../config.js';
 // --- Liste des sessions actives ---------------------------------------------------
 
 export async function loadActiveSessions() {
-  const { data } = await db
-    .from('sessions')
-    .select('*')
-    .eq('status', 'registration_open')
-    .is('archived_at', null)
-    .order('created_at', { ascending: false });
+  const { data } = await fetchAll(() =>
+    db
+      .from('sessions')
+      .select('*')
+      .eq('status', 'registration_open')
+      .is('archived_at', null)
+      .order('created_at', { ascending: false })
+  );
   state.activeSessions = data || [];
   updateStatusDot();
   await renderActivesGrid();
@@ -522,10 +524,14 @@ export async function autoKarts() {
 // --- Archives --------------------------------------------------------------------------
 
 export async function loadArchives() {
-  const { data } = await db
-    .from('sessions')
-    .select('*')
-    .not('archived_at', 'is', null)
-    .order('archived_at', { ascending: false });
+  // P0-5 (audit 30/07) : les archives ne font que grossir — sans pagination, la liste
+  // se serait tronquee a 1000 sessions sans le moindre message.
+  const { data } = await fetchAll(() =>
+    db
+      .from('sessions')
+      .select('*')
+      .not('archived_at', 'is', null)
+      .order('archived_at', { ascending: false })
+  );
   return data || [];
 }

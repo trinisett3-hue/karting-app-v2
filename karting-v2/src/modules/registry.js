@@ -6,7 +6,7 @@
 // Comme stats.js, aucun filtre tenant_id explicite ici : tenant_pilot_registry() est une
 // RPC SECURITY DEFINER qui fait elle-même l'agrégation par tenant_users côté serveur (voir
 // la migration) — le front ne fait que consommer ce qu'elle renvoie.
-import { db } from '../lib/supabase.js';
+import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { formatDate, showMsg, confirmModal } from './ui.js';
 import { NATS } from './countries.js';
 
@@ -262,7 +262,13 @@ export async function loadRegistryTab(keepView) {
   if (searchEl && !keep) searchEl.value = '';
   if (!keep) page = 1;
 
-  const { data, error } = await db.rpc('tenant_pilot_registry');
+  // P0-5 (audit 30/07) : la RPC renvoie un SETOF, donc PostgREST la plafonne aussi
+  // a max_rows (1000). Au-dela de 1000 clients le registre se tronquait en silence.
+  // (email, pilot_id) est unique : email seul suffit pour les lignes legacy
+  // (agregees par email), pilot_id departage les pilotes identifies.
+  const { data, error } = await fetchAll(() => db.rpc('tenant_pilot_registry'), {
+    orderBy: ['email', 'pilot_id'],
+  });
   if (error) {
     if (el) el.innerHTML = '<div class="empty">Erreur de chargement du registre.</div>';
     return;
@@ -276,11 +282,11 @@ export async function loadRegistryTab(keepView) {
   const legacyEmails = rows.filter((r) => r.legacy).map((r) => r.email);
   let regByEmail = new Map();
   if (legacyEmails.length) {
-    const { data: regs } = await db
-      .from('session_registrations')
-      .select('id,email')
-      .is('pilot_id', null)
-      .in('email', legacyEmails);
+    const { data: regs } = await fetchAllIn(
+      () => db.from('session_registrations').select('id,email').is('pilot_id', null),
+      'email',
+      legacyEmails
+    );
     (regs || []).forEach((r) => regByEmail.set(r.email, r.id));
   }
   registryCache = rows.map((r) => Object.assign({}, r, { _registrationId: regByEmail.get(r.email) || null }));
