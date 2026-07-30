@@ -569,7 +569,12 @@ async function afterPublish(sess, msgId) {
     // 3. Envoi immediat ; le cron de rattrapage reprend les echecs.
     const res = await triggerResultEmails();
     const suffix = pdfReport
-      ? ' (' + pdfReport.pilots + ' fiche(s)' + (pdfReport.failed ? ', ' + pdfReport.failed + ' en echec' : '') + ')'
+      ? ' (' + pdfReport.pilots + ' fiche(s)' +
+        (pdfReport.positionCards ? ', ' + pdfReport.positionCards + ' carte(s) position' : '') +
+        (pdfReport.recordCards ? ', ' + pdfReport.recordCards + ' carte(s) record' : '') +
+        (pdfReport.failed || pdfReport.cardsFailed
+          ? ', ' + (pdfReport.failed + pdfReport.cardsFailed) + ' en echec'
+          : '') + ')'
       : '';
     if (res && typeof res.sent === 'number') {
       showMsg(msgId, 'Resultats publies — ' + res.sent + ' e-mail(s) envoye(s)' + suffix + '.', 'ok');

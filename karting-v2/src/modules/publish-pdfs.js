@@ -91,15 +91,36 @@ async function waitForBridge(iframe) {
   throw new Error('Pont d\'export absent (page publique non chargee ?)');
 }
 
+// Priorite quand un pilote bat plusieurs records de portees differentes
+// dans la meme session (ex : record piste ET record personnel). L'index
+// unique de session_assets est (session_id, kind, registration_id) : un
+// seul asset `record_card` peut exister par pilote et par session, donc un
+// seul des records peut etre illustre. On retient le plus prestigieux.
+const RECORD_SCOPE_PRIORITY = ['piste', 'semaine', 'mois', 'perso'];
+
+function pickPrimaryRecord(rows) {
+  for (const scope of RECORD_SCOPE_PRIORITY) {
+    const hit = rows.find((r) => r.scope === scope);
+    if (hit) return hit;
+  }
+  return rows[0] || null;
+}
+
 /**
- * Genere et televerse le classement complet + une fiche par pilote destinataire.
+ * Genere et televerse le classement complet + une fiche par pilote destinataire,
+ * puis les cartes partageables (position pour tous les destinataires, record pour
+ * ceux qui viennent d'en battre un). Meme iframe cachee, meme pont, pour tout.
  *
  * @param {object}   session      ligne `sessions` complete (tenant_id requis)
  * @param {function} onProgress   (fait, total, libelle) — messages d'attente
- * @returns {Promise<{full:boolean, pilots:number, failed:number, total:number, skipped:number}>}
+ * @returns {Promise<{full:boolean, pilots:number, failed:number, total:number, skipped:number,
+ *                     positionCards:number, recordCards:number, cardsFailed:number}>}
  */
 export async function generateSessionPDFs(session, onProgress) {
-  const report = { full: false, pilots: 0, failed: 0, total: 0, skipped: 0 };
+  const report = {
+    full: false, pilots: 0, failed: 0, total: 0, skipped: 0,
+    positionCards: 0, recordCards: 0, cardsFailed: 0,
+  };
   const token = session && session.public_results_token;
   if (!token) throw new Error('Session sans jeton public : rien a rendre.');
   const say = typeof onProgress === 'function' ? onProgress : () => {};
@@ -174,6 +195,91 @@ export async function generateSessionPDFs(session, onProgress) {
       }
       done++;
     }
+
+    // 3. Cartes partageables — dans la MEME iframe, donc le MEME rendu de
+    //    session (theme, logo, avatars deja charges) que les PDF ci-dessus.
+    //
+    //    Position : generee pour CHAQUE destinataire (meme liste `recipients`
+    //    que les fiches PDF, meme critere que enqueue_position_cards() cote
+    //    SQL). On NE LIT PAS card_deliveries pour ca : cette RPC n'est
+    //    appelee qu'APRES ce rendu (voir results.js/afterPublish), justement
+    //    pour qu'aucune ligne de file n'existe tant que la piece jointe n'est
+    //    pas televersee — meme raison que pour les PDF (cf. commentaire en
+    //    tete de afterPublish : un cron qui partirait entre-temps enverrait
+    //    un e-mail sans carte, irreparable une fois la ligne marquee 'sent').
+    //
+    //    Record : les lignes existent deja (le trigger SQL les enfile tour
+    //    par tour, independamment de la publication) ; on les lit pour savoir
+    //    qui vient de battre un record, et sur quelle(s) portee(s).
+    const { data: recordDeliveries, error: dErr } = await db
+      .from('card_deliveries')
+      .select('registration_id,kind,scope,payload')
+      .eq('session_id', session.id)
+      .eq('status', 'pending')
+      .eq('kind', 'record');
+    if (dErr) {
+      console.warn('[publication] lecture de la file des cartes record :', dErr.message);
+    }
+    {
+      const byPilot = new Map();
+      for (const reg of recipients) {
+        if (!known.has(reg.id)) continue;
+        byPilot.set(reg.id, { position: true, records: [] });
+      }
+      for (const d of (recordDeliveries || [])) {
+        if (!d.registration_id) continue;
+        if (!byPilot.has(d.registration_id)) byPilot.set(d.registration_id, { position: false, records: [] });
+        byPilot.get(d.registration_id).records.push(d);
+      }
+
+      for (const [regId, entry] of byPilot) {
+        if (!known.has(regId)) continue; // meme garde-fou que pour les fiches PDF
+        const pilotLabel = (recipients.find((r) => r.id === regId) || {}).display_name || 'pilote';
+
+        if (entry.position) {
+          try {
+            const buf = await withTimeout(api.positionCardPNGBytes(regId), PDF_TIMEOUT, 'carte de position ' + pilotLabel);
+            const path = await uploadSessionAsset({
+              session,
+              kind: 'position_card',
+              blob: new Blob([buf], { type: 'image/png' }),
+              registrationId: regId,
+              filename: 'carte-position_' + slug(pilotLabel) + '_' + String(regId).slice(0, 8) + '.png',
+            });
+            if (path) report.positionCards++; else report.cardsFailed++;
+          } catch (e) {
+            report.cardsFailed++;
+            console.warn('[publication] carte de position de ' + pilotLabel + ' :', e.message || e);
+          }
+        }
+
+        if (entry.records.length) {
+          const primary = pickPrimaryRecord(entry.records);
+          if (entry.records.length > 1) {
+            console.warn('[publication] ' + pilotLabel + ' a battu ' + entry.records.length +
+              ' records dans cette session ; un seul asset record_card est televersable (index unique), portee retenue : ' + primary.scope);
+          }
+          try {
+            const buf = await withTimeout(
+              api.recordCardPNGBytes(regId, primary.scope, primary.payload || {}),
+              PDF_TIMEOUT, 'carte de record ' + pilotLabel
+            );
+            const path = await uploadSessionAsset({
+              session,
+              kind: 'record_card',
+              blob: new Blob([buf], { type: 'image/png' }),
+              registrationId: regId,
+              filename: 'carte-record_' + slug(pilotLabel) + '_' + String(regId).slice(0, 8) + '.png',
+            });
+            if (path) report.recordCards++; else report.cardsFailed++;
+          } catch (e) {
+            report.cardsFailed++;
+            console.warn('[publication] carte de record de ' + pilotLabel + ' :', e.message || e);
+          }
+        }
+      }
+    }
+
     return report;
   } finally {
     // Toujours, y compris sur erreur : une iframe oubliee garderait la page

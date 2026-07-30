@@ -27,6 +27,7 @@ async function ensureAvatarModuleLoaded() {
   _avatarModuleLoaded = true;
 }
 import { loadSiteConfig } from './site-config.js';
+import { qrSVG } from './qr.js';
 import {
   signatureAvatarsActive,
   signatureAvatarHTML,
@@ -1615,4 +1616,117 @@ export async function pilotPDFBytes(regId) {
 export async function fullPDFBytes() {
   const pdf = await buildFullPDF();
   return pdf.output('arraybuffer');
+}
+
+/* ==================================================================
+   🆕 P0-6 — CARTES PARTAGEABLES (position / record), rendues en PNG.
+
+   Meme pont, meme iframe cachee, memes contraintes que les PDF ci-dessus :
+   vraies dimensions (1080x1920, jamais display:none), un seul moteur de
+   rendu (celui-ci), un ArrayBuffer traverse la frontiere d'iframe (jamais
+   un Blob, invalide des que l'iframe est retiree du DOM).
+
+   Le QR est genere localement par qr.js (mode octet, niveau M) : c'est un
+   vrai code QR scannable, pas une image decorative. Il pointe vers l'URL
+   PUBLIQUE de la session de resultats (results.html?result=<jeton>) —
+   il n'existe pas d'ancre par-pilote sur cette page, donc le QR mene au
+   classement complet dans lequel le pilote peut se retrouver.
+
+   Regle produit : c'est TOUJOURS pilot.name (le pseudo, display_name) qui
+   est imprime sur la carte, jamais un nom civil — comme partout ailleurs
+   sur cette page publique.
+   ================================================================== */
+const CARD_W = 1080;
+const CARD_H = 1920;
+
+function cardResultsURL() {
+  const u = new URL('/results.html', window.location.origin);
+  if (resultsToken) u.searchParams.set('result', resultsToken);
+  return u.toString();
+}
+
+function cardQRHTML(url) {
+  let svg = '';
+  try { svg = qrSVG(url); } catch (e) { svg = ''; }
+  if (!svg) return '';
+  return `<div style="width:180px;height:180px;background:#fff;border-radius:16px;padding:14px;` +
+    `display:flex;align-items:center;justify-content:center">${svg}</div>`;
+}
+
+// Rasterise un fragment HTML 1080x1920 en PNG (ArrayBuffer). Reutilise
+// sectionToCanvas (le meme moteur html2canvas que les PDF), a l'echelle 1 :
+// la carte est deja definie a sa resolution finale, contrairement aux
+// pages A4 qui doivent etre remises a l'echelle.
+async function renderCardPNG(bodyHTML) {
+  const t = themeColors();
+  const node = document.createElement('div');
+  node.style.cssText = `position:relative;width:${CARD_W}px;height:${CARD_H}px;overflow:hidden;` +
+    `background:${t.bg};font-family:'UI',system-ui,sans-serif;color:${t.text}`;
+  node.innerHTML = bodyHTML;
+  const canvas = await sectionToCanvas(node, CARD_W, t.bg, 1);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) { reject(new Error('Rendu de la carte vide (toBlob)')); return; }
+      blob.arrayBuffer().then(resolve, reject);
+    }, 'image/png');
+  });
+}
+
+/** Carte de position — un pilote, son classement, un QR vers le classement en ligne. */
+export async function positionCardPNGBytes(regId) {
+  const pilot = (allResults || []).find((r) => r.regId === regId);
+  if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
+  const t = themeColors();
+  const circuit = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+  const dateTxt = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  const best = pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--';
+  const html = `
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg, ${t.surface} 0%, ${t.bg} 60%)"></div>
+    <div style="position:absolute;left:0;right:0;top:0;height:14px;background:${t.accent}"></div>
+    <div style="position:absolute;left:74px;right:74px;top:120px">
+      <div style="font:700 34px 'UI',sans-serif;letter-spacing:.13em;text-transform:uppercase">${circuit}</div>
+      <div style="font:400 20px 'Mono',monospace;letter-spacing:.045em;color:${t.muted};margin-top:14px">${dateTxt}</div>
+    </div>
+    <div style="position:absolute;left:74px;right:74px;top:620px;text-align:center">
+      <div style="font:400 20px 'Mono',monospace;letter-spacing:.34em;color:${t.muted}">POSITION</div>
+      <div style="font:700 320px 'UI',sans-serif;line-height:.8;color:${t.accent};margin-top:20px">${pilot.pos}</div>
+      <div style="font:700 54px 'UI',sans-serif;margin-top:44px;text-transform:uppercase;overflow-wrap:break-word">${escapeHTML(pilot.name)}</div>
+      <div style="font:400 24px 'Mono',monospace;color:${t.muted};margin-top:22px;letter-spacing:.1em">Kart ${pilot.kart ?? '-'} &middot; Meilleur tour ${best}</div>
+    </div>
+    <div style="position:absolute;left:74px;bottom:120px">${cardQRHTML(cardResultsURL())}</div>
+    <div style="position:absolute;right:74px;bottom:170px;text-align:right;max-width:700px;font:400 18px 'Mono',monospace;color:${t.muted}">Scanne pour voir<br/>le classement complet</div>
+  `;
+  return renderCardPNG(html);
+}
+
+const RECORD_SCOPE_LABELS = {
+  perso: 'RECORD PERSONNEL', piste: 'RECORD DE LA PISTE',
+  semaine: 'RECORD DE LA SEMAINE', mois: 'RECORD DU MOIS',
+};
+
+/** Carte de record — un pilote qui vient de battre un record (scope donne). */
+export async function recordCardPNGBytes(regId, scope, payload) {
+  const pilot = (allResults || []).find((r) => r.regId === regId);
+  if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
+  const t = themeColors();
+  const circuit = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+  const label = RECORD_SCOPE_LABELS[scope] || 'NOUVEAU RECORD';
+  const newTime = (payload && payload.time != null) ? fmtPdfTime(payload.time)
+    : (pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--');
+  const prevTime = (payload && payload.prev != null) ? fmtPdfTime(payload.prev) : null;
+  const html = `
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg, ${t.surface} 0%, ${t.bg} 60%)"></div>
+    <div style="position:absolute;left:0;right:0;top:0;height:14px;background:${t.accent}"></div>
+    <div style="position:absolute;left:74px;right:74px;top:120px">
+      <div style="font:700 34px 'UI',sans-serif;letter-spacing:.13em;text-transform:uppercase">${circuit}</div>
+    </div>
+    <div style="position:absolute;left:74px;right:74px;top:600px;text-align:center">
+      <div style="font:400 22px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${label}</div>
+      ${prevTime ? `<div style="font:700 74px 'UI',sans-serif;color:${t.muted};text-decoration:line-through;margin-top:44px">${prevTime}</div>` : ''}
+      <div style="font:700 150px 'UI',sans-serif;color:${t.text};margin-top:26px">${newTime}</div>
+      <div style="font:700 54px 'UI',sans-serif;margin-top:44px;text-transform:uppercase;overflow-wrap:break-word">${escapeHTML(pilot.name)}</div>
+    </div>
+    <div style="position:absolute;left:74px;bottom:120px">${cardQRHTML(cardResultsURL())}</div>
+  `;
+  return renderCardPNG(html);
 }

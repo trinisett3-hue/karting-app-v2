@@ -23,5 +23,7 @@ if (new URLSearchParams(window.location.search).get('export') === '1') {
     setOrient: results.setPdfOrient,
     pilotPDFBytes: results.pilotPDFBytes,
     fullPDFBytes: results.fullPDFBytes,
+    positionCardPNGBytes: results.positionCardPNGBytes,
+    recordCardPNGBytes: results.recordCardPNGBytes,
   };
 }
