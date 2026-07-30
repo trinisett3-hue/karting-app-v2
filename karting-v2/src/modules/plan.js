@@ -9,10 +9,29 @@
 
 import { db } from '../lib/supabase.js';
 
-// 'advanced_stats' : les 3 blocs "Offre 2" de l'onglet Statistiques (Fidelisation,
-// Performance sportive, Usage avance & saisonnalite) — voir stats.js > loadPremiumStatsBlocks()
-// et admin.html (sous-onglets restant visibles mais verrouilles si le plan ne les autorise pas).
-const PREMIUM_FEATURES = ['track_map', 'advanced_stats'];
+// Repartition Basique/Premium plus fine (30/07) — chaque flag ci-dessous verrouille un
+// perimetre precis, plutot qu'un seul gros flag "advanced_stats" pour tout l'onglet
+// Statistiques comme avant :
+//  - 'advanced_stats'    : sous-onglets Statistiques > Performance sportive et Usage
+//                          avance & saisonnalite (voir stats.js > loadPremiumStatsBlocks()).
+//                          Fidelisation n'est PLUS concernee par ce flag : elle reste
+//                          Basique et se calcule desormais toujours.
+//  - 'session_occupancy' : dans le sous-onglet Statistiques > Vue d'ensemble, les deux
+//                          blocs "Exploitation de la piste" et "Frequentation" (voir
+//                          stats.js > loadStatsTab()). Le reste de la Vue d'ensemble
+//                          (KPIs globaux) et le Hall of Fame restent Basique.
+//  - 'archive_detail'    : dans la fiche d'une archive, les blocs Classement / Inscrits /
+//                          Imports chrono (voir results.js > openArchiveDetail()). La liste
+//                          des archives, les notes internes et republier/copier le lien
+//                          restent Basique.
+//  - 'registry_export'   : le bouton "Exporter en CSV" de l'onglet Registre (voir
+//                          registry.js > exportRegistryCSV()). Le registre lui-meme
+//                          (total, pagination, recherche) reste Basique.
+//  - 'archive_export'    : les boutons "Export CSV" / "Export PDF" d'une archive
+//                          INDIVIDUELLE, depuis sa fiche (voir app.js > exportArchiveCSV()/
+//                          exportArchivePDF()). Ne concerne pas l'export GLOBAL CSV/XLSX de
+//                          la liste des archives (archives-export.js), qui reste Basique.
+const PREMIUM_FEATURES = ['track_map', 'advanced_stats', 'session_occupancy', 'archive_detail', 'registry_export', 'archive_export'];
 
 let cachedPlanCode = null;
 
@@ -39,4 +58,21 @@ return plan === 'pro' || plan === 'business';
 // Invalide le cache (utile après changement de plan sans recharger la page).
 export function resetPlanCache() {
 cachedPlanCode = null;
+}
+
+// Encart de verrouillage partage — meme rendu visuel que celui deja utilise pour
+// track_map/advanced_stats (#trackmap-upsell, stats.js > renderLockedStatsPanel()).
+// Centralise ici pour que tous les nouveaux flags (session_occupancy, archive_detail,
+// registry_export, archive_export...) affichent le meme encart, quel que soit le module
+// appelant. IMPORTANT (repris de stats.js) : cette fonction doit toujours etre appelee
+// AVANT tout calcul/fetch du bloc concerne, jamais apres — aucune donnee ne doit etre
+// deposee dans le DOM (meme cache) si le plan ne l'autorise pas.
+export function renderPremiumLock(elId, message) {
+const el = document.getElementById(elId);
+if (!el) return;
+el.innerHTML =
+'<div style="font-size:13px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:16px;text-align:center">' +
+'<div style="font-size:22px;margin-bottom:6px">🔒</div>' +
+'<div>' + (message || 'Reserve au plan <strong>Premium</strong>. Passe au plan superieur pour debloquer cette fonctionnalite.') + '</div>' +
+'</div>';
 }

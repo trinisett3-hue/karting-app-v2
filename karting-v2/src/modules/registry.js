@@ -9,6 +9,7 @@
 import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { formatDate, showMsg, confirmModal } from './ui.js';
 import { NATS } from './countries.js';
+import { hasFeature } from './plan.js';
 
 let registryCache = [];
 // 🆕 v18 : clef de la ligne actuellement en édition ('pilot:<id>' ou
@@ -292,6 +293,21 @@ export async function loadRegistryTab(keepView) {
   registryCache = rows.map((r) => Object.assign({}, r, { _registrationId: regByEmail.get(r.email) || null }));
   applySearch();
   renderRegistry();
+  await refreshExportButtonState();
+}
+
+// 30/07 : le registre (total, pagination, recherche) reste Basique -- seul l'export CSV
+// devient Premium (flag 'registry_export', voir plan.js). On desactive juste le bouton
+// avec un titre explicite plutot que de le masquer : le reste de l'onglet Registre n'est
+// pas touche.
+async function refreshExportButtonState() {
+  const btn = document.getElementById('btn-registry-export');
+  if (!btn) return;
+  const allowed = await hasFeature('registry_export');
+  btn.disabled = !allowed;
+  btn.title = allowed ? '' : 'Reserve au plan Premium';
+  btn.style.opacity = allowed ? '' : '0.5';
+  btn.style.cursor = allowed ? '' : 'not-allowed';
 }
 
 // Recalcule `viewRows` depuis le champ de recherche. Isolé de
@@ -356,7 +372,14 @@ function csvCell(value) {
   return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
-export function exportRegistryCSV() {
+export async function exportRegistryCSV() {
+  // Flag 'registry_export' (voir plan.js) : le bouton est deja desactive cote UI pour un
+  // compte Basique (refreshExportButtonState()), mais on revalide ici aussi -- au cas ou
+  // l'appel viendrait d'ailleurs que du clic sur le bouton.
+  if (!(await hasFeature('registry_export'))) {
+    showMsg('msg-registre', 'Export CSV reserve au plan Premium.', 'err');
+    return;
+  }
   // On exporte ce qui est A L'ECRAN (recherche comprise), pas seulement la
   // page courante : exporter autre chose que ce que l'admin voit est le
   // meilleur moyen de produire un fichier faux sans que personne ne s'en

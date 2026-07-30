@@ -14,6 +14,7 @@ import { APP_CONFIG } from '../config.js';
 import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid } from './sessions.js';
 import { uploadSessionAsset, triggerResultEmails } from './publish-exports.js';
 import { generateSessionPDFs } from './publish-pdfs.js';
+import { hasFeature, renderPremiumLock } from './plan.js';
 
 // Echappement HTML minimal pour tout texte saisi par le public (display_name, etc.)
 // avant injection dans innerHTML — protection XSS (audit du 28/07, section 4.1).
@@ -674,19 +675,37 @@ export async function openArchiveDetail(id) {
   if (typeEl) typeEl.value = s.session_type || 'loisir';
   const notesEl = document.getElementById('arch-notes-input');
   if (notesEl) notesEl.value = s.internal_notes || '';
-  const results = await loadRanking(s);
-  renderRankTable('arch-ranking', results);
-  renderSessionStats(results, 'arch-stats-card', 'arch-stats-grid');
-  const { data: regsAll } = await db.from('session_registrations').select('*').eq('session_id', id);
-  const regs = (regsAll || []).filter((r) => !r.is_unknown);
-  const ri = document.getElementById('arch-inscrits');
-  if (!regs.length) {
-    ri.innerHTML = '<div class="empty">Aucun inscrit via QR.</div>';
+  // 30/07 : Classement / Inscrits / Imports chrono passent en Premium (flag
+  // 'archive_detail', voir plan.js) -- notes internes, republier/copier le lien et la
+  // liste des archives restent Basique (non touches ici). Meme principe que les autres
+  // gatings : le verrou est verifie AVANT tout calcul/fetch, ces trois blocs ne sont donc
+  // ni charges ni deposes dans le DOM pour un compte Basique.
+  const detailAllowed = await hasFeature('archive_detail');
+  if (detailAllowed) {
+    const results = await loadRanking(s);
+    renderRankTable('arch-ranking', results);
+    renderSessionStats(results, 'arch-stats-card', 'arch-stats-grid');
+    const { data: regsAll } = await db.from('session_registrations').select('*').eq('session_id', id);
+    const regs = (regsAll || []).filter((r) => !r.is_unknown);
+    const ri = document.getElementById('arch-inscrits');
+    if (!regs.length) {
+      ri.innerHTML = '<div class="empty">Aucun inscrit via QR.</div>';
+    } else {
+      ri.innerHTML =
+        '<table class="tbl"><thead><tr><th>Kart</th><th>Nom</th><th>Nat.</th></tr></thead><tbody>' +
+        regs.map((r) => '<tr><td>' + (r.kart_number || '--') + '</td><td>' + escapeHTML(r.display_name || '--') + '</td><td>' + escapeHTML(r.nationality || '--') + '</td></tr>').join('') +
+        '</tbody></table>';
+    }
+    await loadArchiveChronoImports(id);
   } else {
-    ri.innerHTML =
-      '<table class="tbl"><thead><tr><th>Kart</th><th>Nom</th><th>Nat.</th></tr></thead><tbody>' +
-      regs.map((r) => '<tr><td>' + (r.kart_number || '--') + '</td><td>' + escapeHTML(r.display_name || '--') + '</td><td>' + escapeHTML(r.nationality || '--') + '</td></tr>').join('') +
-      '</tbody></table>';
+    // "Statistiques de la session" (arch-stats-card) derive du meme classement que
+    // Classement/Inscrits -- on la masque aussi plutot que de laisser un ancien contenu
+    // (potentiellement d'une autre archive consultee juste avant) affiche par erreur.
+    const statsCard = document.getElementById('arch-stats-card');
+    if (statsCard) statsCard.style.display = 'none';
+    renderPremiumLock('arch-ranking');
+    renderPremiumLock('arch-inscrits');
+    renderPremiumLock('arch-chrono-imports');
   }
   if (s.public_results_token) {
     const url = APP_CONFIG.baseUrl + '/results.html?result=' + s.public_results_token + '&v=' + Date.now();
@@ -694,7 +713,22 @@ export async function openArchiveDetail(id) {
   } else {
     document.getElementById('arch-qr-wrap').innerHTML = '<div class="empty">Non publie</div>';
   }
-  await loadArchiveChronoImports(id);
+  await refreshArchiveExportButtons();
+}
+
+// Boutons "Exporter CSV" / "Exporter PDF" de la fiche archive individuelle -- flag
+// 'archive_export' (voir plan.js). Ne concerne pas l'export GLOBAL CSV/XLSX de la liste
+// des archives (archives-export.js), qui reste Basique.
+async function refreshArchiveExportButtons() {
+  const allowed = await hasFeature('archive_export');
+  ['btn-csv-archive', 'btn-pdf-archive'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.disabled = !allowed;
+    btn.title = allowed ? '' : 'Reserve au plan Premium';
+    btn.style.opacity = allowed ? '' : '0.5';
+    btn.style.cursor = allowed ? '' : 'not-allowed';
+  });
 }
 
 // --- Historique des imports chrono (v19) ---------------------------------------------------

@@ -19,6 +19,7 @@ import * as stats from './modules/stats.js';
 import * as registry from './modules/registry.js';
 import * as manualAdd from './modules/manual-add.js';
 import * as archivesExport from './modules/archives-export.js';
+import { hasFeature } from './modules/plan.js';
 // Auth branchée (24/07) : l'admin nécessite désormais une session Supabase Auth valide.
 // Voir doLogin()/doLogout() et l'overlay #login-overlay dans admin.html.
 
@@ -219,11 +220,17 @@ function exportActivePDF(btn) {
 return results.exportSessionPDF(state.activeDetailSession, btn);
 }
 
-function exportArchiveCSV() {
+// Flag 'archive_export' (voir plan.js) : export CSV/PDF d'une archive INDIVIDUELLE. Les
+// boutons sont deja desactives cote UI pour un compte Basique (voir
+// results.js > refreshArchiveExportButtons()), on revalide ici aussi. Ne concerne pas
+// l'export GLOBAL CSV/XLSX de la liste des archives (archivesExport, reste Basique).
+async function exportArchiveCSV() {
+if (!(await hasFeature('archive_export'))) return;
 return results.exportCSV(state.archiveSession);
 }
 
-function exportArchivePDF(btn) {
+async function exportArchivePDF(btn) {
+if (!(await hasFeature('archive_export'))) return;
 return results.exportSessionPDF(state.archiveSession, btn);
 }
 

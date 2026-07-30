@@ -10,7 +10,7 @@
 import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { formatTime, formatDate } from './ui.js';
 import { PREMIUM_THEMES } from './settings.js';
-import { hasFeature } from './plan.js';
+import { hasFeature, renderPremiumLock } from './plan.js';
 
 let chartInstance = null;
 // 🆕 v20 : Basique — l'onglet Statistiques reste un pack leger (KPIs globaux,
@@ -364,39 +364,52 @@ export async function loadStatsTab(range) {
       kpiBox('Chronos enregistres', allLaps.length, null, '⏱️', 'Nombre total de tours chronometres enregistres sur la periode.');
   }
 
-  // --- Exploitation piste (Basique, MVP) — voir computeExploitationKpis() -----------------
-  const regsCountBySession = new Map();
-  allRegs.forEach((r) => {
-    regsCountBySession.set(r.session_id, (regsCountBySession.get(r.session_id) || 0) + 1);
-  });
-  const exploitation = computeExploitationKpis(allSessions, regsCountBySession, currentRange);
-  lastExploitation = exploitation;
-  if (exploitationGrid) {
-    exploitationGrid.innerHTML =
-      kpiBox(
-        'Remplissage moyen',
-        pct(exploitation.avgFill),
-        exploitation.avgFill != null ? 'min ' + pct(exploitation.minFill) + ' · max ' + pct(exploitation.maxFill) : 'Aucune session avec capacite connue',
-        '🪑', 'Moyenne du taux de remplissage (inscrits / places max) des sessions ayant une capacite renseignee. Les sessions sans capacite definie sont ignorees dans ce calcul.'
-      ) +
-      kpiBox(
-        'Utilisation piste (estimee)',
-        pct(exploitation.utilizationRate),
-        'Base : ' + DEFAULT_OPENING_HOURS_PER_DAY + 'h/jour, session ≈' + DEFAULT_AVG_SESSION_MINUTES + 'min',
-        '📈', 'Estimation simple : (nb sessions x 15 min) / (nb jours de la periode x 8h d\'ouverture). Basee sur des valeurs par defaut, pas sur de vrais horaires configures -- a affiner si besoin.'
-      ) +
-      kpiBox(
-        'Sessions / jour',
-        exploitation.sessionsPerDay != null ? exploitation.sessionsPerDay.toFixed(1) : '--',
-        exploitation.days ? 'sur ' + exploitation.days + ' jour(s)' : null,
-        '📅', 'Nombre de sessions divise par le nombre de jours couverts par la periode selectionnee.'
-      ) +
-      kpiBox(
-        'Sessions / semaine',
-        exploitation.sessionsPerWeek != null ? exploitation.sessionsPerWeek.toFixed(1) : '--',
-        null,
-        '🗓️', 'Sessions / jour x 7.'
-      );
+  // --- Exploitation piste + Frequentation (Premium — flag 'session_occupancy') -----------
+  // 30/07 : ces deux blocs de la Vue d'ensemble passent en Premium (KPIs globaux et
+  // Hall of Fame restent Basique). IMPORTANT, meme principe que loadPremiumStatsBlocks() :
+  // le verrou est verifie AVANT tout calcul — computeExploitationKpis() et
+  // renderFrequencyChart() ne tournent pas du tout si le plan ne l'autorise pas, pas de
+  // fuite de donnees dans le DOM.
+  const occupancyAllowed = await hasFeature('session_occupancy');
+  if (!occupancyAllowed) {
+    lastExploitation = { avgFill: null, minFill: null, maxFill: null, utilizationRate: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
+    renderPremiumLock('stats-exploitation-grid');
+    renderPremiumLock('stats-freq-card');
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+  } else {
+    const regsCountBySession = new Map();
+    allRegs.forEach((r) => {
+      regsCountBySession.set(r.session_id, (regsCountBySession.get(r.session_id) || 0) + 1);
+    });
+    const exploitation = computeExploitationKpis(allSessions, regsCountBySession, currentRange);
+    lastExploitation = exploitation;
+    if (exploitationGrid) {
+      exploitationGrid.innerHTML =
+        kpiBox(
+          'Remplissage moyen',
+          pct(exploitation.avgFill),
+          exploitation.avgFill != null ? 'min ' + pct(exploitation.minFill) + ' · max ' + pct(exploitation.maxFill) : 'Aucune session avec capacite connue',
+          '🪑', 'Moyenne du taux de remplissage (inscrits / places max) des sessions ayant une capacite renseignee. Les sessions sans capacite definie sont ignorees dans ce calcul.'
+        ) +
+        kpiBox(
+          'Utilisation piste (estimee)',
+          pct(exploitation.utilizationRate),
+          'Base : ' + DEFAULT_OPENING_HOURS_PER_DAY + 'h/jour, session ≈' + DEFAULT_AVG_SESSION_MINUTES + 'min',
+          '📈', 'Estimation simple : (nb sessions x 15 min) / (nb jours de la periode x 8h d\'ouverture). Basee sur des valeurs par defaut, pas sur de vrais horaires configures -- a affiner si besoin.'
+        ) +
+        kpiBox(
+          'Sessions / jour',
+          exploitation.sessionsPerDay != null ? exploitation.sessionsPerDay.toFixed(1) : '--',
+          exploitation.days ? 'sur ' + exploitation.days + ' jour(s)' : null,
+          '📅', 'Nombre de sessions divise par le nombre de jours couverts par la periode selectionnee.'
+        ) +
+        kpiBox(
+          'Sessions / semaine',
+          exploitation.sessionsPerWeek != null ? exploitation.sessionsPerWeek.toFixed(1) : '--',
+          null,
+          '🗓️', 'Sessions / jour x 7.'
+        );
+    }
   }
 
   // --- Totaux par inscription (pour le top temps) -----------------------------------------
@@ -449,7 +462,8 @@ export async function loadStatsTab(range) {
   }
 
   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
-  renderFrequencyChart(allSessions, currentRange);
+  // Fait partie du meme verrou 'session_occupancy' que l'exploitation piste ci-dessus.
+  if (occupancyAllowed) renderFrequencyChart(allSessions, currentRange);
 
   // --- Premium : fidelisation, performance avancee, qualite, utilisation avancee ---------
   // Section entierement separee (voir plus bas dans ce fichier) — ne modifie rien de ce
@@ -698,18 +712,12 @@ function renderLockedStatsPanel(panelId) {
 }
 
 async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, range) {
-  // Gating Offre 2 (voir plan.js > hasFeature('advanced_stats')) : les 3 sous-onglets
-  // restent visibles dans la navigation (switchStatsSubtab ne change pas) mais leur
-  // contenu est remplace par un encart verrouille -- et surtout, AUCUN des calculs
-  // ci-dessous ne tourne si le plan ne l'autorise pas (pas de fuite d'info dans le DOM,
-  // meme cache par un panel inactif).
-  const advancedAllowed = await hasFeature('advanced_stats');
-  if (!advancedAllowed) {
-    renderLockedStatsPanel('stats-subtab-fid');
-    renderLockedStatsPanel('stats-subtab-perf');
-    renderLockedStatsPanel('stats-subtab-qualite');
-    return;
-  }
+  // 30/07 : repartition plus fine — Fidelisation (stats-subtab-fid) est desormais Basique
+  // et se calcule toujours, sans verrou. Seuls Performance sportive (stats-subtab-perf) et
+  // Usage avance & saisonnalite (stats-subtab-qualite) restent derriere le flag
+  // 'advanced_stats' (voir plan.js > hasFeature()) — verifie plus bas, juste avant leurs
+  // calculs respectifs, pas ici : AUCUN des calculs Premium ne doit tourner si le plan ne
+  // l'autorise pas (pas de fuite d'info dans le DOM, meme cache par un panel inactif).
 
   const regsById = new Map(allRegs.map((r) => [r.id, r]));
   const sessionsById = new Map(allSessions.map((s) => [s.id, s]));
@@ -768,6 +776,17 @@ async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, r
   lastFidelisation = { tauxRetour, visites30: visites.j30, visites90: visites.j90, visites365: visites.j365, segmentation, top10: top10Engagement };
   renderFidelisationBlock(lastFidelisation);
 await refreshLevelThresholds();
+
+  // Gating Offre 2 (voir plan.js > hasFeature('advanced_stats')) : Performance sportive et
+  // Usage avance restent visibles dans la navigation (switchStatsSubtab ne change pas) mais
+  // leur contenu est remplace par un encart verrouille -- et surtout, AUCUN des calculs
+  // ci-dessous ne tourne si le plan ne l'autorise pas.
+  const advancedAllowed = await hasFeature('advanced_stats');
+  if (!advancedAllowed) {
+    renderLockedStatsPanel('stats-subtab-perf');
+    renderLockedStatsPanel('stats-subtab-qualite');
+    return;
+  }
 
   // ---------------------------------------------------------------------------------------
   // 2) PERFORMANCE SPORTIVE AVANCEE

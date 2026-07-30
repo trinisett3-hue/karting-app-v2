@@ -542,7 +542,7 @@ updateThemeToggleUI();
 <button class="btn btn-yel btn-sm" onclick="archPublish()">Republier</button>
 <button class="btn btn-ghost btn-sm" onclick="archCopyLink()">Copier lien</button>
 <button class="btn btn-ghost btn-sm" onclick="archTogglePres()">Presentation</button>
-<button class="btn btn-ghost btn-sm" onclick="exportArchiveCSV()">Exporter CSV</button>
+<button class="btn btn-ghost btn-sm" id="btn-csv-archive" onclick="exportArchiveCSV()">Exporter CSV</button>
 <button class="btn btn-ghost btn-sm" id="btn-pdf-archive" onclick="exportArchivePDF(this)">Exporter PDF</button>
 </div>
 <div class="msg" id="msg-arch"></div>
@@ -597,7 +597,7 @@ updateThemeToggleUI();
 <div class="g4" id="stats-exploitation-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:20px">Taux d'utilisation piste : estimation simple basee sur une duree moyenne de session et des horaires d'ouverture par defaut (reglage fin a venir).</div>
 
-<div class="card">
+<div class="card" id="stats-freq-card">
 <div class="ctitle" id="stats-freq-title">Frequentation (8 dernieres semaines)</div>
 <canvas id="stats-freq-chart" height="90"></canvas>
 </div>
@@ -673,7 +673,7 @@ updateThemeToggleUI();
 <div class="reg-count" id="registry-total"></div>
 <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px">
 <input type="text" class="reg-search" id="reg-search" placeholder="Rechercher un pseudo, un nom ou un email..." style="max-width:360px;margin-bottom:0" oninput="filterRegistry()">
-<button class="btn btn-ghost btn-sm" onclick="exportRegistryCSV()">Exporter en CSV</button>
+<button class="btn btn-ghost btn-sm" id="btn-registry-export" onclick="exportRegistryCSV()">Exporter en CSV</button>
 </div>
 <div id="registry-table"><div class="empty">Chargement...</div></div>
 <div class="reg-pager" id="registry-pager"></div>
