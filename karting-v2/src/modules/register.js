@@ -535,7 +535,16 @@ export async function submitForm() {
     document.getElementById('success-card').style.display = 'block';
     document.getElementById('success-name').textContent = 'Bonne course ' + regState.pilot.pseudo + ' !';
   } catch (e) {
-    if (e && e.code === '23505') {
+    // Deux contraintes uniques distinctes peuvent lever un 23505 ici : il
+        // faut les distinguer par leur nom, sinon un pilote qui tente de se
+        // réinscrire une seconde fois se voit répondre « avatar déjà pris »,
+        // ce qui n'a aucun sens et l'incite à retenter en boucle (bug A4/B28,
+        // corrigé le 30/07 — la contrainte session_registrations_session_pilot_uidx
+        // n'existait pas avant, donc les doublons passaient silencieusement).
+        const constraint = (e && (e.details || e.message || '')) + '';
+        if (e && e.code === '23505' && constraint.indexOf('session_pilot_uidx') !== -1) {
+                showMsg('msg-2', 'Tu es déjà inscrit à cette session — inutile de t\'inscrire une seconde fois.', 'err');
+        } else if (e && e.code === '23505') {
       // Collision sur (session_id, avatar_scheme) : un autre pilote vient de
       // prendre exactement le même avatar entre le chargement du carrousel
       // et la soumission. On rafraîchit la liste des disponibles et on
