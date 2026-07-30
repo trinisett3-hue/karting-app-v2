@@ -471,6 +471,7 @@ renderAccordion(results.filter(r => r.hasTime));
 
 document.getElementById('page-nav').style.display = 'flex';
 goToPage(1);
+  return true;
 }
 
 function fail() {
@@ -482,6 +483,7 @@ const msg = `<div class="empty-state">
 const el = document.getElementById(id);
 if (el) el.innerHTML = msg;
 });
+  return false;
 }
 
 /* ------------------------------------------------------------------
@@ -1679,12 +1681,238 @@ function cardResultsURL() {
   return u.toString();
 }
 
-function cardQRHTML(url) {
-  let svg = '';
-  try { svg = qrSVG(url); } catch (e) { svg = ''; }
-  if (!svg) return '';
-  return `<div style="width:180px;height:180px;background:#fff;border-radius:16px;padding:14px;` +
-    `display:flex;align-items:center;justify-content:center">${svg}</div>`;
+function cardQRHTML(url, size) {
+    const s = size || 180;
+    let svg = '';
+    try { svg = qrSVG(url); } catch (e) { svg = ''; }
+    if (!svg) return '';
+    return `<div style="width:${s}px;height:${s}px;background:#fff;border-radius:16px;padding:${Math.round(s * 0.08)}px;` +
+          `display:flex;align-items:center;justify-content:center">${svg}</div>`;
+}
+
+// =====================================================================
+// CARTES PARTAGEABLES — MOTEUR CONFORME AUX 15 CONCEPTS ENREGISTRES
+//
+// Correctif du 30/07 : positionCardPNGBytes/recordCardPNGBytes dessinaient un
+// visuel générique, identique quels que soient les visuels cochés dans
+// Paramètres > Cartes partageables — les 240 concepts (voir assets/cards/) et
+// les choix de l'organisateur (card_position_picks / card_record_picks)
+// n'étaient jamais lus. Reconstruit ici à partir des visuels de référence
+// (mêmes zones : logo+nom+accroche+QR en tête, contenu en zone sûre
+// SAFE_TOP=250/SAFE_BOT=1540, pilote+kart+tours+session+date en pied), sans
+// disposer du fichier source du designer (gen3.js, hors de ce dépôt) — donc
+// fidèle dans la structure et les données, approximatif au pixel près.
+// =====================================================================
+
+function pad2(n) { return String(n).padStart(2, '0'); }
+const MONTH_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre'];
+const DOW_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
+
+function parseRecordDate(d) {
+    const dt = d ? new Date(String(d).slice(0, 10) + 'T00:00:00') : new Date(0);
+    return Number.isNaN(dt.getTime()) ? new Date(0) : dt;
+}
+
+// Lundi de la semaine ISO contenant `dt`, et ses 6 jours suivants.
+function isoWeekDays(dt) {
+    const dow = (dt.getDay() + 6) % 7; // 0=lundi..6=dimanche
+  const monday = new Date(dt); monday.setDate(dt.getDate() - dow);
+    return Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
+}
+
+function cardHeaderHTML(t) {
+    const circuit = escapeHTML(SITE_CIRCUIT_NAME || (sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+    const tagline = escapeHTML(CARD_TAGLINE || '');
+    const logo = PDF_LOGO_URL
+      ? `<img src="${PDF_LOGO_URL}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:contain;border-radius:50%;background:${t.surface}">`
+          : `<div style="width:100%;height:100%;border-radius:50%;border:2px solid ${t.accent};display:flex;align-items:center;justify-content:center;font:700 26px 'UI',sans-serif;color:${t.accent}">${escapeHTML((circuit || 'K').charAt(0))}</div>`;
+    return `
+        <div style="position:absolute;left:74px;top:50px;width:64px;height:64px">${logo}</div>
+            <div style="position:absolute;left:154px;top:52px;right:250px">
+                  <div style="font:700 28px 'UI',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${circuit}</div>
+                        ${tagline ? `<div style="font:400 17px 'Mono',monospace;color:${t.muted};margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tagline}</div>` : ''}
+                            </div>
+                                <div style="position:absolute;right:74px;top:40px">${cardQRHTML(cardResultsURL(), 150)}</div>
+                                    <div style="position:absolute;left:74px;right:74px;top:196px;height:1px;background:${t.border}"></div>
+                                      `;
+}
+
+function cardFooterHTML(t, pilot) {
+    const laps = pilot.hasTime ? String(pilot.lapsCount) + ' tours' : '';
+    const type = escapeHTML((sessionInfo && sessionInfo.session_type) || '');
+    const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+    const meta = ['Kart ' + (pilot.kart ?? '-'), laps, type, date].filter(Boolean).join(' &middot; ');
+    return `
+        <div style="position:absolute;left:74px;bottom:230px;width:64px;height:64px;border-radius:50%;overflow:hidden;background:${t.surface}">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 200, scheme: pilot.scheme })}</div>
+            <div style="position:absolute;left:154px;bottom:258px;right:74px;font:700 30px 'UI',sans-serif;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(pilot.name)}</div>
+                <div style="position:absolute;left:74px;bottom:206px;right:74px;font:400 19px 'Mono',monospace;letter-spacing:.03em;color:${t.muted};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${meta}</div>
+                  `;
+}
+
+function cardBodyWrap(inner) {
+    return `<div style="position:absolute;left:74px;right:74px;top:250px;bottom:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden">${inner}</div>`;
+}
+
+function cardShell(t, bodyInner, pilot) {
+    return cardHeaderHTML(t) + cardBodyWrap(bodyInner) + cardFooterHTML(t, pilot);
+}
+
+// --- Concepts POSITION -----------------------------------------------------
+
+const POSITION_BODIES = {
+    '01-track-hero': (t, pilot, ctx) => `
+        <div style="font:400 22px 'Mono',monospace;letter-spacing:.32em;color:${t.muted}">POSITION FINALE</div>
+            <div style="font:700 280px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:16px">P${ctx.pos}</div>
+                <div style="font:700 86px 'UI',sans-serif;color:${t.text};margin-top:8px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>
+                    <div style="font:400 20px 'Mono',monospace;letter-spacing:.28em;color:${t.muted};margin-top:26px">MEILLEUR TOUR</div>`,
+
+    '02-avatar-central': (t, pilot, ctx) => `
+        <div style="width:320px;height:320px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.border};display:flex;align-items:center;justify-content:center;overflow:hidden">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 300, scheme: pilot.scheme })}</div>
+            <div style="font:700 190px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:34px">P${ctx.pos}</div>
+                <div style="font:700 76px 'UI',sans-serif;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>`,
+
+    '03-chrono-editorial': (t, pilot, ctx) => `
+        <div style="display:flex;align-items:baseline;gap:16px">
+              <span style="font:700 120px 'UI',sans-serif;color:${t.accent}">P${ctx.pos}</span>
+                    <span style="font:400 22px 'Mono',monospace;color:${t.muted};letter-spacing:.05em">/ ${ctx.totalPilots} PILOTES</span>
+                        </div>
+                            <div style="width:100%;height:1px;background:${t.border};margin:28px 0"></div>
+                                <div style="font:700 140px 'UI',sans-serif;color:${t.text}">${ctx.time}</div>
+                                    <div style="font:400 20px 'Mono',monospace;letter-spacing:.24em;color:${t.muted};margin-top:10px">SECONDES &middot; MEILLEUR TOUR</div>
+                                        <div style="width:100%;height:1px;background:${t.border};margin:28px 0"></div>
+                                            <div style="display:flex;justify-content:space-between;width:100%;font:700 17px 'Mono',monospace;letter-spacing:.05em;color:${t.muted};text-transform:uppercase">
+                                                  <span>Session ${escapeHTML(ctx.sessionType)}</span><span>${pilot.hasTime ? pilot.lapsCount : '--'} tours</span><span>${escapeHTML(ctx.dateTxt)}</span>
+                                                      </div>`,
+
+    '06-bloc-massif': (t, pilot, ctx) => `
+        <div style="display:flex;align-items:center;gap:34px">
+              <div style="background:${t.accent};color:#0a0a0a;font:700 140px 'UI',sans-serif;padding:18px 36px;line-height:1">P${ctx.pos}</div>
+                    <div style="text-align:left">
+                            <div style="font:400 18px 'Mono',monospace;letter-spacing:.2em;color:${t.muted}">MEILLEUR TOUR</div>
+                                    <div style="font:700 84px 'UI',sans-serif;color:${t.text}">${ctx.time}<span style="font-size:.35em;color:${t.muted}">s</span></div>
+                                          </div>
+                                              </div>
+                                                  <div style="margin-top:38px;font:700 17px 'Mono',monospace;letter-spacing:.1em;color:${t.muted};text-transform:uppercase;line-height:2">
+                                                        ${pilot.hasTime ? pilot.lapsCount : '--'} tours &middot; session ${escapeHTML(ctx.sessionType)} &middot; ${ctx.totalPilots} pilotes
+                                                            </div>`,
+
+    '07-damier-dissous': (t, pilot, ctx) => `
+        <div style="position:relative;width:100%;display:flex;flex-direction:column;align-items:center">
+              <div style="position:absolute;inset:-60px 0 auto 0;height:340px;opacity:.10;background-image:repeating-conic-gradient(${t.text} 0% 25%, transparent 0% 50%);background-size:40px 40px"></div>
+                    <div style="font:700 20px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};position:relative">MEILLEUR TOUR</div>
+                          <div style="font:800 220px 'UI',sans-serif;color:${t.text};line-height:.85;margin-top:14px;position:relative">${ctx.time}</div>
+                                <div style="font:400 22px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};margin-top:16px;position:relative">SECONDES</div>
+                                    </div>`,
+};
+
+function pickPositionConcept() {
+    const picks = (CARD_POSITION_PICKS || []).filter((id) => POSITION_BODIES[id]);
+    if (!picks.length) return '01-track-hero';
+    return picks[Math.floor(Math.random() * picks.length)];
+}
+
+/** Carte de position — un pilote, son classement, un QR vers le classement en ligne. */
+export async function positionCardPNGBytes(regId) {
+    const pilot = (allResults || []).find((r) => r.regId === regId);
+    if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
+    const t = themeColors();
+    const conceptId = pickPositionConcept();
+    const build = POSITION_BODIES[conceptId] || POSITION_BODIES['01-track-hero'];
+    const ctx = {
+          pos: pilot.pos,
+          time: pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--',
+          totalPilots: (allResults || []).length,
+          sessionType: (sessionInfo && sessionInfo.session_type) || '--',
+          dateTxt: fmtSessionDate(sessionInfo && sessionInfo.session_date),
+    };
+    return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot));
+}
+
+// --- Concepts RECORD --------------------------------------------------------
+
+const RECORD_SCOPE_LABELS = {
+    perso: 'RECORD PERSONNEL', piste: 'RECORD DE LA PISTE',
+    semaine: 'RECORD DE LA SEMAINE', mois: 'RECORD DU MOIS',
+};
+const RECORD_PILL_LABELS = {
+    perso: 'NOUVEAU RECORD PERSO', piste: 'MEILLEUR TEMPS ABSOLU',
+    semaine: 'MEILLEUR TEMPS DE LA SEMAINE', mois: 'MEILLEUR TEMPS DU MOIS',
+};
+
+function recordPill(t, text) {
+    return `<div style="margin-top:34px;display:inline-block;padding:12px 26px;border-radius:999px;border:1px solid ${t.accent};font:700 15px 'Mono',monospace;letter-spacing:.08em;color:${t.accent};text-transform:uppercase">${text}</div>`;
+}
+function checkeredGlyph(t, size) {
+    const s = size || 48;
+    return `<div style="width:${s}px;height:${s}px;background-image:repeating-conic-gradient(${t.text} 0% 25%, transparent 0% 50%);background-size:${s / 4}px ${s / 4}px;border-radius:6px;opacity:.9"></div>`;
+}
+
+const RECORD_BODIES = {
+    perso: (t, pilot, ctx) => `
+        <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${ctx.label}</div>
+            ${ctx.prevTime ? `<div style="font:700 58px 'UI',sans-serif;color:${t.muted};text-decoration:line-through;margin-top:32px">${ctx.prevTime}</div>` : ''}
+                <div style="font:700 140px 'UI',sans-serif;color:${t.text};margin-top:${ctx.prevTime ? '10px' : '38px'}">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
+                    ${ctx.deltaTxt ? `<div style="margin-top:16px;font:700 19px 'Mono',monospace;color:${t.accent}">${ctx.deltaTxt}</div>` : ''}
+                        ${recordPill(t, RECORD_PILL_LABELS.perso)}`,
+
+    piste: (t, pilot, ctx) => `
+        ${checkeredGlyph(t, 56)}
+            <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent};margin-top:22px">${ctx.label}</div>
+                <div style="font:700 130px 'UI',sans-serif;color:${t.text};margin-top:16px">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
+                    ${ctx.prevTime ? `<div style="margin-top:14px;font:400 18px 'Mono',monospace;color:${t.muted}">ANCIEN RECORD ${ctx.prevTime}s ${ctx.deltaTxt ? '&middot; ' + ctx.deltaTxt : ''}</div>` : ''}
+                        ${recordPill(t, RECORD_PILL_LABELS.piste)}`,
+
+    semaine: (t, pilot, ctx) => {
+          const days = isoWeekDays(ctx.recordDate);
+          const dow = (ctx.recordDate.getDay() + 6) % 7;
+          const grid = days.map((d, i) => `
+                <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+                        <div style="font:400 13px 'Mono',monospace;letter-spacing:.05em;color:${t.muted}">${DOW_FR[i]}</div>
+                                <div style="width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 16px 'UI',sans-serif;${i === dow ? `background:${t.accent};color:#0a0a0a` : `border:1px solid ${t.border};color:${t.muted}`}">${d.getDate()}</div>
+                                      </div>`).join('');
+          const endDate = days[6];
+          const rangeTxt = `SEMAINE DU ${pad2(days[0].getDate())} AU ${pad2(endDate.getDate())} ${MONTH_FR[endDate.getMonth()].toUpperCase()} ${endDate.getFullYear()}`;
+          return `
+                <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${ctx.label}</div>
+                      <div style="font:700 110px 'UI',sans-serif;color:${t.text};margin-top:18px">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
+                            <div style="display:flex;gap:14px;margin-top:38px">${grid}</div>
+                                  <div style="margin-top:24px;font:400 17px 'Mono',monospace;letter-spacing:.05em;color:${t.muted}">${rangeTxt}</div>
+                                        ${recordPill(t, RECORD_PILL_LABELS.semaine)}`;
+    },
+
+    mois: (t, pilot, ctx) => {
+          const y = ctx.recordDate.getFullYear(), m = ctx.recordDate.getMonth();
+          const daysInMonth = new Date(y, m + 1, 0).getDate();
+          const dayOfMonth = ctx.recordDate.getDate();
+          const dots = Array.from({ length: daysInMonth }, (_, i) => {
+                  const on = i + 1 === dayOfMonth;
+                  return `<div style="width:16px;height:16px;border-radius:50%;${on ? `background:${t.accent}` : `border:1.5px solid ${t.border}`}"></div>`;
+          }).join('');
+          return `
+                <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${ctx.label}</div>
+                      <div style="font:700 110px 'UI',sans-serif;color:${t.text};margin-top:18px">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
+                            <div style="display:grid;grid-template-columns:repeat(7, 16px);gap:12px;margin-top:34px;max-width:220px">${dots}</div>
+                                  <div style="margin-top:24px;font:400 20px 'Mono',monospace;letter-spacing:.15em;color:${t.muted};text-transform:uppercase">${MONTH_FR[m]} ${y}</div>
+                                        ${recordPill(t, RECORD_PILL_LABELS.mois)}`;
+    },
+};
+
+/** Carte de record — un pilote qui vient de battre un record (scope donne). */
+export async function recordCardPNGBytes(regId, scope, payload) {
+    const pilot = (allResults || []).find((r) => r.regId === regId);
+    if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
+    const t = themeColors();
+    const newTime = (payload && payload.time != null) ? fmtPdfTime(payload.time)
+          : (pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--');
+    const prevTime = (payload && payload.prev != null) ? fmtPdfTime(payload.prev) : null;
+    const deltaTxt = (payload && payload.delta != null) ? '-' + fmtPdfTime(payload.delta) + 's' : null;
+    const recordDate = parseRecordDate(payload && payload.date);
+    const ctx = {
+          label: RECORD_SCOPE_LABELS[scope] || 'NOUVEAU RECORD',
+          newTime, prevTime, deltaTxt, recordDate,
+    };
+    const build = RECORD_BODIES[scope] || RECORD_BODIES.perso;
+    return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot));
 }
 
 // Rasterise un fragment HTML 1080x1920 en PNG (ArrayBuffer). Reutilise
@@ -1692,75 +1920,16 @@ function cardQRHTML(url) {
 // la carte est deja definie a sa resolution finale, contrairement aux
 // pages A4 qui doivent etre remises a l'echelle.
 async function renderCardPNG(bodyHTML) {
-  const t = themeColors();
-  const node = document.createElement('div');
-  node.style.cssText = `position:relative;width:${CARD_W}px;height:${CARD_H}px;overflow:hidden;` +
-    `background:${t.bg};font-family:'UI',system-ui,sans-serif;color:${t.text}`;
-  node.innerHTML = bodyHTML;
-  const canvas = await sectionToCanvas(node, CARD_W, t.bg, 1);
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) { reject(new Error('Rendu de la carte vide (toBlob)')); return; }
-      blob.arrayBuffer().then(resolve, reject);
-    }, 'image/png');
-  });
-}
-
-/** Carte de position — un pilote, son classement, un QR vers le classement en ligne. */
-export async function positionCardPNGBytes(regId) {
-  const pilot = (allResults || []).find((r) => r.regId === regId);
-  if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
-  const t = themeColors();
-  const circuit = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
-  const dateTxt = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
-  const best = pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--';
-  const html = `
-    <div style="position:absolute;inset:0;background:linear-gradient(180deg, ${t.surface} 0%, ${t.bg} 60%)"></div>
-    <div style="position:absolute;left:0;right:0;top:0;height:14px;background:${t.accent}"></div>
-    <div style="position:absolute;left:74px;right:74px;top:120px">
-      <div style="font:700 34px 'UI',sans-serif;letter-spacing:.13em;text-transform:uppercase">${circuit}</div>
-      <div style="font:400 20px 'Mono',monospace;letter-spacing:.045em;color:${t.muted};margin-top:14px">${dateTxt}</div>
-    </div>
-    <div style="position:absolute;left:74px;right:74px;top:620px;text-align:center">
-      <div style="font:400 20px 'Mono',monospace;letter-spacing:.34em;color:${t.muted}">POSITION</div>
-      <div style="font:700 320px 'UI',sans-serif;line-height:.8;color:${t.accent};margin-top:20px">${pilot.pos}</div>
-      <div style="font:700 54px 'UI',sans-serif;margin-top:44px;text-transform:uppercase;overflow-wrap:break-word">${escapeHTML(pilot.name)}</div>
-      <div style="font:400 24px 'Mono',monospace;color:${t.muted};margin-top:22px;letter-spacing:.1em">Kart ${pilot.kart ?? '-'} &middot; Meilleur tour ${best}</div>
-    </div>
-    <div style="position:absolute;left:74px;bottom:120px">${cardQRHTML(cardResultsURL())}</div>
-    <div style="position:absolute;right:74px;bottom:170px;text-align:right;max-width:700px;font:400 18px 'Mono',monospace;color:${t.muted}">Scanne pour voir<br/>le classement complet</div>
-  `;
-  return renderCardPNG(html);
-}
-
-const RECORD_SCOPE_LABELS = {
-  perso: 'RECORD PERSONNEL', piste: 'RECORD DE LA PISTE',
-  semaine: 'RECORD DE LA SEMAINE', mois: 'RECORD DU MOIS',
-};
-
-/** Carte de record — un pilote qui vient de battre un record (scope donne). */
-export async function recordCardPNGBytes(regId, scope, payload) {
-  const pilot = (allResults || []).find((r) => r.regId === regId);
-  if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
-  const t = themeColors();
-  const circuit = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
-  const label = RECORD_SCOPE_LABELS[scope] || 'NOUVEAU RECORD';
-  const newTime = (payload && payload.time != null) ? fmtPdfTime(payload.time)
-    : (pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--');
-  const prevTime = (payload && payload.prev != null) ? fmtPdfTime(payload.prev) : null;
-  const html = `
-    <div style="position:absolute;inset:0;background:linear-gradient(180deg, ${t.surface} 0%, ${t.bg} 60%)"></div>
-    <div style="position:absolute;left:0;right:0;top:0;height:14px;background:${t.accent}"></div>
-    <div style="position:absolute;left:74px;right:74px;top:120px">
-      <div style="font:700 34px 'UI',sans-serif;letter-spacing:.13em;text-transform:uppercase">${circuit}</div>
-    </div>
-    <div style="position:absolute;left:74px;right:74px;top:600px;text-align:center">
-      <div style="font:400 22px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${label}</div>
-      ${prevTime ? `<div style="font:700 74px 'UI',sans-serif;color:${t.muted};text-decoration:line-through;margin-top:44px">${prevTime}</div>` : ''}
-      <div style="font:700 150px 'UI',sans-serif;color:${t.text};margin-top:26px">${newTime}</div>
-      <div style="font:700 54px 'UI',sans-serif;margin-top:44px;text-transform:uppercase;overflow-wrap:break-word">${escapeHTML(pilot.name)}</div>
-    </div>
-    <div style="position:absolute;left:74px;bottom:120px">${cardQRHTML(cardResultsURL())}</div>
-  `;
-  return renderCardPNG(html);
+    const t = themeColors();
+    const node = document.createElement('div');
+    node.style.cssText = `position:relative;width:${CARD_W}px;height:${CARD_H}px;overflow:hidden;` +
+          `background:${t.bg};font-family:'UI',system-ui,sans-serif;color:${t.text}`;
+    node.innerHTML = bodyHTML;
+    const canvas = await sectionToCanvas(node, CARD_W, t.bg, 1);
+    return new Promise((resolve, reject) => {
+          canvas.toBlob((blob) => {
+                  if (!blob) { reject(new Error('Rendu de la carte vide (toBlob)')); return; }
+                  blob.arrayBuffer().then(resolve, reject);
+          }, 'image/png');
+    });
 }
