@@ -71,7 +71,7 @@ let PDF_LOGO_URL = null;
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
 // <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
 function genAvatarDataURL(kart, opts) {
-  // Pack Signature (plan Pro) : le PDF doit utiliser le même avatar que l'écran.
+  // Pack Signature (plan Premium) : le PDF doit utiliser le même avatar que l'écran.
   // signatureAvatarDataURLSync() lit un cache préchauffé par prewarm… en tête des
   // deux exports ; s'il est vide (pack cassé, kart non préchauffé) on retombe
   // silencieusement sur l'avatar classique.
@@ -100,7 +100,7 @@ admin.html > Paramètres > Apparence.
 export function initTheme() {
 const MAP = {
 classic: 'classic', dark: 'classic', neon: 'neon', carbon: 'carbon',
-// v15 : thèmes premium (plan Pro/Business) — manquaient de cette table,
+// v15 : thèmes premium (plan Premium/Business) — manquaient de cette table,
 // donc my_theme_entitlement() avait beau autoriser le thème choisi dans
 // Paramètres, initTheme() le retombait silencieusement sur 'classic' ici
 // (MAP[theme] || 'classic') faute d'entrée correspondante. Même impact sur
@@ -139,7 +139,7 @@ header.appendChild(img);
 }
 
 // Plan du circuit (optionnel) — affiché juste avant le podium, uniquement si configuré.
-// À gater sur le plan Pro une fois la facturation en place (Phase 3 roadmap).
+// À gater sur le plan Premium une fois la facturation en place (Phase 3 roadmap).
 const trackMapUrl = data.value && data.value.track_map_url;
 if (trackMapUrl) {
 const podiumWrap = document.getElementById('podium-wrap');

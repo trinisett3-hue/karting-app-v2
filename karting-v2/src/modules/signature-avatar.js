@@ -1,5 +1,5 @@
 /* =============================================================================
-   TRINISETTE — Avatars "Signature" (plan Pro)
+   TRINISETTE — Avatars "Signature" (plan Premium)
    -----------------------------------------------------------------------------
    Un avatar Signature est composé de TROIS COUCHES superposées, jamais d'un
    fichier unique :
@@ -306,7 +306,7 @@ const DEFAULTS = {
   background: 'studio',   // id de style, ou false/null/'none' = fond désactivé
   outline: true,          // halo blanc autour du sujet quand le fond est actif
   shape: 'round',         // 'round' | 'square'
-  entitled: false,        // le tenant a-t-il le droit au pack (plan Pro)
+  entitled: false,        // le tenant a-t-il le droit au pack (plan Premium)
   plan: 'free',
   base_url: '/avatars/signature/'
 };

@@ -31,7 +31,8 @@ return cachedPlanCode;
 export async function hasFeature(feature) {
 if (!PREMIUM_FEATURES.includes(feature)) return true;
 const plan = await getCurrentPlanCode();
-// codes techniques inchangés : "pro" = Premium, "business" = Business (dormant)
+// codes techniques inchangés : "pro" = Premium (nom commercial actuel, potentiellement
+// ajustable plus tard), "business" = plan dormant, pas encore vendu / nommé commercialement
 return plan === 'pro' || plan === 'business';
 }
 

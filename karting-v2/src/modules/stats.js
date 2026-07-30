@@ -666,7 +666,7 @@ function stddev(values) {
   return { mean, sd: Math.sqrt(variance) };
 }
 
-// Themes "Pro" — copie volontairement locale de la liste de PREMIUM_THEMES dans
+// Themes "Premium" — copie volontairement locale de la liste de PREMIUM_THEMES dans
 // settings.js (pas d'import croise entre les deux modules pour ce simple usage en
 // lecture) : settings.js reste la source de verite si la liste doit evoluer.
 // Ex-doublon corrigé (audit 28/07, section 4.1) : importé depuis settings.js, seule
@@ -993,7 +993,7 @@ function renderUsageAvanceBlock(u) {
       kpiBox('Inscriptions en ligne', pct(u.pctEnLigne), 'Via register.html', '💻') +
       kpiBox('Inscriptions sur place', pct(u.pctSurPlace), 'Walk-in / saisie admin', '🚶') +
       kpiBox('Plan de piste', u.planPisteActif ? 'Actif' : 'Inactif', null, '🗺️') +
-      kpiBox('Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Pro' : 'Theme gratuit', '🎨');
+      kpiBox('Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Premium' : 'Theme gratuit', '🎨');
   }
   const saisonEl = document.getElementById('stats-usage-saison');
   if (!saisonEl) return;
@@ -1129,7 +1129,7 @@ export function exportStatsXLSX() {
     ['Inscriptions en ligne (register.html)', pct(u.pctEnLigne), ''],
     ['Inscriptions sur place (walk-in/admin)', pct(u.pctSurPlace), ''],
     ['Plan de piste', u.planPisteActif ? 'Actif' : 'Inactif', ''],
-    ['Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Pro' : 'Theme gratuit'],
+    ['Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Premium' : 'Theme gratuit'],
     [],
     ['Saisonnalite (12 derniers mois) — Mois', 'Sessions'],
     ...u.saisonnalite.months.map((m) => [m.month, m.count]),

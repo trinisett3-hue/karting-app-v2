@@ -25,7 +25,7 @@
 //
 // Le pack d'avatars (classic/signature) affiché dans le carrousel n'est
 // JAMAIS décidé ici : public_registration_config() relaie tel quel ce que
-// private.avatar_config(tenant_id) a déjà tranché côté serveur (Pro ou pas),
+// private.avatar_config(tenant_id) a déjà tranché côté serveur (Premium ou pas),
 // exactement comme le fait déjà site-config.js pour results.html.
 import { db } from '../lib/supabase.js';
 import { kartAvatarSVG } from './kart-avatar.js';

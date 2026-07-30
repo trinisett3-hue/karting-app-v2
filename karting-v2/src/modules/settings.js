@@ -49,7 +49,7 @@ const THEME_COLORS = {
 classic: { bg: '#050608', surf: '#0d0f14', mut: '#7a7d8a', acc: '#ff2a2a', text: '#f4f5f8', p2: 'rgba(255,255,255,.28)', p3: 'rgba(184,134,90,.6)', gapBg: '#ff2a2a', gapText: '#fff' },
 neon: { bg: '#060810', surf: '#0b0e18', mut: '#6a7a9a', acc: '#00d4ff', text: '#f0f4ff', p2: 'rgba(255,0,128,.5)', p3: 'rgba(255,0,128,.3)', gapBg: '#00d4ff', gapText: '#060810' },
 carbon: { bg: '#111214', surf: '#181a1e', mut: '#8a8880', acc: '#c9a84c', text: '#f5f0e8', p2: 'rgba(180,180,180,.35)', p3: 'rgba(150,110,70,.5)', gapBg: 'transparent', gapText: '#c9a84c' },
-// Thèmes Pro (v15) — mêmes tokens que les blocs [data-theme="..."] de results.html.
+// Thèmes Premium (v15) — mêmes tokens que les blocs [data-theme="..."] de results.html.
 checkered: { bg: '#08090b', surf: '#101114', mut: '#9a9a94', acc: '#ece8dd', text: '#f7f6f2', p2: 'rgba(255,255,255,.4)', p3: 'rgba(201,163,93,.35)', gapBg: '#ece8dd', gapText: '#0a0a0a' },
 endurance: { bg: '#03050b', surf: '#070a17', mut: '#7580a6', acc: '#ffb238', text: '#eef1fb', p2: 'rgba(79,178,255,.48)', p3: 'rgba(255,178,56,.3)', gapBg: '#ffb238', gapText: '#04060d' },
 pitlane: { bg: '#0a0b0b', surf: '#131613', mut: '#8d8f80', acc: '#f0c419', text: '#f6f4ea', p2: 'rgba(255,255,255,.32)', p3: 'rgba(255,106,31,.4)', gapBg: '#f0c419', gapText: '#0b0c0c' },
@@ -57,7 +57,7 @@ champagne: { bg: '#0c0a07', surf: '#161009', mut: '#a4937b', acc: '#d9b978', tex
 arctic: { bg: '#f4f6f9', surf: '#ffffff', mut: '#565c72', acc: '#1a6fbd', text: '#11131c', p2: 'rgba(10,15,30,.3)', p3: 'rgba(26,111,189,.24)', gapBg: '#1a6fbd', gapText: '#ffffff' },
 };
 
-// Slugs des thèmes réservés au plan Pro (entitlement `premium_themes`,
+// Slugs des thèmes réservés au plan Premium (entitlement `premium_themes`,
 // cf. public.my_theme_entitlement() dans migration-v15-registre-stats-themes.sql).
 // Exportée : source de vérité unique, reprise par stats.js (audit 28/07, section 4.1 —
 // la liste était dupliquée dans les deux fichiers, avec un risque d'oubli à l'ajout d'un thème).
@@ -467,10 +467,10 @@ export function switchParamsSubtab(tab) {
   if (tab === 'cartes') renderCardsTab();
 }
 
-// --- Entitlement "thèmes premium" (plan Pro) ---------------------------------------
+// --- Entitlement "thèmes premium" (plan Premium) ---------------------------------------
 // Même pattern que avatarEntitlement ci-dessous : rempli une fois au chargement par
 // public.my_theme_entitlement(), utilisé UNIQUEMENT pour l'affichage (griser/verrouiller
-// les thèmes Pro dans le picker). La décision réelle appartient au serveur, et elle y est
+// les thèmes Premium dans le picker). La décision réelle appartient au serveur, et elle y est
 // désormais appliquée : le trigger trg_enforce_premium_settings nettoie chaque écriture de
 // app_settings et le RPC public_site_config() re-nettoie à la lecture publique. Un thème
 // Premium forcé par un plan Basique retombe donc sur "classic" côté serveur.
@@ -481,13 +481,13 @@ try {
 const { data, error } = await db.rpc('my_theme_entitlement');
 if (!error && data) themeEntitlement = data;
 } catch (e) {
-// Sans reponse on reste sur { entitled:false } : les thèmes Pro restent verrouillés
+// Sans reponse on reste sur { entitled:false } : les thèmes Premium restent verrouillés
 // dans l'UI plutôt que de promettre a tort qu'ils sont disponibles.
 }
 renderThemeGating();
 }
 
-// Applique le verrouillage visuel des lignes de thèmes Pro (grisé + icône cadenas),
+// Applique le verrouillage visuel des lignes de thèmes Premium (grisé + icône cadenas),
 // sans jamais désactiver les 3 thèmes gratuits historiques.
 function renderThemeGating() {
 document.querySelectorAll('.theme-option-row').forEach((r) => {
@@ -500,19 +500,19 @@ const currentIsPremiumLocked = isPremiumTheme(state.prefs.results_theme) && !the
 ups.style.display = (!themeEntitlement.entitled) ? 'block' : 'none';
 if (currentIsPremiumLocked) {
 // Cas résiduel (downgrade après sélection) : la préférence enregistrée pointe vers
-// un thème Pro que le tenant n'a plus le droit d'utiliser. On ne la modifie pas
+// un thème Premium que le tenant n'a plus le droit d'utiliser. On ne la modifie pas
 // silencieusement ici — voir la lacune connue côté public_site_config() — mais on
 // le signale clairement dans l'encart plutôt que de laisser un message générique.
-ups.innerHTML = 'Le thème actuellement enregistré est un thème <strong>Pro</strong> et ton plan ne l\'inclut plus : la page publique peut continuer à l\'afficher jusqu\'à ce que tu en choisisses un autre ici. Passe au plan supérieur pour le conserver, ou choisis un thème gratuit.';
+ups.innerHTML = 'Le thème actuellement enregistré est un thème <strong>Premium</strong> et ton plan ne l\'inclut plus : la page publique peut continuer à l\'afficher jusqu\'à ce que tu en choisisses un autre ici. Passe au plan supérieur pour le conserver, ou choisis un thème gratuit.';
 } else {
-ups.innerHTML = 'Les thèmes premium sont réservés au plan <strong>Pro</strong>. Passe au plan supérieur pour les débloquer.';
+ups.innerHTML = 'Les thèmes premium sont réservés au plan <strong>Premium</strong>. Passe au plan supérieur pour les débloquer.';
 }
 }
 }
 
 export function selectResultsTheme(val) {
 if (isPremiumTheme(val) && !themeEntitlement.entitled) {
-// Garde-fou côté picker : on ne laisse pas sélectionner/appliquer un thème Pro sans
+// Garde-fou côté picker : on ne laisse pas sélectionner/appliquer un thème Premium sans
 // entitlement — la RPC my_theme_entitlement() reste la source de vérité, ceci n'est
 // qu'un confort d'UI pour ne pas laisser croire que le choix a été pris en compte.
 renderThemeGating();
@@ -529,10 +529,10 @@ renderCardsTab();
 markPrefsDirty();
 }
 
-// --- Pack d'avatars (Classic / Signature Pro) ---------------------------------------
+// --- Pack d'avatars (Classic / Signature Premium) ---------------------------------------
 // Etat commercial du tenant connecte, rempli une fois au chargement par
 // public.my_avatar_entitlement(). Sert UNIQUEMENT a afficher ou non l'encart
-// « reserve au plan Pro » : la decision reelle est prise par le serveur.
+// « reserve au plan Premium » : la decision reelle est prise par le serveur.
 let avatarEntitlement = { entitled: false, plan: 'free' };
 
 function currentPack() {
@@ -572,7 +572,7 @@ renderSignatureControls();
 }
 
 // Applique l'etat du formulaire a l'ecran : surlignage des pastilles de pack,
-// affichage des deux blocs d'options, encart Pro, bande d'apercu, galerie.
+// affichage des deux blocs d'options, encart Premium, bande d'apercu, galerie.
 export function renderSignatureControls() {
 const pack = currentPack();
 document.querySelectorAll('.avatar-pack-row').forEach((r) => {
