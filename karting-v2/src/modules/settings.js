@@ -10,7 +10,7 @@
 import { db } from '../lib/supabase.js';
 import { state, setPrefs, markPrefsDirty } from '../state.js';
 import { showMsg, formatTime, formatDate } from './ui.js';
-import { toggleSectorsField, loadRanking } from './results.js';
+import { toggleSectorsField, loadRanking, buildSessionPDF } from './results.js';
 import { kartAvatarSVG } from './kart-avatar.js';
 import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature, getCurrentPlanCode } from './plan.js';
@@ -1160,6 +1160,18 @@ const { data } = await db
 return data || [];
 }
 
+// Repli demo quand aucune session n'est encore archivee, au meme format que celui
+// retourne par loadRanking() ({name,kart,t}) pour pouvoir etre passe tel quel en 2e
+// argument de buildSessionPDF() et emprunter exactement le meme rendu.
+const PDF_PREVIEW_DEMO_ROWS = [
+{ name: 'PILOTE TEST', kart: 7, t: 62.345 },
+{ name: 'PILOTE FICTIF 2', kart: 4, t: 64.542 },
+];
+
+// URL blob du dernier PDF d'apercu genere : revoquee avant chaque nouveau rendu pour
+// ne pas accumuler de blobs en memoire au fil des changements de session/onglet.
+let pdfPreviewBlobUrl = null;
+
 export async function refreshPdfPreview() {
 const root = document.getElementById('pdf-preview-root');
 const sel = document.getElementById('pdf-preview-session-select');
@@ -1174,25 +1186,18 @@ sel.innerHTML = pdfPreviewSessions.length
 }
 const chosenId = sel?.value || (pdfPreviewSessions[0] && pdfPreviewSessions[0].id);
 const sess = pdfPreviewSessions.find((s) => s.id === chosenId);
-let rows;
-if (sess) {
-rows = await loadRanking(sess);
-} else {
-rows = [
-{ name: 'PILOTE TEST', kart: 7, t: 62.345 },
-{ name: 'PILOTE FICTIF 2', kart: 4, t: 64.542 },
-];
+// Meme fonction que le telechargement/l'envoi par e-mail (buildSessionPDF) : l'apercu
+// est donc le vrai PDF, pas une reconstitution HTML approximative. Le repli DEMO n'est
+// utilise que quand aucune session archivee n'existe, en passant les lignes toutes
+// faites en 2e argument pour eviter un appel loadRanking(undefined).
+const pdf = await buildSessionPDF(sess || {}, sess ? undefined : PDF_PREVIEW_DEMO_ROWS);
+if (pdfPreviewBlobUrl) {
+URL.revokeObjectURL(pdfPreviewBlobUrl);
+pdfPreviewBlobUrl = null;
 }
-const rowsHTML = rows
-.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.kart || '--') + '</td><td>' + r.name + '</td><td>' + formatTime(r.t) + '</td></tr>')
-.join('');
+pdfPreviewBlobUrl = pdf.output('bloburl');
 root.innerHTML =
-'<div style="border-bottom:3px solid #7c74ff;padding-bottom:10px;margin-bottom:16px">' +
-'<div style="font-size:22px;font-weight:900">' + (sess ? (sess.title || 'Session') : 'Session de demonstration') + '</div>' +
-'<div style="font-size:12px;color:#666;margin-top:4px">' + (sess?.session_date ? formatDate(sess.session_date) : 'Aucune session archivee — apercu avec un pilote fictif') + (sess?.session_type ? ' · ' + sess.session_type : '') + '</div>' +
-'</div>' +
-'<table><thead><tr><th>Pos.</th><th>Kart</th><th>Nom</th><th>Temps</th></tr></thead>' +
-'<tbody>' + (rowsHTML || '<tr><td colspan="4" style="color:#888">Aucun resultat.</td></tr>') + '</tbody></table>';
+'<iframe src="' + pdfPreviewBlobUrl + '" title="Apercu PDF" style="width:100%;height:600px;border:1px solid var(--border,#333);border-radius:8px;background:#fff"></iframe>';
 } catch (e) {
 root.innerHTML = '<div class="msg err">Erreur apercu PDF: ' + e.message + '</div>';
 }
