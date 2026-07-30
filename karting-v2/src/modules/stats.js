@@ -10,6 +10,7 @@
 import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { formatTime, formatDate } from './ui.js';
 import { PREMIUM_THEMES } from './settings.js';
+import { hasFeature } from './plan.js';
 
 let chartInstance = null;
 // 🆕 v20 : Basique — l'onglet Statistiques reste un pack leger (KPIs globaux,
@@ -680,7 +681,36 @@ function formatMinutes(min) {
   return h + 'h' + (m ? String(m).padStart(2, '0') : '');
 }
 
+// Message de verrouillage affiche a la place d'un bloc Offre 2 quand le plan ne
+// l'autorise pas -- meme esprit visuel que #trackmap-upsell / #themes-upsell dans
+// admin.html (encart discret, pas de blocage brutal de la navigation : le sous-onglet
+// reste cliquable, seul son contenu est remplace). IMPORTANT : cette fonction est
+// appelee AVANT tout calcul du bloc concerne -- aucune donnee n'est donc jamais
+// deposee dans le DOM (meme cache) si le plan ne l'autorise pas.
+function renderLockedStatsPanel(panelId) {
+  const panel = document.getElementById(panelId);
+  if (!panel) return;
+  panel.innerHTML =
+    '<div style="font-size:13px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:16px;text-align:center">' +
+    '<div style="font-size:22px;margin-bottom:6px">🔒</div>' +
+    '<div>Reserve au plan <strong>Premium</strong>. Passe au plan superieur pour debloquer ces statistiques avancees.</div>' +
+    '</div>';
+}
+
 async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, range) {
+  // Gating Offre 2 (voir plan.js > hasFeature('advanced_stats')) : les 3 sous-onglets
+  // restent visibles dans la navigation (switchStatsSubtab ne change pas) mais leur
+  // contenu est remplace par un encart verrouille -- et surtout, AUCUN des calculs
+  // ci-dessous ne tourne si le plan ne l'autorise pas (pas de fuite d'info dans le DOM,
+  // meme cache par un panel inactif).
+  const advancedAllowed = await hasFeature('advanced_stats');
+  if (!advancedAllowed) {
+    renderLockedStatsPanel('stats-subtab-fid');
+    renderLockedStatsPanel('stats-subtab-perf');
+    renderLockedStatsPanel('stats-subtab-qualite');
+    return;
+  }
+
   const regsById = new Map(allRegs.map((r) => [r.id, r]));
   const sessionsById = new Map(allSessions.map((s) => [s.id, s]));
 

@@ -9,7 +9,10 @@
 
 import { db } from '../lib/supabase.js';
 
-const PREMIUM_FEATURES = ['track_map'];
+// 'advanced_stats' : les 3 blocs "Offre 2" de l'onglet Statistiques (Fidelisation,
+// Performance sportive, Usage avance & saisonnalite) — voir stats.js > loadPremiumStatsBlocks()
+// et admin.html (sous-onglets restant visibles mais verrouilles si le plan ne les autorise pas).
+const PREMIUM_FEATURES = ['track_map', 'advanced_stats'];
 
 let cachedPlanCode = null;
 
