@@ -74,6 +74,28 @@ export async function generateSessionPDFs(session, onProgress) {
   if (!token) throw new Error('Session sans jeton public : rien a rendre.');
   const say = typeof onProgress === 'function' ? onProgress : () => {};
 
+    // 🆕 30/07 (point de vigilance signale par le client — "un seul PDF recu,
+    // j'en attendais plusieurs") : une session archivee entre deux publications
+    // rend public_session_results() muet, donc l'iframe ci-dessous chargeait une
+    // page "resultats indisponibles" sans qu'aucune fiche pilote ne soit
+    // generee -- silencieusement, avec un simple report.failed++ par pilote,
+    // aucune erreur remontee a l'admin. Verification fraiche AVANT d'ouvrir
+    // l'iframe (le `session` recu en argument peut etre perime) : mieux vaut un
+    // message clair et bloquant que 45s d'iframe pour rien.
+    const { data: freshSession, error: sessErr } = await db
+      .from('sessions')
+      .select('archived_at')
+      .eq('id', session.id)
+      .single();
+    if (sessErr) throw sessErr;
+    if (freshSession && freshSession.archived_at) {
+          throw new Error(
+                  'Cette session est archivee : la page publique de resultats refuse de la servir, donc aucune '
+                  + 'fiche pilote ni carte partageable ne peut etre generee (seul le classement deja televerse, le '
+                  + 'cas echeant, restera disponible). Desarchive la session avant de republier.'
+                );
+    }
+
   // Qui recoit reellement un e-mail ? Inutile de rendre la fiche d'un inscrit
   // sans adresse (ajout manuel anonyme) : c'est du temps de rendu pur perdu, et
   // le rendu tourne dans le navigateur de l'admin qui attend.
@@ -93,6 +115,16 @@ export async function generateSessionPDFs(session, onProgress) {
     await withTimeout(loaded, IFRAME_LOAD_TIMEOUT, 'chargement de la page de resultats');
     const api = await waitForBridge(iframe);
     await withTimeout(Promise.resolve(api.ready), BRIDGE_TIMEOUT, 'chargement des donnees de la session');
+        // Filet de securite en plus du controle ci-dessus (course possible entre
+        // la verification fraiche et le chargement de l'iframe) : si la page
+        // publique n'a pas reussi a charger le classement, `api.ok` vaut false.
+        const loadedOk = api.ok ? await Promise.resolve(api.ok) : true;
+        if (!loadedOk) {
+                throw new Error(
+                          'La page publique de resultats n\'a pas pu charger cette session (archivee entre-temps, ou lien '
+                          + 'invalide) : aucune fiche ni carte ne peut etre generee. Reessaie apres verification.'
+                        );
+        }
 
     // 1. Le classement complet — un seul fichier pour toute la session.
     say(0, recipients.length + 1, 'classement');
