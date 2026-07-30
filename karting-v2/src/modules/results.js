@@ -980,9 +980,9 @@ export async function exportSessionPDF(sess, btn) {
 // document, mais sous forme de Blob a televerser, pas de fichier a enregistrer.
 // Dupliquer le rendu garantirait qu'un jour le PDF telecharge et le PDF envoye
 // par e-mail ne se ressemblent plus.
-export async function buildSessionPDF(s, ranking) {
+export async function buildSessionPDF(s) {
   {
-    const rankResults = ranking || (await loadRanking(s));
+    const rankResults = await loadRanking(s);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
     const width = 700;

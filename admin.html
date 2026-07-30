@@ -1031,13 +1031,16 @@ Basés sur une session de démonstration (ou la dernière session archivée si d
 <!-- 5) PDF & EXPORT — apercu reel de la fiche PDF (buildSessionPDF, results.js) -->
 <div class="params-tabpanel" id="params-subtab-pdf" data-tab="pdf">
 <div class="card">
-<div class="ctitle">Aperçu de la fiche PDF de classement</div>
+<div class="ctitle">Aperçu des PDF (classement complet + fiche pilote)</div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:12px">
-Rendu HTML qui reprend les memes champs que l'export reel (voir results.js &gt; exportSessionPDF() / buildSessionPDF()) :
-position, kart, nom, temps. Injecte avec les donnees de la derniere session disponible, ou un pilote fictif si aucune session n'existe encore.
+Aperçu du VRAI PDF, généré par le même moteur de rendu que le fichier téléchargé ou envoyé par
+e-mail au pilote (voir public-results.js &gt; buildFullPDF() / buildPilotPDF(), via le pont d'export
+utilisé pour la publication — publish-pdfs.js). Nécessite une session archivée et publiée
+(jeton public_results_token).
 </div>
 <div class="flex" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
 <select id="pdf-preview-session-select" onchange="refreshPdfPreview()" style="max-width:320px"></select>
+<select id="pdf-preview-pilot-select" onchange="refreshPdfPreview()" style="max-width:280px"></select>
 <button class="btn btn-ghost btn-sm" onclick="refreshPdfPreview()">Actualiser l'aperçu</button>
 </div>
 <div id="pdf-preview-root" class="pdf-preview-frame">

@@ -10,7 +10,11 @@
 import { db } from '../lib/supabase.js';
 import { state, setPrefs, markPrefsDirty } from '../state.js';
 import { showMsg, formatTime, formatDate } from './ui.js';
-import { toggleSectorsField, loadRanking, buildSessionPDF } from './results.js';
+import { toggleSectorsField, loadRanking } from './results.js';
+import {
+  IFRAME_LOAD_TIMEOUT, BRIDGE_TIMEOUT, PDF_TIMEOUT,
+  withTimeout, exportUrl, openHiddenFrame, waitForBridge,
+} from './pdf-bridge.js';
 import { kartAvatarSVG } from './kart-avatar.js';
 import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature, getCurrentPlanCode } from './plan.js';
@@ -1141,64 +1145,105 @@ showMsg('msg-account-security', 'Erreur: ' + e.message, 'err');
 }
 
 // =====================================================================================
-// Sous-onglet PDF & export (onglet Parametres > PDF & export, refonte 30/07)
+// Sous-onglet PDF & export (onglet Parametres > PDF & export, refonte 30/07 corrigee)
 // =====================================================================================
-// Apercu HTML qui reprend EXACTEMENT les memes champs que l'export reel — voir
-// results.js > buildSessionPDF() (pos., kart, nom, temps). Les secteurs / logo / nom de
-// circuit ne sont PAS injectes ici : buildSessionPDF() ne les rend pas non plus a ce jour
-// (seule la variante "carte partageable" de public-results.js les affiche). Voir le
-// rapport de refonte pour cette ambiguite.
+// L'apercu precedent reconstruisait un tableau HTML approximatif (puis, dans une version
+// intermediaire, appelait a tort buildSessionPDF() de results.js — un generateur de repli
+// non utilise par le vrai flux de publication). Le vrai PDF que recoit un pilote est produit
+// par buildFullPDF()/buildPilotPDF() dans public-results.js, exploite uniquement via le pont
+// iframe cache decrit dans pdf-bridge.js/publish-pdfs.js (podium, avatars, theme circuit...).
+// On reutilise ici EXACTEMENT le meme pont, pointe sur la session archivee choisie, pour que
+// cet apercu soit le vrai fichier — octet pour octet — et pas une maquette qui pourrait un
+// jour diverger du rendu reel.
 let pdfPreviewSessions = [];
+let pdfPreviewPilots = []; // liste des pilotes de la session choisie (regId/name), via le pont
 
 async function fetchPdfPreviewSessions() {
-const { data } = await db
-.from('sessions')
-.select('id,title,session_date,session_type')
-.not('archived_at', 'is', null)
-.order('archived_at', { ascending: false })
-.limit(20);
-return data || [];
+  const { data } = await db
+    .from('sessions')
+    .select('id,title,session_date,session_type,public_results_token')
+    .not('archived_at', 'is', null)
+    .order('archived_at', { ascending: false })
+    .limit(20);
+  return data || [];
 }
 
-// Repli demo quand aucune session n'est encore archivee, au meme format que celui
-// retourne par loadRanking() ({name,kart,t}) pour pouvoir etre passe tel quel en 2e
-// argument de buildSessionPDF() et emprunter exactement le meme rendu.
-const PDF_PREVIEW_DEMO_ROWS = [
-{ name: 'PILOTE TEST', kart: 7, t: 62.345 },
-{ name: 'PILOTE FICTIF 2', kart: 4, t: 64.542 },
-];
+// URL blob des deux derniers PDF d'apercu generes : revoquees avant chaque nouveau rendu
+// pour ne pas accumuler de blobs en memoire au fil des changements de session/onglet.
+let pdfPreviewFullBlobUrl = null;
+let pdfPreviewPilotBlobUrl = null;
 
-// URL blob du dernier PDF d'apercu genere : revoquee avant chaque nouveau rendu pour
-// ne pas accumuler de blobs en memoire au fil des changements de session/onglet.
-let pdfPreviewBlobUrl = null;
+function revokePdfPreviewUrls() {
+  if (pdfPreviewFullBlobUrl) { URL.revokeObjectURL(pdfPreviewFullBlobUrl); pdfPreviewFullBlobUrl = null; }
+  if (pdfPreviewPilotBlobUrl) { URL.revokeObjectURL(pdfPreviewPilotBlobUrl); pdfPreviewPilotBlobUrl = null; }
+}
 
 export async function refreshPdfPreview() {
-const root = document.getElementById('pdf-preview-root');
-const sel = document.getElementById('pdf-preview-session-select');
-if (!root) return;
-root.innerHTML = '<div class="msg">Chargement de l\'apercu...</div>';
-try {
-if (!pdfPreviewSessions.length) pdfPreviewSessions = await fetchPdfPreviewSessions();
-if (sel && !sel.options.length) {
-sel.innerHTML = pdfPreviewSessions.length
-? pdfPreviewSessions.map((s) => '<option value="' + s.id + '">' + (s.title || 'Session') + (s.session_date ? ' — ' + formatDate(s.session_date) : '') + '</option>').join('')
-: '<option value="">Aucune session archivee — pilote fictif</option>';
-}
-const chosenId = sel?.value || (pdfPreviewSessions[0] && pdfPreviewSessions[0].id);
-const sess = pdfPreviewSessions.find((s) => s.id === chosenId);
-// Meme fonction que le telechargement/l'envoi par e-mail (buildSessionPDF) : l'apercu
-// est donc le vrai PDF, pas une reconstitution HTML approximative. Le repli DEMO n'est
-// utilise que quand aucune session archivee n'existe, en passant les lignes toutes
-// faites en 2e argument pour eviter un appel loadRanking(undefined).
-const pdf = await buildSessionPDF(sess || {}, sess ? undefined : PDF_PREVIEW_DEMO_ROWS);
-if (pdfPreviewBlobUrl) {
-URL.revokeObjectURL(pdfPreviewBlobUrl);
-pdfPreviewBlobUrl = null;
-}
-pdfPreviewBlobUrl = pdf.output('bloburl');
-root.innerHTML =
-'<iframe src="' + pdfPreviewBlobUrl + '" title="Apercu PDF" style="width:100%;height:600px;border:1px solid var(--border,#333);border-radius:8px;background:#fff"></iframe>';
-} catch (e) {
-root.innerHTML = '<div class="msg err">Erreur apercu PDF: ' + e.message + '</div>';
-}
+  const root = document.getElementById('pdf-preview-root');
+  const sel = document.getElementById('pdf-preview-session-select');
+  const pilotSel = document.getElementById('pdf-preview-pilot-select');
+  if (!root) return;
+  // Le rendu reel (iframe + RPC + rasterisation html2canvas) prend plusieurs secondes :
+  // etat de chargement explicite plutot qu'un apercu HTML instantane mais infidele.
+  root.innerHTML = '<div class="msg"><span class="spin"></span> Generation de l\'apercu PDF reel (peut prendre quelques secondes)...</div>';
+
+  try {
+    if (!pdfPreviewSessions.length) pdfPreviewSessions = await fetchPdfPreviewSessions();
+    if (sel && !sel.options.length) {
+      sel.innerHTML = pdfPreviewSessions.length
+        ? pdfPreviewSessions.map((s) => '<option value="' + s.id + '">' + (s.title || 'Session') + (s.session_date ? ' — ' + formatDate(s.session_date) : '') + '</option>').join('')
+        : '<option value="">Aucune session publiee</option>';
+    }
+    const chosenId = sel?.value || (pdfPreviewSessions[0] && pdfPreviewSessions[0].id);
+    const sess = pdfPreviewSessions.find((s) => s.id === chosenId);
+
+    if (!sess || !sess.public_results_token) {
+      pdfPreviewPilots = [];
+      if (pilotSel) pilotSel.innerHTML = '';
+      root.innerHTML = '<div class="msg">Aucune session publiée pour l\'instant — publie une session pour voir un aperçu réel des PDF.</div>';
+      return;
+    }
+
+    const { iframe, loaded } = openHiddenFrame(exportUrl(sess.public_results_token));
+    let api;
+    try {
+      await withTimeout(loaded, IFRAME_LOAD_TIMEOUT, 'chargement de la page de resultats');
+      api = await waitForBridge(iframe);
+      await withTimeout(Promise.resolve(api.ready), BRIDGE_TIMEOUT, 'chargement des donnees de la session');
+
+      pdfPreviewPilots = api.listPilots() || [];
+      if (pilotSel) {
+        const prevPilot = pilotSel.value;
+        pilotSel.innerHTML = pdfPreviewPilots.length
+          ? pdfPreviewPilots.map((p) => '<option value="' + p.regId + '">' + (p.name || 'Pilote') + '</option>').join('')
+          : '<option value="">Aucun pilote</option>';
+        if (prevPilot && pdfPreviewPilots.some((p) => p.regId === prevPilot)) pilotSel.value = prevPilot;
+      }
+      const chosenPilotId = pilotSel?.value || (pdfPreviewPilots[0] && pdfPreviewPilots[0].regId);
+
+      const fullBuf = await withTimeout(api.fullPDFBytes(), PDF_TIMEOUT, 'rendu du classement');
+      let pilotBuf = null;
+      if (chosenPilotId) {
+        pilotBuf = await withTimeout(api.pilotPDFBytes(chosenPilotId), PDF_TIMEOUT, 'rendu de la fiche pilote');
+      }
+
+      revokePdfPreviewUrls();
+      pdfPreviewFullBlobUrl = URL.createObjectURL(new Blob([fullBuf], { type: 'application/pdf' }));
+      if (pilotBuf) pdfPreviewPilotBlobUrl = URL.createObjectURL(new Blob([pilotBuf], { type: 'application/pdf' }));
+
+      root.innerHTML =
+        '<div style="font-size:12px;font-weight:700;margin-bottom:6px">Classement complet</div>' +
+        '<iframe src="' + pdfPreviewFullBlobUrl + '" title="Apercu classement PDF" style="width:100%;height:520px;border:1px solid var(--border,#333);border-radius:8px;background:#fff;margin-bottom:16px"></iframe>' +
+        (pdfPreviewPilotBlobUrl
+          ? '<div style="font-size:12px;font-weight:700;margin-bottom:6px">Fiche pilote</div>' +
+            '<iframe src="' + pdfPreviewPilotBlobUrl + '" title="Apercu fiche pilote PDF" style="width:100%;height:520px;border:1px solid var(--border,#333);border-radius:8px;background:#fff"></iframe>'
+          : '<div class="msg">Aucun pilote pour la fiche.</div>');
+    } finally {
+      // Toujours nettoyer l'iframe cachee : sinon chaque ouverture de l'onglet
+      // Parametres en accumule une, avec sa page publique et ses timers actifs.
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+    }
+  } catch (e) {
+    root.innerHTML = '<div class="msg err">Erreur apercu PDF: ' + e.message + '</div>';
+  }
 }
