@@ -139,6 +139,17 @@ function buildHtml(g: Delivery[], attachments: Array<{ filename: string; url: st
     ? env('PUBLIC_APP_URL').replace(/\/+$/, '') + '/results.html?result=' + encodeURIComponent(head.results_token)
     : '';
   const hasRecord = g.some((d) => d.kind === 'record' || d.kind === 'record_card');
+  // Correctif audit 30/07 : ne PAS annoncer une piece jointe qui n'existe pas.
+  // Aucun code ne produit encore d'asset `record_card` / `position_card` (le
+  // navigateur ne televerse que `full_pdf` et `pilot_pdf`) : le message
+  // « Ta carte est en piece jointe » etait donc faux des qu'un record etait
+  // detecte. On ne le dit que si la carte est reellement signee et attachee.
+  const recordCardAttached = attachments.some((a) => a.filename.indexOf('carte-record') === 0);
+  const recordLine = hasRecord
+    ? (recordCardAttached
+      ? 'Nouveau record battu sur cette session. Ta carte est en piece jointe.'
+      : 'Nouveau record battu sur cette session. Felicitations !')
+    : '';
 
   return `<!DOCTYPE html><html lang="fr"><body style="margin:0;background:#06070b;font-family:'Segoe UI',Arial,sans-serif;color:#f5f6fb">
 <div style="max-width:560px;margin:0 auto;padding:32px 20px">
@@ -148,7 +159,7 @@ function buildHtml(g: Delivery[], attachments: Array<{ filename: string; url: st
 
   <div style="background:#12141e;border:1px solid #262a3c;border-radius:16px;padding:20px;margin-bottom:16px">
     <p style="margin:0 0 12px;font-size:17px">Bravo <strong>${esc(who)}</strong>, tes resultats sont en ligne.</p>
-    ${hasRecord ? '<p style="margin:0 0 12px;padding:10px 12px;background:rgba(216,181,113,.12);border:1px solid rgba(216,181,113,.4);border-radius:10px;color:#d8b571;font-weight:600">Nouveau record battu sur cette session. Ta carte est en piece jointe.</p>' : ''}
+    ${recordLine ? '<p style="margin:0 0 12px;padding:10px 12px;background:rgba(216,181,113,.12);border:1px solid rgba(216,181,113,.4);border-radius:10px;color:#d8b571;font-weight:600">' + esc(recordLine) + '</p>' : ''}
     ${attachments.length ? `<p style="margin:0;color:#8d92ac;font-size:14px">${attachments.length} document${attachments.length > 1 ? 's' : ''} en piece jointe :</p>
     <ul style="margin:8px 0 0;padding-left:20px;color:#f5f6fb;font-size:14px">
       ${kinds.map((k) => '<li>' + esc(LABELS[k] || k) + '</li>').join('')}
@@ -171,7 +182,12 @@ async function signAssets(items: Array<{ kind: string; path: string; mime: strin
     const { data, error } = await admin.storage.from(BUCKET).createSignedUrl(a.path, SIGNED_URL_TTL);
     // Une piece jointe manquante ne doit pas empecher l'envoi : le pilote
     // recoit ce qui existe, et le lien vers le classement en ligne.
-    if (error || !data?.signedUrl) continue;
+    // On trace quand meme : un envoi a zero piece jointe est silencieux sinon,
+    // et c'est exactement le genre de panne qu'on ne voit jamais (audit 30/07).
+    if (error || !data?.signedUrl) {
+      console.warn('[signAssets] asset introuvable, ignore :', a.kind, a.path, error?.message || '');
+      continue;
+    }
     out.push({ filename: filenameFor(a.kind, a.mime), url: data.signedUrl, kind: a.kind });
   }
   return out;

@@ -346,9 +346,26 @@ export function selectPilotForKart(rid, evt) {
   renderInscritsTable();
 }
 
+// Actions de ligne branchées une fois pour toutes par app.js.
+//
+// Correctif audit 30/07 : `renderInscritsTable(onRowActions = {})` était appelée
+// SANS argument depuis loadInscrits() et selectPilotForKart() — les deux seuls
+// appelants. Le défaut `{}` rendait donc `onRowActions.onHistory` toujours
+// undefined et le bouton horloge de chaque inscrit ne faisait rien : la fenêtre
+// « Historique du pilote » (showPilotHistory + #hist-overlay) était inatteignable
+// depuis l'interface. On enregistre les actions au niveau du module, ce qui
+// survit aux re-rendus internes, sans que sessions.js importe results.js.
+let rowActions = {};
+
+export function setInscritsRowActions(actions) {
+  rowActions = actions || {};
+}
+
 // `onRowActions` reçoit (rid, name) pour brancher l'historique des chronos, géré par le
 // module results.js — ce module sessions.js n'a pas besoin de connaître results.js.
-export function renderInscritsTable(onRowActions = {}) {
+// Argument optionnel : par défaut on utilise les actions enregistrées.
+export function renderInscritsTable(onRowActions) {
+  const actions = onRowActions || rowActions;
   const el = document.getElementById('ins-table');
   if (!el) return;
   if (!state.inscritsData.length) {
@@ -397,7 +414,7 @@ export function renderInscritsTable(onRowActions = {}) {
   el.querySelectorAll('.hist-btn').forEach((btn) => {
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
-      if (onRowActions.onHistory) onRowActions.onHistory(btn.dataset.rid, btn.dataset.name);
+      if (actions.onHistory) actions.onHistory(btn.dataset.rid, btn.dataset.name);
     });
   });
   renderKartGrid();

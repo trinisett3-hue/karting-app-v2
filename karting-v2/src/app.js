@@ -198,6 +198,35 @@ async function loadArchives() {
 await renderArchivesList();
 }
 
+// Branchement de l'historique des chronos sur le bouton horloge de chaque inscrit.
+// sessions.js ne connaît pas results.js : c'est app.js, qui connaît les deux, qui
+// recolle les morceaux (correctif audit 30/07, le bouton ne faisait rien avant).
+sessions.setInscritsRowActions({ onHistory: results.showPilotHistory });
+
+// --- Exports de session : lecture de l'état ICI, pas dans l'attribut onclick ---------------
+// Correctif audit 30/07 : le HTML appelait `exportCSV(activeDetailSession)`. Or un
+// attribut onclick ne résout ses identifiants que dans la portée GLOBALE, et la session
+// courante n'existe que comme propriété `state.activeDetailSession` — jamais sur window.
+// Le handler levait donc un ReferenceError AVANT même d'appeler la fonction : les quatre
+// boutons « Exporter CSV » / « Exporter PDF » (session active ET archive) étaient inertes.
+// On expose désormais des wrappers sans argument qui vont chercher l'état eux-mêmes.
+
+function exportActiveCSV() {
+return results.exportCSV(state.activeDetailSession);
+}
+
+function exportActivePDF(btn) {
+return results.exportSessionPDF(state.activeDetailSession, btn);
+}
+
+function exportArchiveCSV() {
+return results.exportCSV(state.archiveSession);
+}
+
+function exportArchivePDF(btn) {
+return results.exportSessionPDF(state.archiveSession, btn);
+}
+
 // --- Authentification -----------------------------------------------------------------------
 // L'admin est désormais protégé : rien n'est initialisé (sessions/results/settings) tant
 // qu'une session Supabase Auth valide n'est pas confirmée. L'overlay #login-overlay est
@@ -328,6 +357,10 @@ exportArchivesXLSX: archivesExport.exportArchivesXLSX,
 saveArchiveMeta: results.saveArchiveMeta,
 // Résultats & import chronos
 exportCSV: results.exportCSV,
+exportActiveCSV,
+exportActivePDF,
+exportArchiveCSV,
+exportArchivePDF,
 showPilotHistory: results.showPilotHistory,
 closeHistory: results.closeHistory,
 handleChronoFile: results.handleChronoFile,

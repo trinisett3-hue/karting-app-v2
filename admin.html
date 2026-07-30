@@ -447,8 +447,8 @@ updateThemeToggleUI();
 <div class="flex" style="margin-top:14px">
 <button class="btn btn-yel btn-sm" onclick="publishResults()">Publier</button>
 <button class="btn btn-ghost btn-sm" onclick="copyLink('res')">Copier lien</button>
-<button class="btn btn-ghost btn-sm" onclick="exportCSV(activeDetailSession)">Exporter CSV</button>
-<button class="btn btn-ghost btn-sm" id="btn-pdf-active" onclick="exportSessionPDF(activeDetailSession, this)">Exporter PDF</button>
+<button class="btn btn-ghost btn-sm" onclick="exportActiveCSV()">Exporter CSV</button>
+<button class="btn btn-ghost btn-sm" id="btn-pdf-active" onclick="exportActivePDF(this)">Exporter PDF</button>
 </div>
 <div class="msg" id="msg-res"></div>
 </div>
@@ -542,8 +542,8 @@ updateThemeToggleUI();
 <button class="btn btn-yel btn-sm" onclick="archPublish()">Republier</button>
 <button class="btn btn-ghost btn-sm" onclick="archCopyLink()">Copier lien</button>
 <button class="btn btn-ghost btn-sm" onclick="archTogglePres()">Presentation</button>
-<button class="btn btn-ghost btn-sm" onclick="exportCSV(archiveSession)">Exporter CSV</button>
-<button class="btn btn-ghost btn-sm" id="btn-pdf-archive" onclick="exportSessionPDF(archiveSession, this)">Exporter PDF</button>
+<button class="btn btn-ghost btn-sm" onclick="exportArchiveCSV()">Exporter CSV</button>
+<button class="btn btn-ghost btn-sm" id="btn-pdf-archive" onclick="exportArchivePDF(this)">Exporter PDF</button>
 </div>
 <div class="msg" id="msg-arch"></div>
 </div>
@@ -837,7 +837,7 @@ Les thèmes premium sont réservés au plan <strong>Pro</strong>. Passe au plan 
 </div>
 <div class="avatar-pack-row" data-pack-val="signature" onclick="selectAvatarPack('signature')" style="padding:10px;border-radius:8px;cursor:pointer;border:1px solid var(--bord)">
 <div style="font-size:13px;font-weight:700">Signature <span style="font-size:10px;font-weight:800;letter-spacing:.5px;background:var(--yel);color:#111;border-radius:4px;padding:1px 5px;vertical-align:1px">PRO</span></div>
-<div style="font-size:11px;color:var(--mut);margin-top:2px">24 illustrations exclusives, declinees en buste, casque, kart et kart + pilote.</div>
+<div style="font-size:11px;color:var(--mut);margin-top:2px">16 illustrations exclusives, declinees en buste, casque, kart et kart + pilote.</div>
 </div>
 <select id="pref-avatar-pack" style="display:none"><option value="classic">Classic</option><option value="signature">Signature</option></select>
 <div id="signature-upsell" style="display:none;font-size:12px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px 12px;margin-top:10px">
