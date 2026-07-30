@@ -150,6 +150,24 @@ export async function saveDetailMeta() {
   const sessionType = document.getElementById('det-type-input')?.value || state.activeDetailSession.session_type || 'loisir';
   const internalNotes = document.getElementById('det-notes-input')?.value ?? state.activeDetailSession.internal_notes ?? '';
   if (!title) return;
+    // 🆕 30/07 (bug B21, confirme par test de charge) : rien n'empechait avant
+    // de reduire max_karts en dessous du nombre de pilotes deja inscrits (y
+    // compris sur une session avec des chronos deja importes) — la session se
+    // retrouvait avec plus de pilotes que de karts disponibles, sans
+    // avertissement. On compte les inscrits reels juste avant d'enregistrer
+    // (state.inscritsData peut etre perime) plutot que de faire confiance a un
+    // compteur local.
+    if (karts < state.activeDetailSession.max_karts) {
+          const { count, error: cntErr } = await db
+            .from('session_registrations')
+            .select('id', { count: 'exact', head: true })
+            .eq('session_id', state.activeDetailSession.id);
+          if (!cntErr && (count || 0) > karts) {
+                  showMsg('msg-ins', 'Impossible : ' + count + ' pilote(s) deja inscrit(s), tu ne peux pas descendre sous ' + count + ' karts.', 'err');
+                  document.getElementById('det-karts-input').value = state.activeDetailSession.max_karts;
+                  return;
+          }
+    }
   await db.from('sessions').update({ title, max_karts: karts, laps_count: laps, session_type: sessionType, internal_notes: internalNotes }).eq('id', state.activeDetailSession.id);
   state.activeDetailSession.title = title;
   state.activeDetailSession.max_karts = karts;
