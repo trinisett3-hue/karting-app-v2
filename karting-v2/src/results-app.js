@@ -19,6 +19,11 @@ if (new URLSearchParams(window.location.search).get('export') === '1') {
   window.__kartingExport = {
     version: 1,
     ready: ready.then(() => true),
+         // 🆕 30/07 : ready se resolvait toujours a true, meme quand load() echoue
+         // (session archivee ou lien invalide) — generateSessionPDFs() n'avait
+         // alors aucun moyen de detecter l'echec et continuait silencieusement
+         // avec un classement vide. `ok` porte le vrai resultat de load().
+         ok: ready,
     listPilots: results.listExportPilots,
     setOrient: results.setPdfOrient,
     pilotPDFBytes: results.pilotPDFBytes,
