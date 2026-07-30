@@ -187,12 +187,33 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .kart-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 8px;border-radius:7px;font-weight:800;font-size:13px;background:var(--surf2);border:1px solid var(--bord)}
 .kart-badge.assigned{background:rgba(255,59,48,.15);color:var(--acc2);border-color:rgba(255,59,48,.35)}
 .kart-badge.unassigned{color:var(--mut);font-weight:600;font-size:11px}
-/* Paramètres : deux colonnes (réglages à gauche, aperçu en direct à droite) */
+/* Paramètres : refonte en 8 sous-onglets a isolation totale (aucun composant partage
+   entre onglets — voir settings.js > switchParamsSubtab()). Chaque sous-onglet occupe
+   toute la largeur ; seul l'onglet Podium garde une mise en page a deux colonnes pour
+   son apercu en direct, qui n'existe donc plus qu'a cet endroit. */
+.params-subtab-bar{display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;white-space:nowrap;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.params-subtab-bar::-webkit-scrollbar{height:6px}
+.params-subtab-bar .subtab-btn{flex:0 0 auto}
+.params-tabpanel{display:none}
+.params-tabpanel.active{display:block}
+.params-col-left .card{max-width:none}
+/* Mise en page a deux colonnes, reservee au sous-onglet Podium (apercu en direct). */
 .params-layout{display:flex;gap:20px;align-items:flex-start}
 .params-col-left{flex:0 0 clamp(360px,42vw,540px);min-width:0}
 .params-col-right{flex:1 1 380px;min-width:300px;position:sticky;top:0}
-.params-col-left .card{max-width:none}
 @media(max-width:1050px){.params-layout{flex-direction:column}.params-col-right{position:static;width:100%;max-width:540px}}
+.params-save-bar{position:sticky;bottom:12px;z-index:5;margin-top:18px}
+.pdf-preview-frame{background:#fff;color:#111;border-radius:6px;padding:24px;font-family:Arial,sans-serif;max-width:700px;margin:0 auto;box-shadow:0 1px 2px rgba(0,0,0,.4),0 10px 28px -10px rgba(0,0,0,.6)}
+.pdf-preview-frame table{width:100%;border-collapse:collapse;font-size:13px}
+.pdf-preview-frame th{text-align:left;border-bottom:2px solid #111;padding:6px 8px}
+.pdf-preview-frame td{padding:6px 8px;border-bottom:1px solid #ddd}
+.account-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--bord-soft)}
+.account-row:last-child{border-bottom:none}
+.account-label{font-size:12px;color:var(--mut);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.account-value{font-size:13px;color:var(--txt);font-weight:700}
+.plan-badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.4px;padding:3px 9px;border-radius:20px;text-transform:uppercase}
+.plan-badge.free{background:var(--surf2);color:var(--mut);border:1px solid var(--bord)}
+.plan-badge.pro{background:rgba(255,204,51,.15);color:var(--yel);border:1px solid rgba(255,204,51,.4)}
 
 /* ---------- Registre clients ---------- */
 .reg-search{position:relative}
@@ -684,89 +705,35 @@ updateThemeToggleUI();
 <!-- PANEL: PARAMETRES -->
 <div class="panel" id="panel-parametres">
 <div class="pg-title">Parametres</div>
-<div class="params-layout">
-<div class="params-col-left">
 
-<!-- Sous-onglets : les 4 blocs de reglages etaient tous affiches d'un coup, ce qui
-     faisait beaucoup trop d'informations en meme temps. Desormais 1 clic sur
-     "Parametres" (menu) + 1 clic sur un sous-onglet ci-dessous pour voir un bloc a la
-     fois — voir settings.js > switchParamsSubtab(). Le bouton "Enregistrer" reste
-     visible sous tous les sous-onglets. -->
-<div class="subtab-bar">
-<div class="subtab-btn selected" data-ptab-val="sessions" onclick="switchParamsSubtab('sessions')">🏁 Sessions</div>
-<div class="subtab-btn" data-ptab-val="identite" onclick="switchParamsSubtab('identite')">🖼️ Identité circuit</div>
-<div class="subtab-btn" data-ptab-val="theme" onclick="switchParamsSubtab('theme')">🎨 Thème</div>
-<div class="subtab-btn" data-ptab-val="avatars" onclick="switchParamsSubtab('avatars')">🧑‍🚀 Avatars</div>
-<div class="subtab-btn" data-ptab-val="cartes"   onclick="switchParamsSubtab('cartes')">📲 Cartes partageables</div>
-</div>
-
-<!-- 1) SESSIONS — valeurs par defaut + numeros de karts -->
-<div class="subtab-panel active" id="params-subtab-sessions">
-<div class="card">
-<div class="ctitle">Valeurs par defaut des sessions</div>
-<div class="field"><label>Nombre de karts par defaut</label><input type="number" id="pref-karts" min="1" max="30" oninput="markPrefsDirty()"/></div>
-<div class="field">
-<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-<input type="checkbox" id="pref-karts-locked" style="width:auto" checked onchange="markPrefsDirty()"/>
-<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Verrouiller ce nombre (identique pour toutes les sessions)</span>
-</label>
-<div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Si desactive, tu pourras choisir un nombre de karts different a chaque session.</div>
-</div>
-<div class="field">
-<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-<input type="checkbox" id="pref-laps-enabled" style="width:auto" onchange="toggleLapsField();markPrefsDirty()"/>
-<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer le suivi du nombre de tours</span>
-</label>
-</div>
-<div class="g2" style="gap:10px">
-<div class="field" id="pref-laps-wrap"><label>Nombre de tours par defaut</label><input type="number" id="pref-laps" min="1" max="200" oninput="markPrefsDirty()"/></div>
-<div class="g2" style="margin-top:8px">
-<div class="field" style="margin-bottom:0"><label>Seuil "Expert" (meilleur tour, secondes)</label><input type="number" id="pref-level-expert" min="1" step="0.1" oninput="markPrefsDirty()"/></div>
-<div class="field" style="margin-bottom:0"><label>Seuil "Intermediaire" (meilleur tour, secondes)</label><input type="number" id="pref-level-intermediaire" min="1" step="0.1" oninput="markPrefsDirty()"/></div>
-</div>
-<div style="font-size:11px;color:var(--mut);margin-top:-6px;margin-bottom:8px">Utilises dans Statistiques &gt; Performance sportive pour classer les pilotes (meilleur tour &le; seuil Expert = Expert, &le; seuil Intermediaire = Intermediaire, au-dela = Debutant). Valeurs par defaut generiques (45s / 55s) -- ajuste-les selon les temps reels de ton circuit.</div>
-<div class="field"><label>Unite de temps</label>
-<select id="pref-time-unit" onchange="markPrefsDirty()">
-<option value="seconds">Secondes</option>
-<option value="minutes">Minutes:secondes</option>
-<option value="minutes_ms">Minutes:secondes:millieme</option>
-</select>
-</div>
-</div>
-<div class="field" style="margin-top:8px">
-<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-<input type="checkbox" id="pref-sectors-enabled" style="width:auto" onchange="toggleSectorsField();markPrefsDirty()"/>
-<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer les secteurs (import et fiche PDF)</span>
-</label>
-<div id="pref-sectors-status" style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Lorsque désactivé ou absent des chronos, la fiche pilote utilise automatiquement le tableau simplifié.</div>
-</div>
-<div class="field" id="pref-sectors-wrap"><label>Nombre de secteurs</label>
-<select id="pref-sector-count" onchange="updateChronoFormat();markPrefsDirty()"><option value="2">2 secteurs</option><option value="3">3 secteurs</option></select>
-</div>
+<!-- Refonte 8 sous-onglets a isolation totale (30/07) : chaque sous-onglet est un bloc
+     independant en display:none/block, aucun composant (y compris l'apercu podium) n'est
+     partage entre deux onglets — voir settings.js > switchParamsSubtab(). Le bouton
+     "Enregistrer" reste seul element commun, hors des blocs data-tab, visible sous tous
+     les sous-onglets. -->
+<div class="subtab-bar params-subtab-bar">
+<div class="subtab-btn selected" data-ptab-val="general" onclick="switchParamsSubtab('general')">⚙️ Général</div>
+<div class="subtab-btn" data-ptab-val="sessions" onclick="switchParamsSubtab('sessions')">🏁 Sessions</div>
+<div class="subtab-btn" data-ptab-val="apparence" onclick="switchParamsSubtab('apparence')">🎨 Apparence</div>
+<div class="subtab-btn" data-ptab-val="podium" onclick="switchParamsSubtab('podium')">🏆 Podium</div>
+<div class="subtab-btn" data-ptab-val="pdf" onclick="switchParamsSubtab('pdf')">📄 PDF &amp; export</div>
+<div class="subtab-btn" data-ptab-val="compte" onclick="switchParamsSubtab('compte')">👤 Compte</div>
 </div>
 
-<div class="card">
-<div class="ctitle">Numeros de karts existants</div>
-<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
-<div class="field">
-<label>Ajouter un numero</label>
-<div class="flex" style="gap:8px">
-<input type="number" id="pref-kart-num-input" min="1" max="999" placeholder="Ex: 7" style="max-width:120px" onkeydown="if(event.key==='Enter'){event.preventDefault();addKartNumber();}"/>
-<button class="btn btn-primary btn-sm" onclick="addKartNumber()">Ajouter</button>
-<button class="btn btn-ghost btn-sm" onclick="autoFillKartNumbers()">Generer 1 a N</button>
-</div>
-</div>
-<div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
-<div class="msg" id="msg-kart-numbers"></div>
-</div>
-</div>
-
-<!-- 2) IDENTITE CIRCUIT — logo + plan piste -->
-<div class="subtab-panel" id="params-subtab-identite">
+<!-- 1) GENERAL — identite du circuit, format de date, unite de temps -->
+<div class="params-tabpanel active" id="params-subtab-general" data-tab="general">
 <div class="card">
 <div class="ctitle">Identite du circuit</div>
-<div style="font-size:11px;color:var(--mut);margin-bottom:14px">Ces deux images s'affichent sur la page publique de resultats et dans les exports PDF.</div>
-<div style="margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--bord)">
+<div style="font-size:11px;color:var(--mut);margin-bottom:14px">Ces informations s'affichent sur la page publique de resultats et dans les exports PDF.</div>
+<div class="field">
+<label>Nom du circuit</label>
+<input type="text" id="pref-circuit-name" maxlength="60" placeholder="Ex: Circuit de Trinisette" oninput="markPrefsDirty()"/>
+<!-- Nouveau champ (refonte 30/07) : aucun equivalent ecrivable n'existait jusqu'ici, le
+     nom du circuit n'etait lu que depuis sessions.circuit_name par session (voir
+     public-results.js). Le branchement de savePrefs()/loadPrefs() vers app_settings
+     reste a faire cote back — voir le rapport de refonte. -->
+</div>
+<div style="margin:18px 0;padding:16px 0;border-top:1px solid var(--bord);border-bottom:1px solid var(--bord)">
 <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Logo du circuit</div>
 <div id="pref-logo-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
 <div style="width:64px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
@@ -800,13 +767,102 @@ Le plan du circuit est reserve au plan <strong>Premium</strong>. Passe au plan s
 <div class="msg" id="msg-trackmap"></div>
 </div>
 </div>
+<div class="card">
+<div class="ctitle">Affichage des dates et des temps</div>
+<div class="g2" style="gap:10px">
+<div class="field">
+<label>Format des dates (app et PDF)</label>
+<select id="pref-date-format" onchange="markPrefsDirty()">
+<option value="dmy">JJ/MM/AAAA</option>
+<option value="mdy">MM-DD-AAAA</option>
+</select>
+<!-- Nouveau champ (refonte 30/07) : aucune notion de format de date n'existait ailleurs
+     dans le code (formatDate() de ui.js est cablee en dur sur un seul format). savePrefs()
+     ne lit pas encore cet id — branchement JS restant a faire, voir le rapport. -->
+</div>
+<div class="field">
+<label>Unite de temps</label>
+<select id="pref-time-unit" onchange="markPrefsDirty()">
+<option value="seconds">Secondes</option>
+<option value="minutes">Minutes:secondes</option>
+<option value="minutes_ms">Minutes:secondes:millieme</option>
+</select>
+</div>
+</div>
+</div>
 </div>
 
-<!-- 3) THEME — theme de la page resultats -->
-<div class="subtab-panel" id="params-subtab-theme">
+<!-- 2) SESSIONS — valeurs par defaut des sessions -->
+<div class="params-tabpanel" id="params-subtab-sessions" data-tab="sessions">
+<div class="card">
+<div class="ctitle">Valeurs par defaut des sessions</div>
+<div class="field"><label>Nombre de karts par defaut</label><input type="number" id="pref-karts" min="1" max="30" oninput="markPrefsDirty()"/></div>
+<div class="field">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-karts-locked" style="width:auto" checked onchange="markPrefsDirty()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Verrouiller ce nombre (identique pour toutes les sessions)</span>
+</label>
+<div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Si desactive, tu pourras choisir un nombre de karts different a chaque session.</div>
+</div>
+<div class="field">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-laps-enabled" style="width:auto" onchange="toggleLapsField();markPrefsDirty()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer le suivi du nombre de tours</span>
+</label>
+</div>
+<div class="g2" style="gap:10px">
+<div class="field" id="pref-laps-wrap"><label>Nombre de tours par defaut</label><input type="number" id="pref-laps" min="1" max="200" oninput="markPrefsDirty()"/></div>
+</div>
+<div class="g2" style="margin-top:8px">
+<div class="field" style="margin-bottom:0"><label>Seuil "Expert" (meilleur tour, secondes)</label><input type="number" id="pref-level-expert" min="1" step="0.1" oninput="markPrefsDirty()"/></div>
+<div class="field" style="margin-bottom:0"><label>Seuil "Intermediaire" (meilleur tour, secondes)</label><input type="number" id="pref-level-intermediaire" min="1" step="0.1" oninput="markPrefsDirty()"/></div>
+</div>
+<div style="font-size:11px;color:var(--mut);margin-top:8px">Utilises dans Statistiques &gt; Performance sportive pour classer les pilotes (meilleur tour &le; seuil Expert = Expert, &le; seuil Intermediaire = Intermediaire, au-dela = Debutant). Valeurs par defaut generiques (45s / 55s) -- ajuste-les selon les temps reels de ton circuit.</div>
+</div>
+
+<!-- Fusion 30/07 (client) : contenu de l'ancien sous-onglet "Flotte", regroupe ici car
+     directement lie au nombre de karts par defaut ci-dessus. Ids inchanges. -->
+<div class="card">
+<div class="ctitle">Numeros de karts existants</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Definis la liste des numeros de karts que tu possedes reellement (ta flotte). Ils seront utilises pour l'attribution au lieu d'une simple sequence 1 a max.</div>
+<div class="field">
+<label>Ajouter un numero</label>
+<div class="flex" style="gap:8px">
+<input type="number" id="pref-kart-num-input" min="1" max="999" placeholder="Ex: 7" style="max-width:120px" onkeydown="if(event.key==='Enter'){event.preventDefault();addKartNumber();}"/>
+<button class="btn btn-primary btn-sm" onclick="addKartNumber()">Ajouter</button>
+<button class="btn btn-ghost btn-sm" onclick="autoFillKartNumbers()">Generer 1 a N</button>
+</div>
+</div>
+<div id="kart-numbers-list" class="kart-grid" style="margin-top:10px"></div>
+<div class="msg" id="msg-kart-numbers"></div>
+</div>
+
+<!-- Fusion 30/07 (client) : contenu de l'ancien sous-onglet "Secteurs & chronos". Ids
+     inchanges (pref-sectors-enabled, pref-sector-count, pref-sectors-wrap). -->
+<div class="card">
+<div class="ctitle">Secteurs et format d'import des chronos</div>
+<div class="field">
+<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+<input type="checkbox" id="pref-sectors-enabled" style="width:auto" onchange="toggleSectorsField();markPrefsDirty()"/>
+<span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Activer les secteurs (import et fiche PDF)</span>
+</label>
+<div id="pref-sectors-status" style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Lorsque désactivé ou absent des chronos, la fiche pilote utilise automatiquement le tableau simplifié.</div>
+</div>
+<div class="field" id="pref-sectors-wrap"><label>Nombre de secteurs</label>
+<select id="pref-sector-count" onchange="updateChronoFormat();markPrefsDirty()"><option value="2">2 secteurs</option><option value="3">3 secteurs</option></select>
+</div>
+<div style="font-size:11px;color:var(--mut);margin-top:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bord);border-radius:8px" id="params-chrono-format-help">
+Rappel du format CSV d'import (voir aussi l'onglet Sessions actives &gt; Importer chronos) :
+sans secteurs <code>Nom;Kart;NumTour;Temps</code>, avec secteurs <code>Nom;Kart;NumTour;S1;S2;(S3;)Temps</code> — une ligne par tour.
+</div>
+</div>
+</div>
+
+<!-- 3) APPARENCE — theme resultats + avatars -->
+<div class="params-tabpanel" id="params-subtab-apparence" data-tab="apparence">
 <div class="card">
 <div class="ctitle">Theme de la page resultats</div>
-<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Couleurs de la page publique et des exports PDF. Apercu en direct a droite &rarr;</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Couleurs de la page publique et des exports PDF. Apercu en direct dans l'onglet Podium.</div>
 <div class="theme-option-row" data-theme-val="classic" onclick="selectResultsTheme('classic')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#ff2a2a;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Sombre - Classic Racing</span></div>
 <div class="theme-option-row" data-theme-val="neon" onclick="selectResultsTheme('neon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#00d4ff;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Neon Night</span></div>
 <div class="theme-option-row" data-theme-val="carbon" onclick="selectResultsTheme('carbon')" style="display:flex;align-items:center;gap:8px;padding:9px;border-radius:8px;cursor:pointer;margin-bottom:6px;border:1px solid var(--bord)"><span style="width:16px;height:16px;border-radius:50%;background:#c9a84c;display:inline-block;flex-shrink:0"></span><span style="font-size:13px;font-weight:600">Carbone</span></div>
@@ -822,10 +878,7 @@ Les thèmes premium sont réservés au plan <strong>Premium</strong>. Passe au p
 </div>
 <select id="pref-results-theme" onchange="markPrefsDirty();selectResultsTheme(this.value)" style="display:none"><option value="classic">Sombre - Classic Racing</option><option value="neon">Neon Night</option><option value="carbon">Carbone</option><option value="checkered">Damier Rallye</option><option value="endurance">Endurance Le Mans</option><option value="pitlane">Pit Lane F1</option><option value="champagne">Champagne Gold</option><option value="arctic">Arctic White</option></select>
 </div>
-</div>
 
-<!-- 4) AVATARS — pack graphique + reglages avatars -->
-<div class="subtab-panel" id="params-subtab-avatars">
 <div class="card">
 <div class="ctitle">Avatars des pilotes</div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:12px">Chaque pilote recoit automatiquement l'avatar de son kart : le numero affiche est celui du kart, et la couleur est propre a chaque numero (identique d'une session a l'autre).</div>
@@ -895,9 +948,11 @@ Le pack <strong>Signature</strong> est reserve au plan <strong>Premium</strong>.
 </div>
 </div>
 
-
-<!-- 5) CARTES PARTAGEABLES — QR, accroche, selection par categorie -->
-<div class="subtab-panel" id="params-subtab-cartes">
+<!-- 4) PODIUM — QR, accroche, cartes, ET apercu en direct : rien de tout cela n'apparait
+     ailleurs dans le panel (isolation totale demandee). -->
+<div class="params-tabpanel" id="params-subtab-podium" data-tab="podium">
+<div class="params-layout">
+<div class="params-col-left">
 
 <div class="card">
 <div class="ctitle">Lien du QR code</div>
@@ -925,7 +980,7 @@ Le pack <strong>Signature</strong> est reserve au plan <strong>Premium</strong>.
 <div class="ctitle">Cartes de position &mdash; 5 maximum</div>
 <div style="font-size:11px;color:var(--mut);line-height:1.5;margin-bottom:12px">
 Chaque pilote recoit une carte tiree au hasard parmi celles cochees, a la fin de sa session.
-Les apercus suivent le theme choisi dans l'onglet Theme.
+Les apercus suivent le theme choisi dans l'onglet Apparence.
 </div>
 <div id="cards-grid-position" class="cards-grid"></div>
 </div>
@@ -940,20 +995,83 @@ Envoi automatique des qu'un record tombe, jamais manuel. Le pilote recoit alors 
 </div>
 
 </div>
-
-<div class="card" style="position:sticky;bottom:12px;z-index:5">
-<button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer les parametres</button>
-<div class="msg" id="msg-prefs"></div>
-</div>
-
-</div>
 <div class="params-col-right">
 <div class="card">
-<div class="ctitle">Aperçu en direct — page résultats</div>
+<div class="ctitle">Aperçu en direct — page résultats (podium)</div>
 <div id="results-live-preview"></div>
 </div>
 </div>
 </div>
+</div>
+
+<!-- 5) PDF & EXPORT — apercu reel de la fiche PDF (buildSessionPDF, results.js) -->
+<div class="params-tabpanel" id="params-subtab-pdf" data-tab="pdf">
+<div class="card">
+<div class="ctitle">Aperçu de la fiche PDF de classement</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">
+Rendu HTML qui reprend les memes champs que l'export reel (voir results.js &gt; exportSessionPDF() / buildSessionPDF()) :
+position, kart, nom, temps. Injecte avec les donnees de la derniere session disponible, ou un pilote fictif si aucune session n'existe encore.
+</div>
+<div class="flex" style="gap:8px;flex-wrap:wrap;margin-bottom:14px">
+<select id="pdf-preview-session-select" onchange="refreshPdfPreview()" style="max-width:320px"></select>
+<button class="btn btn-ghost btn-sm" onclick="refreshPdfPreview()">Actualiser l'aperçu</button>
+</div>
+<div id="pdf-preview-root" class="pdf-preview-frame">
+<div class="msg">Chargement de l'aperçu...</div>
+</div>
+</div>
+<div class="card">
+<div class="ctitle">Options d'export</div>
+<div style="font-size:11px;color:var(--mut);line-height:1.6">
+Format actuel : <strong>A4 portrait</strong>, une page, image compressee JPEG qualite 95%
+(voir buildSessionPDF() — <code>new jsPDF('p', 'mm', 'a4')</code>). Aucune autre orientation
+ni format papier n'est genere par le code existant a ce jour ; ajouter un choix
+paysage/A5 necessiterait de faire evoluer buildSessionPDF() en amont, ce qui sort du
+perimetre de cette refonte visuelle.
+</div>
+</div>
+</div>
+
+<!-- 6) COMPTE — identite admin, plan, securite -->
+<div class="params-tabpanel" id="params-subtab-compte" data-tab="compte">
+<div class="card">
+<div class="ctitle">Mon compte</div>
+<div class="account-row">
+<span class="account-label">Email</span>
+<span class="account-value" id="account-email-display">—</span>
+</div>
+<div class="account-row">
+<span class="account-label">Plan actuel</span>
+<span class="account-value"><span class="plan-badge free" id="account-plan-badge">Free</span></span>
+</div>
+<div class="account-row" id="account-upgrade-row" style="display:none">
+<span class="account-label">Passer au Premium</span>
+<a href="mailto:contact@trinisette.fr?subject=Passage%20au%20plan%20Premium" class="btn btn-primary btn-sm">Passer au Premium</a>
+</div>
+<div class="account-row">
+<span class="account-label">Compte cree le</span>
+<span class="account-value" id="account-created-at">—</span>
+</div>
+</div>
+<div class="card">
+<div class="ctitle">Sécurité</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:12px">Un e-mail de réinitialisation sera envoyé à l'adresse ci-dessus.</div>
+<button class="btn btn-ghost btn-sm" onclick="requestPasswordReset()">Changer le mot de passe</button>
+<div class="msg" id="msg-account-security"></div>
+</div>
+<div class="card">
+<div class="ctitle">Support</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:10px">Une question, un bug a signaler ?</div>
+<a href="mailto:contact@trinisette.fr" class="btn btn-ghost btn-sm">Contacter le support</a>
+</div>
+<div class="card">
+<button class="btn btn-ghost btn-sm" style="width:100%" onclick="doLogout()">Deconnexion</button>
+</div>
+</div>
+
+<div class="card params-save-bar">
+<button class="btn btn-primary" style="width:100%" onclick="savePrefs()">Enregistrer les parametres</button>
+<div class="msg" id="msg-prefs"></div>
 </div>
 
 </div>

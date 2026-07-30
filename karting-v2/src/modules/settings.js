@@ -9,11 +9,12 @@
 // de résultats (thème + avatars).
 import { db } from '../lib/supabase.js';
 import { state, setPrefs, markPrefsDirty } from '../state.js';
-import { showMsg } from './ui.js';
-import { toggleSectorsField } from './results.js';
+import { showMsg, formatTime, formatDate } from './ui.js';
+import { toggleSectorsField, loadRanking } from './results.js';
 import { kartAvatarSVG } from './kart-avatar.js';
 import { pilotAvatarSVG } from './pilot-avatar.js';
-import { hasFeature } from './plan.js';
+import { hasFeature, getCurrentPlanCode } from './plan.js';
+import { requestPasswordReset as authRequestPasswordReset } from './auth.js';
 import { qrSVG } from './qr.js';
 import {
 configureSignatureAvatars,
@@ -102,6 +103,14 @@ state.prefs.level_intermediaire_max_seconds = state.prefs.level_intermediaire_ma
 if (!Array.isArray(state.prefs.kart_numbers)) state.prefs.kart_numbers = [];
 state.prefs.sectors_enabled = !!state.prefs.sectors_enabled;
 state.prefs.sector_count = Number(state.prefs.sector_count || 3);
+// pref-date-format / pref-circuit-name (developpement reel, 30/07) : meme mecanisme
+// que le reste des prefs — cle JSON dans app_settings.value ('global'), aucune
+// migration SQL necessaire (colonne value est deja jsonb). date_format pilote
+// formatDate() (ui.js) ; circuit_name devient la source de verite du nom de circuit
+// affiche partout (voir commentaire au-dessus de renderLogoPreview plus bas et
+// public-results.js > initTheme()).
+state.prefs.date_format = state.prefs.date_format === 'mdy' ? 'mdy' : 'dmy';
+state.prefs.circuit_name = state.prefs.circuit_name || '';
 state.prefs.results_theme = state.prefs.results_theme || 'classic';
 state.prefs.avatar_mode = state.prefs.avatar_mode || 'kart';
 state.prefs.avatar_pack = state.prefs.avatar_pack || 'classic';
@@ -134,6 +143,10 @@ document.getElementById('pref-laps').value = state.prefs.default_laps;
 document.getElementById('pref-level-expert').value = state.prefs.level_expert_max_seconds;
 document.getElementById('pref-level-intermediaire').value = state.prefs.level_intermediaire_max_seconds;
 document.getElementById('pref-time-unit').value = state.prefs.time_unit;
+const dateFmtEl = document.getElementById('pref-date-format');
+if (dateFmtEl) dateFmtEl.value = state.prefs.date_format || 'dmy';
+const circuitNameEl = document.getElementById('pref-circuit-name');
+if (circuitNameEl) circuitNameEl.value = state.prefs.circuit_name || '';
 document.getElementById('pref-laps-enabled').checked = state.prefs.laps_enabled;
 document.getElementById('pref-karts-locked').checked = state.prefs.karts_locked;
 toggleLapsField();
@@ -451,9 +464,18 @@ showMsg('msg-trackmap', 'Plan retiré. Clique Enregistrer pour confirmer.', 'ok'
 
 // Sous-onglets de l'onglet Parametres (voir admin.html > panel-parametres) : meme
 // convention pastille/.selected que switchStatsSubtab() dans stats.js — un seul bloc
-// de reglages visible a la fois pour reduire la quantite d'info affichee. Remplace
-// l'ancienne fonction switchAppearanceSubtab (jamais reliee a du HTML reel).
-const PARAMS_SUBTABS = ['sessions', 'identite', 'theme', 'avatars', 'cartes'];
+// de reglages visible a la fois pour reduire la quantite d'info affichee.
+//
+// Refonte 30/07 (client) : passage de 5 a 8 sous-onglets avec ISOLATION TOTALE — aucun
+// composant n'est partage entre deux onglets. En particulier l'apercu podium
+// (#results-live-preview) n'existe plus qu'a l'interieur du bloc "podium" : il etait
+// auparavant dans une colonne de droite visible depuis tous les sous-onglets.
+//
+// Fusion 30/07 (client, meme jour) : 8 -> 6 sous-onglets. "Secteurs & chronos" et
+// "Flotte" sont retires de cette liste et leur contenu HTML deplace dans le bloc
+// "sessions" (voir admin.html) — ids et comportement JS inchanges, seul le
+// regroupement visuel change.
+const PARAMS_SUBTABS = ['general', 'sessions', 'apparence', 'podium', 'pdf', 'compte'];
 export function switchParamsSubtab(tab) {
   if (!PARAMS_SUBTABS.includes(tab)) return;
   PARAMS_SUBTABS.forEach((key) => {
@@ -463,8 +485,10 @@ export function switchParamsSubtab(tab) {
   document.querySelectorAll('.subtab-btn[data-ptab-val]').forEach((b) => {
     b.classList.toggle('selected', b.dataset.ptabVal === tab);
   });
-  if (tab === 'avatars') renderKartAvatarGallery();
-  if (tab === 'cartes') renderCardsTab();
+  if (tab === 'apparence') renderKartAvatarGallery();
+  if (tab === 'podium') { renderCardsTab(); renderResultsPreview(); }
+  if (tab === 'pdf') refreshPdfPreview();
+  if (tab === 'compte') renderAccountTab();
 }
 
 // --- Entitlement "thèmes premium" (plan Premium) ---------------------------------------
@@ -715,6 +739,8 @@ setPrefs({
 default_karts: karts,
 default_laps: laps,
 time_unit: unit,
+date_format: document.getElementById('pref-date-format')?.value === 'mdy' ? 'mdy' : 'dmy',
+circuit_name: (document.getElementById('pref-circuit-name')?.value || '').trim().slice(0, 60),
 laps_enabled: lapsEnabled,
 karts_locked: kartsLocked,
 kart_numbers: state.prefs.kart_numbers || [],
@@ -915,5 +941,111 @@ if (note) note.textContent = 'QR valide — ' + url.length + '/179 caracteres.';
 } catch (e) {
 box.innerHTML = '';
 if (note) note.textContent = 'URL trop longue pour un QR lisible (179 caracteres maximum).';
+}
+}
+
+// =====================================================================================
+// Sous-onglet Compte (onglet Parametres > Compte, refonte 30/07)
+// =====================================================================================
+// Reutilise la logique de plan existante (plan.js > getCurrentPlanCode()/hasFeature()) —
+// aucun nouveau systeme de plan invente ici. La date de creation de compte n'est pas
+// exposee par auth.getSession() (supabase-js v2 ne renvoie que l'access token dans la
+// session cote client) ; on retombe donc sur "non disponible" plutot que de l'inventer.
+export async function renderAccountTab() {
+const badge = document.getElementById('account-plan-badge');
+const upgradeRow = document.getElementById('account-upgrade-row');
+const createdAt = document.getElementById('account-created-at');
+if (badge) {
+const plan = await getCurrentPlanCode();
+const isPremium = plan === 'pro' || plan === 'business';
+badge.textContent = isPremium ? 'Premium' : 'Free';
+badge.className = 'plan-badge ' + (isPremium ? 'pro' : 'free');
+if (upgradeRow) upgradeRow.style.display = isPremium ? 'none' : 'flex';
+}
+if (createdAt) {
+try {
+const { data } = await db.auth.getUser();
+const raw = data?.user?.created_at;
+createdAt.textContent = raw ? formatDate(raw) : 'Non disponible';
+} catch (e) {
+createdAt.textContent = 'Non disponible';
+}
+}
+const emailDisplay = document.getElementById('account-email-display');
+const sourceEmail = document.getElementById('login-user-email');
+if (emailDisplay && sourceEmail && sourceEmail.textContent) emailDisplay.textContent = sourceEmail.textContent;
+}
+
+// Bouton "Changer le mot de passe" — appelle le module auth.js (aucune logique
+// dupliquee), avec l'e-mail deja affiche par login-user-email (source unique).
+export async function requestPasswordReset() {
+const email = document.getElementById('login-user-email')?.textContent?.trim();
+if (!email) {
+showMsg('msg-account-security', 'Aucun e-mail de compte detecte.', 'err');
+return;
+}
+try {
+await authRequestPasswordReset(email);
+showMsg('msg-account-security', 'E-mail de reinitialisation envoye a ' + email + '.', 'ok');
+} catch (e) {
+showMsg('msg-account-security', 'Erreur: ' + e.message, 'err');
+}
+}
+
+// =====================================================================================
+// Sous-onglet PDF & export (onglet Parametres > PDF & export, refonte 30/07)
+// =====================================================================================
+// Apercu HTML qui reprend EXACTEMENT les memes champs que l'export reel — voir
+// results.js > buildSessionPDF() (pos., kart, nom, temps). Les secteurs / logo / nom de
+// circuit ne sont PAS injectes ici : buildSessionPDF() ne les rend pas non plus a ce jour
+// (seule la variante "carte partageable" de public-results.js les affiche). Voir le
+// rapport de refonte pour cette ambiguite.
+let pdfPreviewSessions = [];
+
+async function fetchPdfPreviewSessions() {
+const { data } = await db
+.from('sessions')
+.select('id,title,session_date,session_type')
+.not('archived_at', 'is', null)
+.order('archived_at', { ascending: false })
+.limit(20);
+return data || [];
+}
+
+export async function refreshPdfPreview() {
+const root = document.getElementById('pdf-preview-root');
+const sel = document.getElementById('pdf-preview-session-select');
+if (!root) return;
+root.innerHTML = '<div class="msg">Chargement de l\'apercu...</div>';
+try {
+if (!pdfPreviewSessions.length) pdfPreviewSessions = await fetchPdfPreviewSessions();
+if (sel && !sel.options.length) {
+sel.innerHTML = pdfPreviewSessions.length
+? pdfPreviewSessions.map((s) => '<option value="' + s.id + '">' + (s.title || 'Session') + (s.session_date ? ' — ' + formatDate(s.session_date) : '') + '</option>').join('')
+: '<option value="">Aucune session archivee — pilote fictif</option>';
+}
+const chosenId = sel?.value || (pdfPreviewSessions[0] && pdfPreviewSessions[0].id);
+const sess = pdfPreviewSessions.find((s) => s.id === chosenId);
+let rows;
+if (sess) {
+rows = await loadRanking(sess);
+} else {
+rows = [
+{ name: 'PILOTE TEST', kart: 7, t: 62.345 },
+{ name: 'PILOTE FICTIF 2', kart: 4, t: 64.542 },
+];
+}
+const rowsHTML = rows
+.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + (r.kart || '--') + '</td><td>' + r.name + '</td><td>' + formatTime(r.t) + '</td></tr>')
+.join('');
+root.innerHTML =
+'<div style="border-bottom:3px solid #7c74ff;padding-bottom:10px;margin-bottom:16px">' +
+'<div style="font-size:22px;font-weight:900">' + (sess ? (sess.title || 'Session') : 'Session de demonstration') + '</div>' +
+'<div style="font-size:12px;color:#666;margin-top:4px">' + (sess?.session_date ? formatDate(sess.session_date) : 'Aucune session archivee — apercu avec un pilote fictif') + (sess?.session_type ? ' · ' + sess.session_type : '') + '</div>' +
+'</div>' +
+'<table><thead><tr><th>Pos.</th><th>Kart</th><th>Nom</th><th>Temps</th></tr></thead>' +
+'<tbody>' + (rowsHTML || '<tr><td colspan="4" style="color:#888">Aucun resultat.</td></tr>') + '</tbody></table>';
+} catch (e) {
+root.innerHTML = '<div class="msg err">Erreur apercu PDF: ' + e.message + '</div>';
 }
 }

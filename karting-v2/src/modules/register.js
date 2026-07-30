@@ -80,6 +80,7 @@ const FALLBACK_CONFIG = {
   avatar_background: 'studio',
   circuit_name: null,
   logo_url: null,
+  results_token: null,
 };
 
 // 🆕 v17 : la nationalité est demandée via un combobox réellement
@@ -237,6 +238,24 @@ function applyCircuitBranding(cfg) {
     entitled: cfg.avatar_pack === 'signature',
   });
   wireSignatureAvatarFallback();
+  applyResultsNavLink(cfg);
+}
+
+// 🆕 QR code unique : un seul QR (register.html?session=TOKEN) doit permettre
+// d'atteindre aussi bien l'inscription que les résultats de LA MÊME session.
+// public_registration_config() relaie désormais sessions.public_results_token
+// (clé 'results_token') — voir migration v28. Quand il est présent, le lien
+// "Résultats" de la pilule de nav pointe vers cette session précise ; sinon
+// (session sans résultats publiés — inscriptions encore ouvertes, aucun
+// classement à montrer) il reste volontairement sur results.html nu plutôt
+// que d'être masqué : le visiteur peut toujours cliquer et voir un message
+// "aucun résultat" cohérent, moins déroutant qu'un lien qui disparaît.
+function applyResultsNavLink(cfg) {
+  const link = document.getElementById('nav-results-link');
+  if (!link) return;
+  if (cfg && cfg.results_token) {
+    link.href = 'results.html?result=' + encodeURIComponent(cfg.results_token);
+  }
 }
 
 export async function initRegisterPage() {

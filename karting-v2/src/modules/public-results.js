@@ -68,6 +68,15 @@ let PDF_AVATAR_MODE = 'kart';
 // l'appel réseau.
 let PDF_LOGO_URL = null;
 
+// Nom du circuit (Parametres > Sessions, developpement reel 30/07) — lu depuis
+// app_settings.global.circuit_name via public_site_config, exactement comme
+// PDF_LOGO_URL ci-dessus (meme mecanisme, meme RPC). Devient la SOURCE DE VERITE
+// affichee sur cette page et dans les exports quand renseigne ; sessions.circuit_name
+// (par session) reste le repli pour les sessions plus anciennes ou tant que ce
+// reglage global n'a pas ete rempli — voir l'ecrasement juste apres la lecture de
+// `session` dans load() ci-dessous.
+let SITE_CIRCUIT_NAME = null;
+
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
 // <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
 function genAvatarDataURL(kart, opts) {
@@ -122,6 +131,7 @@ if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'cl
 
 const logoUrl = data.value && data.value.logo_url;
 PDF_LOGO_URL = logoUrl || null;
+SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null;
 if (logoUrl) {
 const header = document.querySelector('.circuit-header');
 if (header && !document.getElementById('circuit-logo')) {
@@ -333,6 +343,23 @@ if (pdfBtn) pdfBtn.addEventListener('click', (e) => { e.stopPropagation(); downl
 });
 }
 
+// 🆕 QR code unique : un seul QR doit permettre d'atteindre aussi bien les
+// résultats que l'inscription de LA MÊME session. public_session_results()
+// relaie désormais sessions.public_registration_token dans son bloc
+// 'session' (clé 'registration_token') — voir migration v28. Quand il est
+// présent, le lien "Inscription" de la pilule de nav pointe vers cette
+// session précise ; sinon (inscriptions fermées / aucun jeton actif pour
+// cette session) il reste volontairement sur register.html nu plutôt que
+// d'être masqué, par cohérence avec le choix symétrique côté register.js
+// (applyResultsNavLink).
+function applyRegistrationNavLink(session) {
+  const link = document.getElementById('nav-register-link');
+  if (!link) return;
+  if (session && session.registration_token) {
+    link.href = 'register.html?session=' + encodeURIComponent(session.registration_token);
+  }
+}
+
 /* ------------------------------------------------------------------
 CHARGEMENT DES DONNÉES RÉELLES (Supabase)
 Règles de gestion :
@@ -364,6 +391,13 @@ const { data: bundle, error: sErr } = await db.rpc('public_session_results', { _
 const session = bundle && bundle.session ? bundle.session : null;
 if (sErr || !session) return fail();
 sessionInfo = session;
+applyRegistrationNavLink(session);
+// Le reglage global (Parametres > Sessions > Nom du circuit) prime sur le champ
+// sessions.circuit_name herite — voir le commentaire sur SITE_CIRCUIT_NAME plus haut.
+// Ecrase sessionInfo.circuit_name en amont pour que TOUS les usages plus bas
+// (fiche PDF, classement complet, cartes partageables) en beneficient sans
+// modification supplementaire.
+if (SITE_CIRCUIT_NAME) sessionInfo.circuit_name = SITE_CIRCUIT_NAME;
 
 document.getElementById('circuit-name').textContent = session.circuit_name || 'Circuit de Trinisette';
 document.getElementById('session-label').textContent = session.title || '--';

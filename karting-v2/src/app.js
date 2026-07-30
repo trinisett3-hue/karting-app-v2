@@ -402,6 +402,8 @@ removeLogo: settings.removeLogo,
 uploadTrackMap: settings.uploadTrackMap,
 removeTrackMap: settings.removeTrackMap,
 savePrefs: settings.savePrefs,
+refreshPdfPreview: settings.refreshPdfPreview,
+requestPasswordReset: settings.requestPasswordReset,
 // Statistiques
 selectStatsRange: stats.selectStatsRange,
 switchStatsSubtab: stats.switchStatsSubtab,

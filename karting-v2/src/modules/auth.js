@@ -29,6 +29,14 @@ export async function signOut() {
   await db.auth.signOut();
 }
 
+// Ajoute (refonte Parametres > Compte, 30/07) : envoie un e-mail de reinitialisation de
+// mot de passe a l'utilisateur actuellement connecte. Reprend le mecanisme standard
+// Supabase Auth, deja utilise par signIn/signUp ci-dessus — pas de nouveau backend.
+export async function requestPasswordReset(email) {
+  const { error } = await db.auth.resetPasswordForEmail(email);
+  if (error) throw error;
+}
+
 export function onAuthStateChange(callback) {
   db.auth.onAuthStateChange((_event, session) => callback(session));
 }

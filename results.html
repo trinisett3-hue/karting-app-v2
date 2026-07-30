@@ -1078,6 +1078,54 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .nav-dot.active { background: var(--c-accent); transform: scale(1.35); }
 
 /* ============================================================
+   PAGE SWITCH (Inscription / Résultats) — petit pilule fixe en haut,
+   pour naviguer entre register.html et cette page. QR code unique : le lien
+   "Inscription" est réécrit en JS (public-results.js, load()) vers
+   register.html?session=<public_registration_token> dès que la RPC
+   public_session_results a répondu, pour rester sur LA MÊME session.
+   S'il n'y a pas de jeton d'inscription actif pour cette session (inscriptions
+   fermées / jeton non généré), le lien pointe vers register.html nu.
+   ============================================================ */
+.page-switch {
+  position: fixed;
+  top: var(--space-3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  gap: 2px;
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(6px);
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  padding: 3px;
+}
+.page-switch a, .page-switch span {
+  display: inline-flex;
+  align-items: center;
+  padding: .3rem .85rem;
+  border-radius: 999px;
+  font-family: var(--font-display);
+  font-size: .95rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--c-text-dim, var(--c-text));
+  opacity: .65;
+}
+.page-switch span.current {
+  background: var(--c-accent);
+  color: #fff;
+  opacity: 1;
+}
+.page-switch a:hover { opacity: 1; }
+@media (max-width: 600px) {
+  .page-switch { top: var(--space-2); }
+  .page-switch a, .page-switch span { padding: .25rem .65rem; font-size: .82rem; }
+}
+
+/* ============================================================
    MOBILE — 375px
    ============================================================ */
 /* ============================================================
@@ -1293,6 +1341,12 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 
 <!-- Fond décoratif -->
 <div class="results-bg" aria-hidden="true"></div>
+
+<!-- Navigation Inscription / Résultats -->
+<nav class="page-switch" aria-label="Navigation">
+  <a href="register.html" id="nav-register-link">Inscription</a>
+  <span class="current">Résultats</span>
+</nav>
 
 <!-- Switcher de thème -->
 

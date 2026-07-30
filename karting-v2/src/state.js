@@ -27,6 +27,8 @@ export const state = {
     helmet_colors: null,
     logo_url: null, // logo du circuit (bucket Storage "org-logos"), affiché sur results.html
     track_map_url: null, // plan/tracé du circuit (option, bucket Storage "org-logos"), affiché sur results.html
+    date_format: 'dmy', // 'dmy' (JJ/MM/AAAA) ou 'mdy' (MM-DD-AAAA) — voir ui.js > formatDate()
+    circuit_name: '', // nom du circuit, source de verite affichee (voir public-results.js)
   },
 };
 

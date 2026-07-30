@@ -58,7 +58,24 @@ export function qrSrc(url, size) {
   return 'https://api.qrserver.com/v1/create-qr-code/?size=' + size + 'x' + size + '&data=' + encodeURIComponent(url);
 }
 
-// Formatage relatif d'une date ("Aujourd'hui", "Hier", ou date longue en FR) — anciennement fmtDate().
+// Formatage numerique d'une date selon la preference pref-date-format (Parametres >
+// Sessions), developpee le 30/07 (client) : jusque-la le champ n'etait que visuel.
+// Meme mecanisme que les autres prefs (app_settings.value.date_format, 'dmy' | 'mdy').
+// Utilise par formatDate() ci-dessous des que la date n'est plus "Aujourd'hui"/"Hier",
+// et directement partout ou un format exact est necessaire (PDF, exports CSV).
+export function formatDateNumeric(d) {
+  const date = new Date(d + 'T12:00:00');
+  const dd = String(date.getDate()).padStart(2, '0');
+  const mm = String(date.getMonth() + 1).padStart(2, '0');
+  const yyyy = date.getFullYear();
+  return state.prefs.date_format === 'mdy' ? mm + '-' + dd + '-' + yyyy : dd + '/' + mm + '/' + yyyy;
+}
+
+// Formatage relatif d'une date ("Aujourd'hui", "Hier", ou date au format numerique
+// choisi dans Parametres > Sessions) — anciennement fmtDate(), qui rendait une date
+// longue en FR fixe. Centralise ici : tout appelant (archives, sessions, registre,
+// statistiques, PDF via buildSessionPDF()) beneficie automatiquement du reglage
+// pref-date-format sans modification a chaque site d'appel.
 export function formatDate(d) {
   const date = new Date(d + 'T12:00:00');
   const today = new Date();
@@ -66,7 +83,7 @@ export function formatDate(d) {
   const diff = Math.round((today - date) / (1000 * 60 * 60 * 24));
   if (diff === 0) return "Aujourd'hui";
   if (diff === 1) return 'Hier';
-  return date.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  return formatDateNumeric(d);
 }
 
 

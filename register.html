@@ -196,9 +196,41 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
   .card{padding:26px 20px 22px;border-radius:16px}
   .logo{font-size:29px}
 }
+
+/* Navigation Inscription / Résultats — petite pilule fixe en haut, visible
+   quel que soit l'écran actif (fixed, hors des .reg-screen togglés en JS).
+   QR code unique : le lien "Résultats" est réécrit en JS (register.js,
+   loadRegistrationConfig()) vers results.html?result=<results_token> dès que
+   la config de la session est connue, pour que le visiteur reste sur LA MÊME
+   session sans ressaisir quoi que ce soit. Tant que ce n'est pas fait (ou si
+   la session n'a pas encore de résultats publiés), le lien pointe vers
+   results.html nu. */
+.page-switch{
+  position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:30;
+  display:flex;gap:2px;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(6px);
+  border:1px solid var(--bord-soft);border-radius:999px;padding:3px;
+}
+.page-switch a,.page-switch span{
+  display:inline-flex;align-items:center;padding:.3rem .85rem;border-radius:999px;
+  font-family:var(--font-display);font-size:15px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;text-decoration:none;color:var(--txt);opacity:.65;
+}
+.page-switch span.current{background:var(--acc);color:#fff;opacity:1}
+.page-switch a:hover{opacity:1}
+@media(max-width:420px){
+  .page-switch{top:8px}
+  .page-switch a,.page-switch span{padding:.25rem .65rem;font-size:13px}
+}
 </style>
 </head>
 <body>
+
+<!-- Navigation Inscription / Résultats -->
+<nav class="page-switch" aria-label="Navigation">
+  <span class="current">Inscription</span>
+  <a href="results.html" id="nav-results-link">Résultats</a>
+</nav>
 
 <!-- ÉCRAN 0 — Choix d'identité -->
 <div class="card reg-screen active" id="screen-0">
