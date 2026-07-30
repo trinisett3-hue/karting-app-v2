@@ -18,6 +18,14 @@ let registryCache = [];
 // ce soit de perceptible).
 let editingKey = null;
 
+// 🆕 v28 : pagination. `registryCache` = tout le registre (sert au compteur
+// total, qui ne doit jamais bouger quand on filtre) ; `viewRows` = ce que la
+// recherche laisse passer, c'est lui qu'on pagine. Séparer les deux est ce
+// qui permet d'afficher « 12 résultats sur 73 clients » sans recharger.
+const PAGE_SIZE = 20;
+let viewRows = [];
+let page = 1;
+
 function escapeHTML(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -35,11 +43,92 @@ function natFlagLabel(code) {
   return n ? n.flag + ' ' + n.label : '--';
 }
 
+// Point d'entrée unique du rendu : compteur + table + pagination sont
+// toujours recalculés ensemble. Avant, `filterRegistry()` appelait
+// directement `renderRegistryTable()`, si bien qu'ouvrir un éditeur alors
+// qu'une recherche était active faisait réapparaître tout le registre.
+function renderRegistry() {
+  const total = registryCache.length;
+  const shown = viewRows.length;
+  const pages = Math.max(1, Math.ceil(shown / PAGE_SIZE));
+  // Supprimer le dernier client d'une page peut rendre la page courante
+  // inexistante : on se recale au lieu d'afficher une table vide.
+  if (page > pages) page = pages;
+  if (page < 1) page = 1;
+  renderRegistryCount(total, shown);
+  renderRegistryTable(viewRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
+  renderRegistryPager(shown, pages);
+}
+
+function renderRegistryCount(total, shown) {
+  const el = document.getElementById('registry-total');
+  if (!el) return;
+  const s = total > 1 ? 's' : '';
+  el.innerHTML =
+    '<span class="reg-count-n">' + total + '</span>' +
+    '<span class="reg-count-lbl">client' + s + ' enregistre' + s + '</span>' +
+    (shown !== total
+      ? '<span class="reg-count-filter">' + shown + ' affiche' + (shown > 1 ? 's' : '') + '</span>'
+      : '');
+}
+
+// Fenêtre de numéros de page : au-delà de 7 pages on n'aligne pas 40 boutons,
+// on garde les extrémités et le voisinage immédiat.
+function pageNumbers(pages, current) {
+  if (pages <= 7) {
+    const all = [];
+    for (let i = 1; i <= pages; i++) all.push(i);
+    return all;
+  }
+  const out = [1];
+  let a = Math.max(2, current - 1);
+  let b = Math.min(pages - 1, current + 1);
+  if (current <= 3) { a = 2; b = 4; }
+  if (current >= pages - 2) { a = pages - 3; b = pages - 1; }
+  if (a > 2) out.push('gap');
+  for (let i = a; i <= b; i++) out.push(i);
+  if (b < pages - 1) out.push('gap');
+  out.push(pages);
+  return out;
+}
+
+function renderRegistryPager(shown, pages) {
+  const el = document.getElementById('registry-pager');
+  if (!el) return;
+  // Une seule page : pas de pagination affichée, elle n'apporterait rien.
+  if (shown <= PAGE_SIZE) { el.innerHTML = ''; return; }
+  const from = (page - 1) * PAGE_SIZE + 1;
+  const to = Math.min(shown, page * PAGE_SIZE);
+  el.innerHTML =
+    '<div class="reg-pager-info">' + from + '–' + to + ' sur ' + shown + '</div>' +
+    '<div class="reg-pager-btns">' +
+    '<button class="btn btn-ghost btn-sm"' + (page === 1 ? ' disabled' : '') + ' onclick="gotoRegistryPage(' + (page - 1) + ')">Precedent</button>' +
+    pageNumbers(pages, page)
+      .map((p) => (p === 'gap'
+        ? '<span class="reg-pager-gap">…</span>'
+        : '<button class="btn btn-sm ' + (p === page ? 'btn-primary' : 'btn-ghost') + '" onclick="gotoRegistryPage(' + p + ')">' + p + '</button>'))
+      .join('') +
+    '<button class="btn btn-ghost btn-sm"' + (page === pages ? ' disabled' : '') + ' onclick="gotoRegistryPage(' + (page + 1) + ')">Suivant</button>' +
+    '</div>';
+}
+
+export function gotoRegistryPage(p) {
+  page = p;
+  // Changer de page pendant une édition laisserait un formulaire ouvert sur
+  // une ligne devenue invisible : on ferme l'éditeur.
+  editingKey = null;
+  renderRegistry();
+  const el = document.getElementById('panel-registre');
+  if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function renderRegistryTable(rows) {
   const el = document.getElementById('registry-table');
   if (!el) return;
   if (!rows.length) {
-    el.innerHTML = '<div class="empty">Aucun client enregistre.</div>';
+    el.innerHTML = registryCache.length
+      ? '<div class="empty">Aucun client ne correspond a cette recherche.</div>'
+      : '<div class="empty">Aucun client enregistre.</div>';
     return;
   }
   el.innerHTML =
@@ -111,12 +200,12 @@ function editRowHTML(r) {
 
 export function startEditRegistry(key) {
   editingKey = key;
-  renderRegistryTable(registryCache);
+  renderRegistry();
 }
 
 export function cancelRegistryEdit() {
   editingKey = null;
-  renderRegistryTable(registryCache);
+  renderRegistry();
 }
 
 export async function saveRegistryEdit(key) {
@@ -157,17 +246,21 @@ export async function saveRegistryEdit(key) {
     }
     editingKey = null;
     showMsg('msg-registre', 'Informations mises a jour.', 'ok');
-    await loadRegistryTab();
+    // keepView : on revient sur la meme page et la meme recherche, sinon
+    // corriger le 45e client renvoie l'admin en page 1 sans son filtre.
+    await loadRegistryTab(true);
   } catch (e) {
     showMsg('msg-registre', e.message || 'Erreur lors de la mise a jour.', 'err');
   }
 }
 
-export async function loadRegistryTab() {
+export async function loadRegistryTab(keepView) {
+  const keep = keepView === true;
   const el = document.getElementById('registry-table');
   if (el) el.innerHTML = '<div class="empty">Chargement...</div>';
   const searchEl = document.getElementById('reg-search');
-  if (searchEl) searchEl.value = '';
+  if (searchEl && !keep) searchEl.value = '';
+  if (!keep) page = 1;
 
   const { data, error } = await db.rpc('tenant_pilot_registry');
   if (error) {
@@ -191,19 +284,29 @@ export async function loadRegistryTab() {
     (regs || []).forEach((r) => regByEmail.set(r.email, r.id));
   }
   registryCache = rows.map((r) => Object.assign({}, r, { _registrationId: regByEmail.get(r.email) || null }));
-  renderRegistryTable(registryCache);
+  applySearch();
+  renderRegistry();
+}
+
+// Recalcule `viewRows` depuis le champ de recherche. Isolé de
+// `filterRegistry()` pour pouvoir être rejoué après un rechargement sans
+// remettre la pagination à zéro.
+function applySearch() {
+  const q = (document.getElementById('reg-search')?.value || '').trim().toLowerCase();
+  viewRows = !q
+    ? registryCache
+    : registryCache.filter((r) =>
+      [r.pseudo, r.first_name, r.last_name, r.email].some((v) => (v || '').toLowerCase().includes(q))
+    );
 }
 
 export function filterRegistry() {
-  const q = (document.getElementById('reg-search')?.value || '').trim().toLowerCase();
-  if (!q) {
-    renderRegistryTable(registryCache);
-    return;
-  }
-  const filtered = registryCache.filter((r) =>
-    [r.pseudo, r.first_name, r.last_name, r.email].some((v) => (v || '').toLowerCase().includes(q))
-  );
-  renderRegistryTable(filtered);
+  // Taper dans la recherche doit ramener en page 1 : rester en page 4 d'un
+  // résultat qui n'a plus qu'une page afficherait une table vide.
+  page = 1;
+  editingKey = null;
+  applySearch();
+  renderRegistry();
 }
 
 export async function confirmDeletePilot(pilotId, pseudo) {
@@ -219,7 +322,7 @@ export async function confirmDeletePilot(pilotId, pseudo) {
     return;
   }
   showMsg('msg-registre', pseudo + ' a ete supprime definitivement.', 'ok');
-  await loadRegistryTab();
+  await loadRegistryTab(true);
 }
 
 export async function confirmDeleteLegacy(registrationId, email) {
@@ -239,7 +342,7 @@ export async function confirmDeleteLegacy(registrationId, email) {
     return;
   }
   showMsg('msg-registre', email + ' a ete supprime definitivement.', 'ok');
-  await loadRegistryTab();
+  await loadRegistryTab(true);
 }
 
 function csvCell(value) {
@@ -248,8 +351,17 @@ function csvCell(value) {
 }
 
 export function exportRegistryCSV() {
+  // On exporte ce qui est A L'ECRAN (recherche comprise), pas seulement la
+  // page courante : exporter autre chose que ce que l'admin voit est le
+  // meilleur moyen de produire un fichier faux sans que personne ne s'en
+  // apercoive. Meme regle que l'export des archives.
+  const source = viewRows;
+  if (!source.length) {
+    showMsg('msg-registre', registryCache.length ? 'Aucun client ne correspond a cette recherche.' : 'Aucun client a exporter.', 'err');
+    return;
+  }
   const rows = [['Pseudo', 'Prenom', 'Nom', 'Email', 'Naissance', 'Nationalite', '1ere course', 'Derniere course', 'Sessions']];
-  registryCache.forEach((r) => {
+  source.forEach((r) => {
     rows.push([
       r.legacy ? '(pre-v14)' : r.pseudo,
       r.first_name || '',
@@ -274,4 +386,5 @@ export function exportRegistryCSV() {
   a.click();
   a.remove();
   URL.revokeObjectURL(url);
+  showMsg('msg-registre', source.length + ' client(s) exporte(s) en CSV.', 'ok');
 }

@@ -26,7 +26,8 @@ const { createClient } = window.supabase;
 // Solution : sur ces pages publiques, on force un client strictement anonyme
 // (aucune session persistée, storageKey dédié pour ne jamais lire le token admin).
 // L'admin (admin.html) garde le client normal avec session persistée.
-const isPublicPage = /(^|\/)(register|results)(\.html)?$/.test(window.location.pathname);
+// `j` = page d'accueil du circuit atteinte par la plaque QR imprimée (j.html?c=<token>).
+const isPublicPage = /(^|\/)(register|results|j)(\.html)?$/.test(window.location.pathname);
 
 export const db = isPublicPage
 ? createClient(APP_CONFIG.supabaseUrl, APP_CONFIG.supabaseKey, {

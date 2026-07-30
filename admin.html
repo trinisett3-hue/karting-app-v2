@@ -142,6 +142,10 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .arch-meta{font-size:11px;color:var(--mut);margin-top:2px}
 .day-lbl{font-size:11px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.5px;padding:6px 0;border-bottom:1px solid var(--bord-soft);margin:14px 0 8px}
 .chrono-area{font-family:'SFMono-Regular',Consolas,monospace;font-size:13px;min-height:110px;resize:vertical}
+/* Utilitaire partage : sans lui les trois onglets de la modale d'ajout
+   manuel s'affichent tous en meme temps. */
+.hidden{display:none!important}
+.ma-tab.active{background:var(--acc);border-color:var(--acc);color:#fff}
 .msg{padding:10px 16px;border-radius:8px;font-size:13px;margin-top:10px;display:none;font-weight:600}
 .msg.ok{background:rgba(51,209,122,.12);color:var(--grn);display:block;border:1px solid rgba(51,209,122,.22)}
 .msg.err{background:rgba(255,77,77,.12);color:var(--red);display:block;border:1px solid rgba(255,77,77,.22)}
@@ -194,6 +198,21 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .reg-search{position:relative}
 #panel-registre .card{padding:20px}
 #registry-table .tbl th:first-child,#registry-table .tbl td:first-child{padding-left:6px}
+/* Compteur total : le chiffre est l'information, le mot n'est qu'une légende */
+.reg-count{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.reg-count:empty{display:none}
+.reg-count-n{font-size:30px;font-weight:800;line-height:1;letter-spacing:-.5px}
+.reg-count-lbl{font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
+.reg-count-filter{font-size:11.5px;font-weight:700;color:var(--acc);background:rgba(255,59,48,.1);border:1px solid rgba(255,59,48,.25);border-radius:99px;padding:2px 9px}
+/* Pagination : 20 lignes par page */
+.reg-pager{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px}
+.reg-pager:empty{display:none}
+.reg-pager-info{font-size:12px;color:var(--mut);font-weight:600}
+.reg-pager-btns{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
+.reg-pager-btns .btn{min-width:34px;justify-content:center}
+.reg-pager-btns .btn[disabled]{opacity:.4;cursor:not-allowed}
+.reg-pager-gap{color:var(--mut);padding:0 2px;font-weight:700}
+@media(max-width:600px){.reg-pager{justify-content:center}.reg-pager-info{width:100%;text-align:center}}
 
 /* ---------- Thèmes Pro (results.html) ---------- */
 .theme-pro-badge{font-size:9.5px;font-weight:800;letter-spacing:.5px;background:linear-gradient(180deg,var(--acc2),var(--acc));color:#fff;border-radius:4px;padding:1px 6px;vertical-align:1px;margin-left:6px}
@@ -360,7 +379,7 @@ updateThemeToggleUI();
 <div class="msg" id="msg-ins" style="flex:1;text-align:center;min-height:0;padding:0 8px;font-size:12px"></div>
 <div class="flex" style="gap:6px">
 <button class="btn btn-ghost btn-sm" onclick="loadInscrits()">Actualiser</button>
-<button class="btn btn-primary btn-sm" onclick="addUnknownParticipant()">+ Ajouter</button>
+<button class="btn btn-primary btn-sm" onclick="openManualAdd()">+ Ajouter</button>
 </div>
 </div>
 </div>
@@ -451,16 +470,25 @@ updateThemeToggleUI();
 <div id="arch-list-view">
 <div class="card">
 <div class="ctitle">Sessions passees</div>
-<div class="flex" style="margin-bottom:12px;gap:8px;align-items:center">
-<label style="margin:0;text-transform:none;font-weight:600;color:var(--mut);font-size:12px">Filtrer par type</label>
-<select id="arch-type-filter" onchange="filterArchives()" style="width:auto;min-width:160px">
+<div class="flex" style="margin-bottom:12px;gap:8px;align-items:center;flex-wrap:wrap">
+<label style="margin:0;text-transform:none;font-weight:600;color:var(--mut);font-size:12px">Type</label>
+<select id="arch-type-filter" onchange="filterArchives()" style="width:auto;min-width:150px">
 <option value="">Tous les types</option>
 <option value="loisir">Loisir</option>
 <option value="competition">Competition</option>
 <option value="initiation">Initiation</option>
 <option value="entrainement">Entrainement</option>
 </select>
+<label style="margin:0;text-transform:none;font-weight:600;color:var(--mut);font-size:12px">Jour</label>
+<select id="arch-day-filter" onchange="filterArchives()" style="width:auto;min-width:150px">
+<option value="">Tous les jours</option>
+</select>
+<button class="btn btn-ghost btn-sm" onclick="resetArchiveFilters()">Reinitialiser</button>
+<span style="flex:1"></span>
+<button class="btn btn-ghost btn-sm" onclick="exportArchivesCSV()">Export CSV</button>
+<button class="btn btn-primary btn-sm" onclick="exportArchivesXLSX()">Export XLSX</button>
 </div>
+<div id="msg-arch-export" class="msg"></div>
 <div id="arch-list"><div class="empty">Chargement...</div></div>
 </div>
 </div>
@@ -642,11 +670,13 @@ updateThemeToggleUI();
 <div class="panel" id="panel-registre">
 <div class="pg-title">Registre clients</div>
 <div class="card">
+<div class="reg-count" id="registry-total"></div>
 <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px">
 <input type="text" class="reg-search" id="reg-search" placeholder="Rechercher un pseudo, un nom ou un email..." style="max-width:360px;margin-bottom:0" oninput="filterRegistry()">
 <button class="btn btn-ghost btn-sm" onclick="exportRegistryCSV()">Exporter en CSV</button>
 </div>
 <div id="registry-table"><div class="empty">Chargement...</div></div>
+<div class="reg-pager" id="registry-pager"></div>
 <div class="msg" id="msg-registre"></div>
 </div>
 </div>
@@ -973,6 +1003,53 @@ Envoi automatique des qu'un record tombe, jamais manuel. Le pilote recoit alors 
 <div class="field" style="width:100%"><label>Mot de passe</label><input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"/></div>
 <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Se connecter</button>
 <div class="msg" id="login-msg"></div>
+</div>
+</div>
+
+<!-- Ajout manuel d'un participant (pilote sans telephone / refus du QR) : 3 chemins -->
+<div class="overlay" id="manual-add-overlay" onclick="if(event.target===this)closeManualAdd()">
+<div class="qr-zoom-box" style="max-width:560px;align-items:stretch;text-align:left">
+<div class="flex" style="justify-content:space-between;align-items:center">
+<div style="font-size:17px;font-weight:900">Ajouter un participant</div>
+<div style="font-size:11px;color:var(--yel);font-weight:700" id="ma-seats"></div>
+</div>
+<div class="flex" style="gap:6px;margin:4px 0 2px">
+<button class="btn btn-ghost btn-sm ma-tab active" id="ma-tab-search" onclick="manualAddSetMode('search')">Deja venu</button>
+<button class="btn btn-ghost btn-sm ma-tab" id="ma-tab-new" onclick="manualAddSetMode('new')">Premiere fois</button>
+<button class="btn btn-ghost btn-sm ma-tab" id="ma-tab-anon" onclick="manualAddSetMode('anon')">Anonyme</button>
+</div>
+<div class="msg" id="ma-msg" style="min-height:16px;font-size:12px"></div>
+
+<div id="ma-pane-search">
+<div class="field"><label>Pseudo, nom ou e-mail</label>
+<input type="text" id="ma-search-input" oninput="manualAddSearch()" placeholder="Ex: Speedy, Dupont, jean@..."/></div>
+<div id="ma-search-result" style="max-height:260px;overflow-y:auto;margin-top:6px"></div>
+</div>
+
+<div id="ma-pane-new" class="hidden">
+<div class="flex" style="gap:8px">
+<div class="field" style="flex:1"><label>Prenom</label><input type="text" id="ma-new-first"/></div>
+<div class="field" style="flex:1"><label>Nom</label><input type="text" id="ma-new-last"/></div>
+</div>
+<div class="field"><label>E-mail (obligatoire)</label><input type="email" id="ma-new-email" placeholder="pour recevoir les resultats"/></div>
+<div class="flex" style="gap:8px">
+<div class="field" style="flex:1"><label>Pseudo (nom affiche)</label><input type="text" id="ma-new-pseudo" placeholder="sans accent ni espace"/></div>
+<div class="field" style="flex:1"><label>Nationalite</label><select id="ma-new-nat"></select></div>
+</div>
+<div class="field"><label>Date de naissance (optionnel)</label><input type="date" id="ma-new-birth"/></div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:8px">Le pseudo est le seul nom visible publiquement. L'e-mail sert uniquement a envoyer les resultats a la fin de la session.</div>
+<button class="btn btn-primary btn-sm" id="ma-new-btn" style="width:100%" onclick="manualAddCreate()">Creer le profil et inscrire</button>
+</div>
+
+<div id="ma-pane-anon" class="hidden">
+<div style="font-size:13px;color:var(--txt);margin-bottom:6px">Le participant courra et apparaitra au classement sous un nom provisoire (modifiable dans la liste).</div>
+<div style="font-size:12px;color:var(--yel);margin-bottom:10px">Sans e-mail, il ne recevra <strong>aucun</strong> resultat par mail : ni PDF, ni carte position, ni carte record.</div>
+<button class="btn btn-primary btn-sm" style="width:100%" onclick="manualAddAnonymous()">Ajouter un participant anonyme</button>
+</div>
+
+<div class="flex" style="justify-content:flex-end;margin-top:4px">
+<button class="btn btn-ghost btn-sm" onclick="closeManualAdd()">Fermer</button>
+</div>
 </div>
 </div>
 

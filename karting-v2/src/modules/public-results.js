@@ -41,6 +41,12 @@ const NO_TIME = 999999; // valeur sentinelle : toujours trié en dernier
 let allResults = [];
 let sessionInfo = null;
 let resultsToken = null; // jeton public de la session : requis par les RPC token-gated
+// 🆕 v28 : caches du palmares. Cles par session / par pseudo, vides a chaque
+// load(). Indispensables des qu'on genere les fiches de toute la grille d'un
+// coup (voir buildPilotPDF) : sans eux, 20 pilotes x N sessions d'historique
+// declenchent des centaines d'appels RPC identiques.
+const rankingCache = new Map();
+const palmaresCache = new Map();
 let currentPage = 1;
 
 // Réglage « secteurs » (Paramètres › Apparence), lu depuis app_settings.global.
@@ -341,6 +347,8 @@ export async function load() {
 const token = new URLSearchParams(window.location.search).get('result');
 if (!token) return fail();
 resultsToken = token;
+rankingCache.clear();
+palmaresCache.clear();
 // AVANT tout rendu : sinon les avatars se dessinent en repli classique tant que
 // la config n'est pas revenue (course avec initTheme(), memes promesse memoisee).
 await loadSiteConfig();
@@ -387,6 +395,12 @@ const hasTime = totals.has(r.id);
 const lapsArr = (lapDetails.get(r.id) || []).sort((a, b) => a.idx - b.idx);
 const bestLap = lapsArr.length ? Math.min(...lapsArr.map(l => l.time)) : null;
 results.push({
+// 🆕 v28 : l'identifiant d'inscription voyage jusqu'ici. Il ne sert a rien
+// au rendu, mais c'est la seule cle qui permet a l'admin de rattacher la
+// fiche PDF generee dans l'iframe a la bonne ligne de session_registrations
+// (donc au bon destinataire). Sans lui, « toutes les fiches en piece
+// jointe » serait impossible : on ne saurait pas a qui envoyer quoi.
+regId: r.id,
 kart: r.kart_number,
 name: r.display_name || 'Inconnu',
 nat: r.nationality || (drv && drv.nationality) || 'OTHER',
@@ -515,9 +529,27 @@ const h2cFix = document.createElement('style');
 h2cFix.setAttribute('data-h2c-metrics-fix', '1');
 h2cFix.textContent = 'img[width="1"][height="1"]{display:inline!important;max-width:none!important;border:0!important;margin:0!important;padding:0!important}';
 document.head.appendChild(h2cFix);
+// --- Elagage du clone (correctif de performance v28) -------------------
+// html2canvas ne capture QUE `wrap`, mais il commence par cloner tout le
+// document, puis rastérise chaque <svg> en ligne rencontré — y compris les
+// 65 casques Signature affichés sur la page, à 1024x1024 chacun, à CHAQUE
+// appel. Mesure faite au banc (session de 13 pilotes, Chromium) : capturer
+// une simple <div> de 120x60 px coûtait 48 s ; en retirant les <svg> du
+// document, 0,12 s. C'était donc 100 % de frais fixes payés par appel, sans
+// rapport avec ce qu'on capture réellement.
+// `ignoreElements` (supporté par html2canvas 1.4.1, cf. appendChildNode) fait
+// sauter du clone tout ce qui n'est ni <head> (il porte les @font-face et le
+// correctif de métriques ci-dessus), ni un ancêtre de `wrap`, ni son contenu.
+// La mise en page du sous-arbre capturé n'en dépend pas : #pdf-render-root est
+// en position:fixed hors écran et `wrap` a une largeur explicite.
+// Gain mesuré sur la même session : classement 63 s -> 4 s, fiche pilote
+// 98 s -> 7 s. Sans ce correctif, générer les 13 fiches en pièce jointe
+// aurait immobilisé le navigateur de l'admin une vingtaine de minutes.
+const keepInClone = (el) =>
+document.head.contains(el) || el.contains(wrap) || wrap.contains(el);
 let canvas;
 try {
-canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: scale || 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000 });
+canvas = await html2canvas(wrap, { backgroundColor: bg || '#ffffff', scale: scale || 2.5, width, windowWidth: width, useCORS: true, allowTaint: false, imageTimeout: 8000, ignoreElements: (el) => !keepInClone(el) });
 } finally {
 h2cFix.remove();
 }
@@ -835,19 +867,39 @@ function ensurePdfStyles() {
 .pdfx-photo svg{width:28px;height:28px;stroke:var(--c-muted);opacity:.6}
 .pdfx-kart-badge{position:absolute;right:-10px;bottom:-10px;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2px solid var(--c-surface);box-shadow:0 2px 8px rgba(0,0,0,.5);background:var(--c-bg);overflow:hidden}
 .pdfx-kart-badge .pdfx-av{width:100%;height:100%}
-.pdfx-id-block{min-width:92px;flex:1 1 92px}
+/* ---------------------------------------------------------------------
+   Correctif de debordement de l'en-tete (v28).
+
+   L'en-tete aligne QUATRE blocs sur une seule ligne (flex-wrap:nowrap)
+   dans une feuille A4 portrait qui ne fait que 595 px de large, soit
+   515 px utiles apres les paddings. Tant que la carte de synthese ne
+   contenait qu'une ligne (« Meilleur tour »), ca tenait. L'ajout du
+   palmares en a fait trois lignes cote a cote, et comme la carte etait
+   declaree flex-shrink:0, elle a pousse le bloc circuit HORS de la
+   feuille : « CIRCUIT DE TRINI », « 28/07/20 », « TEST GLOBA » etaient
+   coupes net au bord droit. Les ellipses CSS ne pouvaient rien y faire —
+   les libelles ne debordaient pas de LEUR boite, c'est la ligne entiere
+   qui debordait de la page.
+
+   Regle desormais tenue : chaque bloc de l'en-tete peut se reduire
+   jusqu'a son contenu minimal (min-width:0), la carte de synthese
+   passe a la ligne au lieu de s'etaler, et le bloc circuit garde sa
+   largeur naturelle plafonnee. Somme des minimums ~325 px : le
+   debordement n'est plus atteignable, quel que soit le nom du circuit
+   ou le libelle de la session. */
+.pdfx-id-block{min-width:0;flex:1 1 92px}
 .pdfx-pilot-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text);transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.4}
 .pdfx-id-meta{display:flex;gap:7px;row-gap:3px;margin-top:3px;flex-wrap:wrap}
 .pdfx-id-meta .item{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-id-meta .item b{color:var(--c-accent);font-size:1.05em}
-.pdfx-summary-card{background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:9px;padding:6px 9px;display:flex;flex-direction:row;gap:8px;align-items:center;flex-shrink:0}
-.pdfx-summary-row{display:flex;align-items:center;gap:6px}
+.pdfx-summary-card{background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:9px;padding:6px 9px;display:flex;flex-direction:row;column-gap:8px;row-gap:5px;align-items:center;flex:0 1 auto;min-width:0;flex-wrap:wrap}
+.pdfx-summary-row{display:flex;align-items:center;gap:6px;min-width:0}
 .pdfx-summary-row svg{width:12px;height:12px;stroke:var(--c-accent);flex-shrink:0}
-.pdfx-summary-row .txt{display:flex;flex-direction:column;line-height:1.1}
-.pdfx-summary-row .txt .k{font-size:7.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
-.pdfx-summary-row .txt .v{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--c-text);white-space:nowrap}
+.pdfx-summary-row .txt{display:flex;flex-direction:column;line-height:1.1;min-width:0}
+.pdfx-summary-row .txt .k{font-size:7.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfx-summary-row .txt .v{font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--c-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pdfx-summary-row.best .txt .v{color:var(--c-accent)}
-.pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex:0 1 140px;min-width:90px;max-width:190px;margin-left:auto}
+.pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;max-width:200px;margin-left:auto}
 .pdfx-circuit-text{text-align:right;min-width:0;overflow:hidden;flex:1 1 auto}
 .pdfx-circuit-block .pdfx-c-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12.5px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .pdfx-circuit-meta{display:flex;flex-direction:column;gap:2px;margin-top:2px;align-items:flex-end;min-width:0}
@@ -1075,7 +1127,7 @@ ${secCells}
 // fiche pilote coupait le texte au caractère près sans « … » — cause identique
 // (html2canvas ignore text-overflow), corrigée en ajoutant ces éléments à la
 // liste déjà utilisée pour le nom du pilote.
-const PDFX_FIT_SEL = '.pdfx-pilot-name,.pdfx-p-name,.pdfx-pv-name,.pdfx-rank-row .name,.pdfx-sheet-header-mini .mini-name,.pdfx-rank-header-mini .mini-name,.pdfx-c-name,.pdfx-circuit-meta .item span';
+const PDFX_FIT_SEL = '.pdfx-pilot-name,.pdfx-p-name,.pdfx-pv-name,.pdfx-rank-row .name,.pdfx-sheet-header-mini .mini-name,.pdfx-rank-header-mini .mini-name,.pdfx-c-name,.pdfx-circuit-meta .item span,.pdfx-summary-row .txt .k,.pdfx-summary-row .txt .v';
 function pdfxFitTexts(page) {
   page.querySelectorAll(PDFX_FIT_SEL).forEach(el => {
     const start = parseFloat(getComputedStyle(el).fontSize);
@@ -1150,6 +1202,20 @@ export async function downloadFullPDF(btn) {
   btn.disabled = true;
   btn.innerHTML = `${SPIN_ICON} Génération…`;
   try {
+    const pdf = await buildFullPDF();
+    pdf.save(`classement_karting_${PDF_ORIENT === 'landscape' ? 'paysage' : 'portrait'}.pdf`);
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = original;
+}
+
+/* 🆕 v28 : meme extraction que buildPilotPDF. Le classement joint a l'e-mail
+   passe desormais par CE moteur (mise en page soignee, podium, avatars) et non
+   plus par le rendu admin de secours. */
+export async function buildFullPDF() {
+  {
     ensurePdfStyles();
     /* Pack Signature : html2canvas ne sait pas attendre. On préchauffe donc les
        data URLs (grand format podium + petit format lignes) AVANT de construire
@@ -1220,12 +1286,8 @@ ${headLogo}
       const canvas = await sectionToCanvas(pages[i], g.renderW, t.bg);
       pdfxPlace(pdf, canvas, g, i === 0, t);
     }
-    pdf.save(`classement_karting_${g.landscape ? 'paysage' : 'portrait'}.pdf`);
-  } catch (e) {
-    alert('Erreur PDF : ' + e.message);
+    return pdf;
   }
-  btn.disabled = false;
-  btn.innerHTML = original;
 }
 
 /* ==================================================================
@@ -1252,6 +1314,17 @@ ${headLogo}
    avec un historique réel avant mise en prod.
    ================================================================== */
 async function computeSessionRanking(sessionId) {
+  // 🆕 v28 : memoisation. Le point d'attention perf ci-dessus n'etait pas
+  // theorique : generer les fiches de TOUTE la grille (20 pilotes) fait
+  // recalculer les memes sessions d'historique 20 fois. Le cache est vide a
+  // chaque load(), donc jamais perime entre deux sessions affichees.
+  if (rankingCache.has(sessionId)) return rankingCache.get(sessionId);
+  const p = computeSessionRankingUncached(sessionId);
+  rankingCache.set(sessionId, p);
+  return p;
+}
+
+async function computeSessionRankingUncached(sessionId) {
   const { data: pack } = await db.rpc('public_session_ranking', {
     _results_token: resultsToken,
     _session_id: sessionId,
@@ -1273,6 +1346,14 @@ async function computeSessionRanking(sessionId) {
 export async function getPilotPalmares(name, tenantId) {
   const cleanName = (name || '').trim();
   if (!cleanName) return { podiums: 0, lastPositions: [] };
+  const ck = cleanName.toLowerCase();
+  if (palmaresCache.has(ck)) return palmaresCache.get(ck);
+  const p = getPilotPalmaresUncached(cleanName);
+  palmaresCache.set(ck, p);
+  return p;
+}
+
+async function getPilotPalmaresUncached(cleanName) {
   try {
     // Le tenant est deduit du jeton cote SQL : plus besoin de filtrer ici.
     const { data: allRegs, error } = await db.rpc('public_pilot_sessions', {
@@ -1315,11 +1396,11 @@ function palmaresHTML(palmares) {
   return `
 <div class="pdfx-summary-row">
 ${PDFX_SVG_TAG}
-<div class="txt"><span class="k">Podiums (toutes sessions)</span><span class="v">${palmares.podiums}</span></div>
+<div class="txt"><span class="k">Podiums (total)</span><span class="v">${palmares.podiums}</span></div>
 </div>
 <div class="pdfx-summary-row">
 ${PDFX_SVG_CLOCK}
-<div class="txt" title="${escapeHTML(posTitle)}"><span class="k">3 dernieres positions</span><span class="v" style="font-size:12px">${posTxt}</span></div>
+<div class="txt" title="${escapeHTML(posTitle)}"><span class="k">3 dern. positions</span><span class="v" style="font-size:12px">${posTxt}</span></div>
 </div>`;
 }
 
@@ -1330,6 +1411,23 @@ export async function downloadPilotPDF(pilot, btn) {
   btn.classList.add('loading');
   btn.innerHTML = SPIN_ICON;
   try {
+    const pdf = await buildPilotPDF(pilot);
+    pdf.save(`Fiche_Pilote_${pilot.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.classList.remove('loading');
+  btn.innerHTML = PDF_ICON;
+}
+
+/* 🆕 v28 : le rendu est extrait du gestionnaire de clic pour pouvoir etre
+   reutilise sans DOM d'appui — l'admin appelle buildPilotPDF() a travers une
+   iframe cachee au moment de la publication, recupere les octets et les
+   televerse comme piece jointe. La fiche recue par e-mail est donc rigoureusement
+   celle que le pilote peut telecharger lui-meme : un seul moteur de rendu, pas
+   deux implementations a maintenir en phase. */
+export async function buildPilotPDF(pilot) {
+  {
     ensurePdfStyles();
     if (signatureAvatarsActive()) {
       await prewarmSignatureAvatarDataURLs([{ kart: pilot.kart, scheme: pilot.scheme }], PILOT_SHEET_AV_OPTS);
@@ -1432,12 +1530,8 @@ ${palmaresHTML(palmares)}
       const canvas = await sectionToCanvas(pages[i], g.renderW, t.bg, 4);
       pdfxPlace(pdf, canvas, g, i === 0, t, 0.97);
     }
-    pdf.save(`Fiche_Pilote_${pilot.name.replace(/[^a-z0-9]/gi, '_')}.pdf`);
-  } catch (e) {
-    alert('Erreur PDF : ' + e.message);
+    return pdf;
   }
-  btn.classList.remove('loading');
-  btn.innerHTML = PDF_ICON;
 }
 
 /* ==================================================================
@@ -1480,4 +1574,45 @@ export function initPdfFullButton() {
   if (!btn) return;
   btn.addEventListener('click', (e) => downloadFullPDF(e.currentTarget));
   initPdfOrientControl(btn);
+}
+
+/* ==================================================================
+   🆕 v28 — PASSERELLE D'EXPORT (« tous les PDF en piece jointe »)
+
+   Consommee par results-app.js, qui l'expose sur window.__kartingExport
+   uniquement quand l'URL porte ?export=1. L'admin ouvre alors
+   results.html?result=<jeton>&export=1 dans une iframe CACHEE et de MEME
+   ORIGINE, attend la fin du chargement, puis demande un PDF a la fois.
+
+   Pourquoi une iframe plutot qu'un portage du moteur cote admin :
+   - le rendu depend d'une quinzaine de variables de module (theme, logo,
+     avatars Signature prechauffes, secteurs actifs, orientation) qu'il
+     faudrait toutes dupliquer, donc maintenir en double ;
+   - la piece jointe est ainsi OCTET POUR OCTET le fichier que le pilote
+     obtiendrait en cliquant lui-meme. Aucune divergence possible.
+
+   On renvoie des ArrayBuffer et non des Blob : un Blob cree dans le realm de
+   l'iframe devient inutilisable des que celle-ci est retiree du DOM. L'appelant
+   reconstruit le Blob chez lui.
+   ================================================================== */
+export function listExportPilots() {
+  return (allResults || [])
+    .filter((r) => r.regId)
+    .map((r) => ({ regId: r.regId, name: r.name, kart: r.kart, pos: r.pos, hasTime: r.hasTime }));
+}
+
+export function setPdfOrient(v) {
+  if (v === 'portrait' || v === 'landscape') PDF_ORIENT = v;
+}
+
+export async function pilotPDFBytes(regId) {
+  const pilot = (allResults || []).find((r) => r.regId === regId);
+  if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
+  const pdf = await buildPilotPDF(pilot);
+  return pdf.output('arraybuffer');
+}
+
+export async function fullPDFBytes() {
+  const pdf = await buildFullPDF();
+  return pdf.output('arraybuffer');
 }

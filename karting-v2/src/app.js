@@ -17,6 +17,8 @@ import * as settings from './modules/settings.js';
 import * as auth from './modules/auth.js';
 import * as stats from './modules/stats.js';
 import * as registry from './modules/registry.js';
+import * as manualAdd from './modules/manual-add.js';
+import * as archivesExport from './modules/archives-export.js';
 // Auth branchée (24/07) : l'admin nécessite désormais une session Supabase Auth valide.
 // Voir doLogin()/doLogout() et l'overlay #login-overlay dans admin.html.
 
@@ -43,7 +45,30 @@ async function renderArchivesList() {
 const el = document.getElementById('arch-list');
 if (!el) return;
 archivesCache = await sessions.loadArchives();
+archivesExport.invalidateArchivesExportCache();
+fillArchiveDayFilter();
 renderFilteredArchives();
+}
+
+// Le filtre jour est construit a partir des sessions reellement archivees :
+// proposer un calendrier complet ferait choisir des jours vides.
+function fillArchiveDayFilter() {
+const sel = document.getElementById('arch-day-filter');
+if (!sel) return;
+const previous = sel.value;
+const days = [];
+archivesCache.forEach((s) => {
+const d = s.session_date || (s.created_at || '').slice(0, 10);
+if (d && !days.includes(d)) days.push(d);
+});
+importUiHelpers().then(({ formatDate }) => {
+sel.innerHTML =
+'<option value="">Tous les jours</option>' +
+days.map((d) => '<option value="' + d + '">' + formatDate(d) + '</option>').join('');
+// On restaure la selection si le jour existe toujours (rechargement
+// apres suppression d'une session, par exemple).
+if (previous && days.includes(previous)) sel.value = previous;
+});
 }
 
 function renderFilteredArchives() {
@@ -51,9 +76,15 @@ const el = document.getElementById('arch-list');
 if (!el) return;
 const filterEl = document.getElementById('arch-type-filter');
 const filterType = filterEl ? filterEl.value : '';
-const list = filterType ? archivesCache.filter((s) => s.session_type === filterType) : archivesCache;
+const dayEl = document.getElementById('arch-day-filter');
+const filterDay = dayEl ? dayEl.value : '';
+const list = archivesCache.filter(
+(s) =>
+(!filterType || s.session_type === filterType) &&
+(!filterDay || (s.session_date || (s.created_at || '').slice(0, 10)) === filterDay)
+);
 if (!list.length) {
-el.innerHTML = '<div class="empty">Aucune session archivee.</div>';
+el.innerHTML = '<div class="empty">Aucune session archivee pour ce filtre.</div>';
 return;
 }
 const groups = {};
@@ -86,6 +117,14 @@ dayList
 }
 
 function filterArchives() {
+renderFilteredArchives();
+}
+
+function resetArchiveFilters() {
+const t = document.getElementById('arch-type-filter');
+const d = document.getElementById('arch-day-filter');
+if (t) t.value = '';
+if (d) d.value = '';
 renderFilteredArchives();
 }
 
@@ -259,7 +298,15 @@ terminerSession: terminerSessionAndGoBack,
 closeRecapModal: sessions.closeRecapModal,
 confirmTerminerSession: sessions.confirmTerminerSession,
 // Inscriptions & karts
+// addUnknownParticipant reste expose : la modale s'appuie sur le meme
+// garde-fou de capacite, et d'anciens raccourcis peuvent encore l'appeler.
 addUnknownParticipant: sessions.addUnknownParticipant,
+openManualAdd: manualAdd.openManualAdd,
+closeManualAdd: manualAdd.closeManualAdd,
+manualAddSetMode: manualAdd.manualAddSetMode,
+manualAddSearch: manualAdd.manualAddSearch,
+manualAddCreate: manualAdd.manualAddCreate,
+manualAddAnonymous: manualAdd.manualAddAnonymous,
 loadInscrits: sessions.loadInscrits,
 saveNameInline: sessions.saveNameInline,
 assignKartToPilot: sessions.assignKartToPilot,
@@ -275,6 +322,9 @@ archTogglePres: results.archTogglePres,
 deleteSession: results.deleteSession,
 loadArchives,
 filterArchives,
+resetArchiveFilters,
+exportArchivesCSV: archivesExport.exportArchivesCSV,
+exportArchivesXLSX: archivesExport.exportArchivesXLSX,
 saveArchiveMeta: results.saveArchiveMeta,
 // Résultats & import chronos
 exportCSV: results.exportCSV,
@@ -322,6 +372,7 @@ exportStatsXLSX: stats.exportStatsXLSX,
 // Registre
 loadRegistryTab: registry.loadRegistryTab,
 filterRegistry: registry.filterRegistry,
+gotoRegistryPage: registry.gotoRegistryPage,
 confirmDeletePilot: registry.confirmDeletePilot,
 confirmDeleteLegacy: registry.confirmDeleteLegacy,
 exportRegistryCSV: registry.exportRegistryCSV,

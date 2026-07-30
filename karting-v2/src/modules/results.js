@@ -12,6 +12,8 @@ import { state } from '../state.js';
 import { showMsg, qrSrc, formatTime, formatDate, randomCode4, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid } from './sessions.js';
+import { uploadSessionAsset, triggerResultEmails } from './publish-exports.js';
+import { generateSessionPDFs } from './publish-pdfs.js';
 
 // Echappement HTML minimal pour tout texte saisi par le public (display_name, etc.)
 // avant injection dans innerHTML — protection XSS (audit du 28/07, section 4.1).
@@ -496,11 +498,76 @@ export async function publishResults() {
     token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     state.activeDetailSession.public_results_token = token;
   }
-  await db.from('sessions').update({ status: 'results_published', public_results_token: token }).eq('id', state.activeDetailSession.id);
+  await db.from('sessions').update({
+    status: 'results_published',
+    public_results_token: token,
+    // Sans cet horodatage, la page publique « resultats des 6 dernieres
+    // heures » n'a aucun moyen de savoir quand la session est passee en ligne.
+    results_published_at: new Date().toISOString(),
+  }).eq('id', state.activeDetailSession.id);
   state.activeDetailSession.status = 'results_published';
   showMsg('msg-res', 'Resultats publies !', 'ok');
   updateQRRes();
   await renderActivesGrid();
+  await afterPublish(state.activeDetailSession, 'msg-res');
+}
+
+// Enchainement de la publication : mise en file des envois, televersement du
+// classement, puis appel immediat de l'Edge Function. Volontairement APRES
+// l'affichage du message de succes : la publication est deja acquise en base,
+// et l'admin n'a pas a attendre le rendu du PDF pour voir que ca a marche.
+async function afterPublish(sess, msgId) {
+  try {
+    // 1. TOUS les PDF d'abord : le classement complet + une fiche par pilote
+    //    destinataire (demande du 30/07). L'ordre est deliberement l'inverse de
+    //    la v27 : la mise en file venait avant, si bien que le cron de
+    //    rattrapage (toutes les 5 min) pouvait partir au milieu du rendu et
+    //    envoyer a la moitie de la grille un e-mail sans sa fiche — irreparable,
+    //    la ligne etant alors marquee 'sent'. Aucune ligne de file n'existe
+    //    maintenant tant que les pieces jointes ne sont pas en place : au pire,
+    //    un plantage du navigateur ne fait partir aucun e-mail, ce qui se
+    //    corrige en republiant.
+    showMsg(msgId, 'Resultats publies — generation des PDF...', 'ok');
+    let pdfReport = null;
+    try {
+      pdfReport = await generateSessionPDFs(sess, (done, total, label) => {
+        showMsg(msgId, 'Generation des PDF ' + done + '/' + total + ' (' + label + ')...', 'ok');
+      });
+    } catch (e) {
+      // Rendu impossible (iframe bloquee, page publique en erreur) : on
+      // continue quand meme. Le pilote recevra le lien vers le classement en
+      // ligne, ce qui est l'essentiel. Repli sur le rendu admin du classement.
+      console.warn('[publication] generation des PDF publics :', e.message || e);
+      try {
+        const pdf = await buildSessionPDF(sess);
+        await uploadSessionAsset({
+          session: sess,
+          kind: 'full_pdf',
+          blob: pdf.output('blob'),
+          filename: 'classement.pdf',
+        });
+      } catch (e2) {
+        console.warn('[publication] classement PDF de repli non televerse :', e2.message || e2);
+      }
+    }
+
+    // 2. La file d'envoi, une fois les pieces jointes deposees.
+    const enq = await db.rpc('enqueue_position_cards', { _session_id: sess.id });
+    if (enq.error) throw enq.error;
+
+    // 3. Envoi immediat ; le cron de rattrapage reprend les echecs.
+    const res = await triggerResultEmails();
+    const suffix = pdfReport
+      ? ' (' + pdfReport.pilots + ' fiche(s)' + (pdfReport.failed ? ', ' + pdfReport.failed + ' en echec' : '') + ')'
+      : '';
+    if (res && typeof res.sent === 'number') {
+      showMsg(msgId, 'Resultats publies — ' + res.sent + ' e-mail(s) envoye(s)' + suffix + '.', 'ok');
+    } else {
+      showMsg(msgId, 'Resultats publies' + suffix + ' — envoi en cours.', 'ok');
+    }
+  } catch (e) {
+    showMsg(msgId, 'Publie, mais envoi des e-mails a reprendre : ' + (e.message || e), 'err');
+  }
 }
 
 export function updateQRRes() {
@@ -700,10 +767,23 @@ export async function archPublish() {
     token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     state.archiveSession.public_results_token = token;
   }
-  await db.from('sessions').update({ status: 'results_published', public_results_token: token }).eq('id', state.archiveSession.id);
+  const already = !!state.archiveSession.results_published_at;
+  await db.from('sessions').update({
+    status: 'results_published',
+    public_results_token: token,
+    // Republier ne doit pas reecrire la date de premiere publication.
+    results_published_at: state.archiveSession.results_published_at || new Date().toISOString(),
+  }).eq('id', state.archiveSession.id);
   showMsg('msg-arch', 'QR republie !', 'ok');
   const url = APP_CONFIG.baseUrl + '/results.html?result=' + token + '&v=' + Date.now();
   document.getElementById('arch-qr-wrap').innerHTML = '<div class="qr-wrap"><img src="' + qrSrc(url, 180) + '"/></div>';
+  if (!already) {
+    // Une premiere publication depuis l'archive doit envoyer les e-mails comme
+    // une publication normale. Une REpublication, non : les lignes de file sont
+    // deja 'sent' et personne ne recoit deux fois le meme e-mail.
+    state.archiveSession.results_published_at = new Date().toISOString();
+    await afterPublish(state.archiveSession, 'msg-arch');
+  }
 }
 
 export function archCopyLink() {
@@ -818,7 +898,13 @@ async function adminSectionToCanvas(node, width) {
   wrap.appendChild(node);
   holder.appendChild(wrap);
   await new Promise((r) => setTimeout(r, 60));
-  const canvas = await html2canvas(wrap, { backgroundColor: '#ffffff', scale: 2, width, windowWidth: width, useCORS: true });
+  // Meme elagage que cote public (cf. sectionToCanvas dans public-results.js) :
+  // html2canvas clone tout le document avant de recadrer sur `wrap`, et
+  // admin.html est truffe d'icones <svg> en ligne que chaque appel rasterise
+  // pour rien. On ne garde dans le clone que <head>, les ancetres de `wrap` et
+  // son contenu.
+  const keepInClone = (el) => document.head.contains(el) || el.contains(wrap) || wrap.contains(el);
+  const canvas = await html2canvas(wrap, { backgroundColor: '#ffffff', scale: 2, width, windowWidth: width, useCORS: true, ignoreElements: (el) => !keepInClone(el) });
   holder.innerHTML = '';
   return canvas;
 }
@@ -832,6 +918,20 @@ export async function exportSessionPDF(sess, btn) {
   const original = btn ? btn.innerHTML : null;
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Export...'; }
   try {
+    const pdf = await buildSessionPDF(s);
+    pdf.save((s.title || 'session').replace(/[^a-z0-9]/gi, '_') + '-classement.pdf');
+  } catch (e) {
+    showMsg('msg-res', 'Erreur PDF: ' + e.message, 'err');
+  }
+  if (btn) { btn.disabled = false; btn.innerHTML = original; }
+}
+
+// Le rendu est isole du telechargement : la publication a besoin du MEME
+// document, mais sous forme de Blob a televerser, pas de fichier a enregistrer.
+// Dupliquer le rendu garantirait qu'un jour le PDF telecharge et le PDF envoye
+// par e-mail ne se ressemblent plus.
+export async function buildSessionPDF(s) {
+  {
     const rankResults = await loadRanking(s);
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF('p', 'mm', 'a4');
@@ -864,11 +964,8 @@ export async function exportSessionPDF(sess, btn) {
       const imgH = (canvas.height * imgW) / canvas.width;
       pdf.addImage(canvas.toDataURL('image/jpeg', 0.95), 'JPEG', 10, 10, imgW, imgH);
     }
-    pdf.save((s.title || 'session').replace(/[^a-z0-9]/gi, '_') + '-classement.pdf');
-  } catch (e) {
-    showMsg('msg-res', 'Erreur PDF: ' + e.message, 'err');
+    return pdf;
   }
-  if (btn) { btn.disabled = false; btn.innerHTML = original; }
 }
 
 export function updateChronoFormat() {
