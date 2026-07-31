@@ -446,12 +446,50 @@ function venueShell(inner) {
 export async function renderVenuePicker(venueToken) {
   const host = document.getElementById('podium-wrap');
   if (!host) return false;
-  ['top10-rows', 'page2-ranking', 'page3-accordion'].forEach(id => {
+
+  // 31/07 (correctif) : la page picker laissait apparaitre derriere elle le
+  // squelette de la page resultats (titre "Podium", section "Top 10" vide,
+  // pages 2/3, bouton PDF, pagination bas de page) — illogique puisqu'on est
+  // en train de CHOISIR une session, pas de consulter un resultat. On masque
+  // tout ce qui n'est pas l'entete + le contenu du picker lui-meme.
+  const podiumTitle = document.getElementById('podium-title');
+  if (podiumTitle) podiumTitle.style.display = 'none';
+  const top10TitleEl = document.getElementById('top10-title');
+  const top10Section = top10TitleEl ? top10TitleEl.closest('section') : null;
+  if (top10Section) top10Section.style.display = 'none';
+  ['page-screen-2', 'page-screen-3'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) el.innerHTML = '';
+    if (el) el.style.display = 'none';
   });
+  const pdfWrap = document.querySelector('.pdf-btn-wrap');
+  if (pdfWrap) pdfWrap.style.display = 'none';
   const nav = document.querySelector('.page-nav, .results-nav');
   if (nav) nav.style.display = 'none';
+
+  // La pilule flottante Inscription/Resultats chevauchait le titre du circuit
+  // et son lien "Inscription" perdait le jeton ?v= du circuit (le picker
+  // redevenait alors inaccessible depuis l'inscription). Remplacee par des
+  // onglets integres a l'entete, sur leur propre ligne.
+  const floatSwitch = document.querySelector('.page-switch');
+  if (floatSwitch) floatSwitch.remove();
+  const header = document.querySelector('#page-screen-1 .circuit-header');
+  if (header && !document.getElementById('venue-tabs')) {
+    if (!document.getElementById('venue-tabs-css')) {
+      document.head.insertAdjacentHTML('beforeend', `<style id="venue-tabs-css">
+.venue-tabs{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--c-border,rgba(224,232,255,.12))}
+.venue-tabs a,.venue-tabs span{padding:8px 20px;border-radius:999px;font-family:var(--font-body,sans-serif);font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+.venue-tabs a{background:rgba(255,255,255,.05);color:var(--c-muted,#7580a6);border:1px solid var(--c-border,rgba(224,232,255,.1))}
+.venue-tabs a:hover{color:var(--c-text,#eef1fb)}
+.venue-tabs span{background:var(--c-accent,#ffb238);color:#0b0b0f}
+</style>`);
+    }
+    const tabs = document.createElement('div');
+    tabs.id = 'venue-tabs';
+    tabs.className = 'venue-tabs';
+    tabs.innerHTML = '<a href="register.html?v=' + encodeURIComponent(venueToken) + '">Inscription</a><span>Résultats</span>';
+    header.appendChild(tabs);
+  }
+
   host.className = '';
   host.innerHTML = venueShell('<div class="venue-empty">Chargement…</div>');
 
@@ -635,14 +673,29 @@ document.querySelectorAll('.page-screen').forEach(el => el.classList.toggle('act
 document.body.classList.toggle('podium-page-active', n === 1);
 document.body.classList.toggle('compact-results-page', n === 1 || n === 2);
 document.querySelectorAll('.nav-dot').forEach(d => d.classList.toggle('active', Number(d.dataset.dot) === n));
-document.getElementById('nav-prev').disabled = (n === 1);
+// 31/07 : sur la page 1, "Precedent" n'est plus grise sans rien faire — s'il
+// y a un jeton de circuit (?v=) dans l'URL, il ramene vers l'accueil resultats
+// (le picker de sessions), sinon (lien direct par e-mail, pas de circuit
+// connu) on garde l'ancien comportement desactive.
+const venueTok0 = new URLSearchParams(window.location.search).get('v') || new URLSearchParams(window.location.search).get('venue');
+const prevBtn = document.getElementById('nav-prev');
+prevBtn.disabled = (n === 1 && !venueTok0);
+const prevLabel = prevBtn.querySelector('span');
+if (prevLabel) prevLabel.textContent = (n === 1 && venueTok0) ? 'Résultats' : 'Précédent';
 document.getElementById('nav-next').disabled = (n === 3);
 document.getElementById('nav-next-label').textContent = (n === 1 ? 'Classement' : 'Détails');
 window.scrollTo(0, 0);
 }
 
 export function initNav() {
-document.getElementById('nav-prev').addEventListener('click', () => goToPage(currentPage - 1));
+document.getElementById('nav-prev').addEventListener('click', () => {
+  if (currentPage === 1) {
+    const v = new URLSearchParams(window.location.search).get('v') || new URLSearchParams(window.location.search).get('venue');
+    if (v) { window.location.href = 'results.html?v=' + encodeURIComponent(v); return; }
+    return;
+  }
+  goToPage(currentPage - 1);
+});
 document.getElementById('nav-next').addEventListener('click', () => goToPage(currentPage + 1));
 document.querySelectorAll('.nav-dot').forEach(d => d.addEventListener('click', () => goToPage(Number(d.dataset.dot))));
 }
