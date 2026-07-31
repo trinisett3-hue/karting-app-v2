@@ -1,6 +1,6 @@
 // Module de la page publique de résultats (results.html) — accès par QR code / lien,
 // sans auth. Reprend à l'identique la logique de l'ancien results.html monofichier :
-// résolution de session par public_results_token, classement (temps total), podium,
+// résolution de session par public_results_token, classement (temps total), podium, 
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
 // Chargement paresseux (30/07, audit du 28/07 section 1.2) : kart-avatar.js
