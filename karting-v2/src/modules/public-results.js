@@ -1758,161 +1758,319 @@ function cardShell(t, bodyInner, pilot) {
 }
 
 // --- Concepts POSITION -----------------------------------------------------
+// Les 10 visuels du catalogue (voir settings.js CARD_CATALOG.position et les
+// vignettes de reference assets/cards/<concept>__<theme>.jpg). Chaque corps
+// n'utilise que les jetons de theme (t.*) : le meme concept se decline donc
+// automatiquement sur les 8 themes, exactement comme les vignettes.
+
+function cardRule(t, m) { return `<div style="width:100%;height:1px;background:${t.border};margin:${m || 26}px 0"></div>`; }
+function cardCheckerBG(t, op) {
+  return `background-image:repeating-conic-gradient(${t.text} 0% 25%, transparent 0% 50%);background-size:40px 40px;opacity:${op || .10}`;
+}
 
 const POSITION_BODIES = {
-    '01-track-hero': (t, pilot, ctx) => `
-        <div style="font:400 22px 'Mono',monospace;letter-spacing:.32em;color:${t.muted}">POSITION FINALE</div>
-            <div style="font:700 280px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:16px">P${ctx.pos}</div>
-                <div style="font:700 86px 'UI',sans-serif;color:${t.text};margin-top:8px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>
-                    <div style="font:400 20px 'Mono',monospace;letter-spacing:.28em;color:${t.muted};margin-top:26px">MEILLEUR TOUR</div>`,
+  '01-track-hero': (t, pilot, ctx) => `
+    <div style="font:400 22px 'Mono',monospace;letter-spacing:.32em;color:${t.muted}">POSITION FINALE</div>
+    <div style="font:700 280px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:16px">P${ctx.pos}</div>
+    <div style="font:700 86px 'UI',sans-serif;color:${t.text};margin-top:8px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>
+    <div style="font:400 20px 'Mono',monospace;letter-spacing:.28em;color:${t.muted};margin-top:26px">MEILLEUR TOUR</div>`,
 
-    '02-avatar-central': (t, pilot, ctx) => `
-        <div style="width:320px;height:320px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.border};display:flex;align-items:center;justify-content:center;overflow:hidden">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 300, scheme: pilot.scheme })}</div>
-            <div style="font:700 190px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:34px">P${ctx.pos}</div>
-                <div style="font:700 76px 'UI',sans-serif;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>`,
+  '02-avatar-central': (t, pilot, ctx) => `
+    <div style="width:320px;height:320px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.accent};box-shadow:0 0 60px ${t.accent}44;display:flex;align-items:center;justify-content:center;overflow:hidden">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 300, scheme: pilot.scheme })}</div>
+    <div style="font:700 190px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:34px">P${ctx.pos}</div>
+    <div style="font:700 76px 'UI',sans-serif;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>`,
 
-    '03-chrono-editorial': (t, pilot, ctx) => `
-        <div style="display:flex;align-items:baseline;gap:16px">
-              <span style="font:700 120px 'UI',sans-serif;color:${t.accent}">P${ctx.pos}</span>
-                    <span style="font:400 22px 'Mono',monospace;color:${t.muted};letter-spacing:.05em">/ ${ctx.totalPilots} PILOTES</span>
-                        </div>
-                            <div style="width:100%;height:1px;background:${t.border};margin:28px 0"></div>
-                                <div style="font:700 140px 'UI',sans-serif;color:${t.text}">${ctx.time}</div>
-                                    <div style="font:400 20px 'Mono',monospace;letter-spacing:.24em;color:${t.muted};margin-top:10px">SECONDES &middot; MEILLEUR TOUR</div>
-                                        <div style="width:100%;height:1px;background:${t.border};margin:28px 0"></div>
-                                            <div style="display:flex;justify-content:space-between;width:100%;font:700 17px 'Mono',monospace;letter-spacing:.05em;color:${t.muted};text-transform:uppercase">
-                                                  <span>Session ${escapeHTML(ctx.sessionType)}</span><span>${pilot.hasTime ? pilot.lapsCount : '--'} tours</span><span>${escapeHTML(ctx.dateTxt)}</span>
-                                                      </div>`,
+  '03-chrono-editorial': (t, pilot, ctx) => `
+    <div style="width:100%;display:flex;align-items:baseline;gap:16px">
+      <span style="font:700 120px 'UI',sans-serif;color:${t.accent}">P${ctx.pos}</span>
+      <span style="font:400 22px 'Mono',monospace;color:${t.muted};letter-spacing:.05em">/ ${ctx.totalPilots} PILOTES</span>
+    </div>
+    ${cardRule(t, 28)}
+    <div style="width:100%;text-align:left;font:700 140px 'UI',sans-serif;color:${t.text}">${ctx.time}</div>
+    <div style="width:100%;text-align:left;font:400 20px 'Mono',monospace;letter-spacing:.24em;color:${t.muted};margin-top:10px">SECONDES &middot; MEILLEUR TOUR</div>
+    ${cardRule(t, 28)}
+    <div style="display:flex;justify-content:space-between;width:100%;font:700 17px 'Mono',monospace;letter-spacing:.05em;color:${t.muted};text-transform:uppercase">
+      <span>Session ${escapeHTML(ctx.sessionType)}</span><span>${ctx.laps} tours</span><span>${escapeHTML(ctx.dateTxt)}</span>
+    </div>`,
 
-    '06-bloc-massif': (t, pilot, ctx) => `
-        <div style="display:flex;align-items:center;gap:34px">
-              <div style="background:${t.accent};color:#0a0a0a;font:700 140px 'UI',sans-serif;padding:18px 36px;line-height:1">P${ctx.pos}</div>
-                    <div style="text-align:left">
-                            <div style="font:400 18px 'Mono',monospace;letter-spacing:.2em;color:${t.muted}">MEILLEUR TOUR</div>
-                                    <div style="font:700 84px 'UI',sans-serif;color:${t.text}">${ctx.time}<span style="font-size:.35em;color:${t.muted}">s</span></div>
-                                          </div>
-                                              </div>
-                                                  <div style="margin-top:38px;font:700 17px 'Mono',monospace;letter-spacing:.1em;color:${t.muted};text-transform:uppercase;line-height:2">
-                                                        ${pilot.hasTime ? pilot.lapsCount : '--'} tours &middot; session ${escapeHTML(ctx.sessionType)} &middot; ${ctx.totalPilots} pilotes
-                                                            </div>`,
+  // Grand P majuscule en haut a gauche, diagonale accent, triangle damier en
+  // bas a droite, chrono cale sur le bas du triangle.
+  '04-split-diagonal': (t, pilot, ctx) => `
+    <div style="position:relative;width:100%;height:100%">
+      <div style="position:absolute;left:0;top:40px;font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.muted}">POSITION</div>
+      <div style="position:absolute;left:0;top:78px;font:700 220px 'UI',sans-serif;line-height:.85;color:${t.accent}">P${ctx.pos}</div>
+      <div style="position:absolute;right:0;bottom:0;width:62%;height:58%;${cardCheckerBG(t, .12)}"></div>
+      <div style="position:absolute;left:-4%;bottom:16%;width:118%;height:2px;background:${t.accent};transform:rotate(-24deg);transform-origin:left center"></div>
+      <div style="position:absolute;right:0;bottom:132px;text-align:right;font:400 18px 'Mono',monospace;letter-spacing:.22em;color:${t.muted}">MEILLEUR TOUR &middot; ${ctx.laps} TOURS</div>
+      <div style="position:absolute;right:0;bottom:52px;font:700 96px 'UI',sans-serif;color:${t.text}">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
+    </div>`,
 
-    '07-damier-dissous': (t, pilot, ctx) => `
-        <div style="position:relative;width:100%;display:flex;flex-direction:column;align-items:center">
-              <div style="position:absolute;inset:-60px 0 auto 0;height:340px;opacity:.10;background-image:repeating-conic-gradient(${t.text} 0% 25%, transparent 0% 50%);background-size:40px 40px"></div>
-                    <div style="font:700 20px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};position:relative">MEILLEUR TOUR</div>
-                          <div style="font:800 220px 'UI',sans-serif;color:${t.text};line-height:.85;margin-top:14px;position:relative">${ctx.time}</div>
-                                <div style="font:400 22px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};margin-top:16px;position:relative">SECONDES</div>
-                                    </div>`,
+  // Deux colonnes : chrono a gauche, releve des tours reels a droite, le
+  // meilleur tour en accent.
+  '05-telemetrie': (t, pilot, ctx) => {
+    const laps = (pilot.lapsArr || []).slice(0, 20);
+    const rows = laps.map((l) => {
+      const best = pilot.bestLap != null && Math.abs(l.time - pilot.bestLap) < 1e-6;
+      return `<div style="display:flex;justify-content:space-between;font:400 17px 'Mono',monospace;letter-spacing:.04em;color:${best ? t.accent : t.muted};line-height:1.85">` +
+        `<span>${pad2(l.idx)}</span><span>${fmtPdfTime(l.time)}</span></div>`;
+    }).join('') || `<div style="font:400 17px 'Mono',monospace;color:${t.muted}">--</div>`;
+    return `
+      <div style="width:100%;display:flex;gap:44px;align-items:flex-start;text-align:left">
+        <div style="flex:1 1 auto;min-width:0">
+          <div style="font:400 19px 'Mono',monospace;letter-spacing:.26em;color:${t.muted}">MEILLEUR TOUR</div>
+          <div style="font:700 132px 'UI',sans-serif;color:${t.text};line-height:1;margin-top:12px">${ctx.time}</div>
+          <div style="font:400 18px 'Mono',monospace;letter-spacing:.26em;color:${t.muted};margin-top:10px">SECONDES</div>
+          <div style="margin-top:54px;display:flex;align-items:baseline;gap:14px">
+            <span style="font:700 84px 'UI',sans-serif;color:${t.accent}">P${ctx.pos}</span>
+            <span style="font:400 20px 'Mono',monospace;color:${t.muted}">/ ${ctx.totalPilots}</span>
+          </div>
+        </div>
+        <div style="flex:0 0 320px;border-left:1px solid ${t.border};padding-left:32px">
+          <div style="font:400 15px 'Mono',monospace;letter-spacing:.2em;color:${t.muted};margin-bottom:14px">TEMPS AU TOUR</div>
+          ${rows}
+        </div>
+      </div>`;
+  },
+
+  '06-bloc-massif': (t, pilot, ctx) => `
+    <div style="width:100%;display:flex;align-items:center;gap:34px;text-align:left">
+      <div style="background:${t.accent};color:${t.bg};font:700 140px 'UI',sans-serif;padding:18px 36px;line-height:1">P${ctx.pos}</div>
+      <div>
+        <div style="font:400 18px 'Mono',monospace;letter-spacing:.2em;color:${t.muted}">MEILLEUR TOUR</div>
+        <div style="font:700 84px 'UI',sans-serif;color:${t.text}">${ctx.time}<span style="font-size:.35em;color:${t.muted}">s</span></div>
+        <div style="margin-top:24px;font:700 17px 'Mono',monospace;letter-spacing:.1em;color:${t.muted};text-transform:uppercase;line-height:1.9">
+          ${ctx.laps} tours<br>session ${escapeHTML(ctx.sessionType)}<br>${ctx.totalPilots} pilotes
+        </div>
+      </div>
+    </div>`,
+
+  '07-damier-dissous': (t, pilot, ctx) => `
+    <div style="position:relative;width:100%;display:flex;flex-direction:column;align-items:center">
+      <div style="position:absolute;inset:-60px 0 auto 0;height:340px;${cardCheckerBG(t, .10)}"></div>
+      <div style="font:700 20px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};position:relative">MEILLEUR TOUR</div>
+      <div style="font:800 220px 'UI',sans-serif;color:${t.text};line-height:.85;margin-top:14px;position:relative">${ctx.time}</div>
+      <div style="font:400 22px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};margin-top:16px;position:relative">SECONDES</div>
+    </div>`,
+
+  // Ligne d'arrivee : le chrono, une regle graduee dont le segment accent
+  // s'arrete sur la position, et la pastille P<n>.
+  '08-ligne-arrivee': (t, pilot, ctx) => {
+    const n = Math.max(ctx.totalPilots, 1);
+    const ticks = Array.from({ length: n }, () =>
+      `<div style="flex:1 1 0;height:18px;border-left:1px solid ${t.border}"></div>`).join('');
+    const ratio = Math.max(0, Math.min(1, (n - ctx.pos + 1) / n));
+    return `
+      <div style="width:100%;text-align:left">
+        <div style="font:400 19px 'Mono',monospace;letter-spacing:.24em;color:${t.muted}">MEILLEUR TOUR &mdash; SESSION ${escapeHTML(String(ctx.sessionType).toUpperCase())}</div>
+        <div style="font:700 150px 'UI',sans-serif;color:${t.text};line-height:1;margin-top:14px">${ctx.time}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+        <div style="position:relative;margin-top:30px;height:56px">
+          <div style="position:absolute;left:0;right:0;top:0;height:2px;background:${t.border}"></div>
+          <div style="position:absolute;left:0;top:0;height:2px;width:${(ratio * 100).toFixed(1)}%;background:${t.accent}"></div>
+          <div style="position:absolute;left:0;right:0;top:2px;display:flex">${ticks}</div>
+          <div style="position:absolute;right:0;top:-14px;background:${t.accent};color:${t.bg};font:700 30px 'UI',sans-serif;padding:6px 16px">P${ctx.pos}</div>
+        </div>
+        <div style="margin-top:26px;font:400 17px 'Mono',monospace;letter-spacing:.12em;color:${t.muted};text-transform:uppercase">${ctx.laps} tours enregistr&eacute;s &middot; ${ctx.totalPilots} pilotes en piste</div>
+      </div>`;
+  },
+
+  // Fiche de course : grille cle / valeur, comme un releve officiel.
+  '09-grille-indice': (t, pilot, ctx) => {
+    const row = (k, v, accent) => `
+      <div style="display:flex;justify-content:space-between;align-items:baseline;padding:22px 0;border-bottom:1px solid ${t.border}">
+        <span style="font:400 17px 'Mono',monospace;letter-spacing:.18em;color:${t.muted};text-transform:uppercase">${k}</span>
+        <span style="font:700 ${accent ? '52px' : '30px'} 'UI',sans-serif;color:${accent ? t.accent : t.text}">${v}</span>
+      </div>`;
+    return `
+      <div style="width:100%;text-align:left">
+        <div style="font:400 18px 'Mono',monospace;letter-spacing:.28em;color:${t.muted}">FICHE DE COURSE</div>
+        <div style="height:2px;background:${t.accent};margin:16px 0 6px"></div>
+        ${row('Position', 'P' + ctx.pos, true)}
+        ${row('Meilleur tour', ctx.time + ' s')}
+        ${row('&Eacute;cart au pr&eacute;c&eacute;dent', ctx.gapPrev)}
+        ${row('Tours', ctx.laps)}
+        ${row('Session', escapeHTML(String(ctx.sessionType).toUpperCase()))}
+        ${row('Plateau', ctx.totalPilots + ' pilotes')}
+      </div>`;
+  },
+
+  // Filigrane : le numero de kart en tres grand, en fond, et le resultat par
+  // dessus.
+  '10-filigrane': (t, pilot, ctx) => `
+    <div style="position:relative;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);font:800 420px 'UI',sans-serif;line-height:.8;color:${t.text};opacity:.06;text-align:center">${pilot.kart != null ? pilot.kart : '--'}</div>
+      <div style="position:relative;font:400 18px 'Mono',monospace;letter-spacing:.24em;color:${t.muted};text-transform:uppercase">Kart ${pilot.kart != null ? pilot.kart : '-'} &middot; ${escapeHTML(pilot.name)}</div>
+      <div style="position:relative;font:700 210px 'UI',sans-serif;line-height:.9;color:${t.accent};margin-top:18px">P${ctx.pos}</div>
+      <div style="position:relative;font:700 82px 'UI',sans-serif;color:${t.text};margin-top:6px">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
+      <div style="position:relative;font:400 18px 'Mono',monospace;letter-spacing:.28em;color:${t.muted};margin-top:20px">MEILLEUR TOUR</div>
+    </div>`,
 };
 
+const POSITION_FALLBACK = '01-track-hero';
+
 function pickPositionConcept() {
-    const picks = (CARD_POSITION_PICKS || []).filter((id) => POSITION_BODIES[id]);
-    if (!picks.length) return '01-track-hero';
-    return picks[Math.floor(Math.random() * picks.length)];
+  const picks = (CARD_POSITION_PICKS || []).filter((id) => POSITION_BODIES[id]);
+  if (!picks.length) return POSITION_FALLBACK;
+  return picks[Math.floor(Math.random() * picks.length)];
+}
+
+function positionCtx(pilot) {
+  const list = allResults || [];
+  const prev = list.find((r) => r.pos === pilot.pos - 1);
+  let gapPrev = '--';
+  if (pilot.hasTime && prev && prev.hasTime) gapPrev = '&minus; ' + fmtPdfTime(pilot.total - prev.total) + ' s';
+  else if (pilot.pos === 1) gapPrev = 'Leader';
+  return {
+    pos: pilot.pos,
+    time: pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--',
+    laps: pilot.hasTime ? pilot.lapsCount : '--',
+    totalPilots: list.length,
+    sessionType: (sessionInfo && sessionInfo.session_type) || '--',
+    dateTxt: fmtSessionDate(sessionInfo && sessionInfo.session_date),
+    gapPrev,
+  };
 }
 
 /** Carte de position — un pilote, son classement, un QR vers le classement en ligne. */
-export async function positionCardPNGBytes(regId) {
-    const pilot = (allResults || []).find((r) => r.regId === regId);
-    if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
-    const t = themeColors();
-    const conceptId = pickPositionConcept();
-    const build = POSITION_BODIES[conceptId] || POSITION_BODIES['01-track-hero'];
-    const ctx = {
-          pos: pilot.pos,
-          time: pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--',
-          totalPilots: (allResults || []).length,
-          sessionType: (sessionInfo && sessionInfo.session_type) || '--',
-          dateTxt: fmtSessionDate(sessionInfo && sessionInfo.session_date),
-    };
-    return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot));
+export async function positionCardPNGBytes(regId, conceptId) {
+  const pilot = (allResults || []).find((r) => r.regId === regId);
+  if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
+  const t = themeColors();
+  const id = (conceptId && POSITION_BODIES[conceptId]) ? conceptId : pickPositionConcept();
+  const build = POSITION_BODIES[id] || POSITION_BODIES[POSITION_FALLBACK];
+  return renderCardPNG(cardShell(t, build(t, pilot, positionCtx(pilot)), pilot));
 }
 
 // --- Concepts RECORD --------------------------------------------------------
+// Cinq visuels, indexes par IDENTIFIANT DE CONCEPT (et non par portee) : c'est
+// ce que stocke card_record_picks cote Parametres
+// ({ perso: '01r-track-record', piste: '11r-record-piste', ... }). L'ancien
+// moteur indexait par portee et ignorait donc silencieusement le choix de
+// l'organisateur — c'est corrige ici.
 
 const RECORD_SCOPE_LABELS = {
-    perso: 'RECORD PERSONNEL', piste: 'RECORD DE LA PISTE',
-    semaine: 'RECORD DE LA SEMAINE', mois: 'RECORD DU MOIS',
+  perso: 'RECORD PERSONNEL', piste: 'RECORD DE LA PISTE',
+  semaine: 'RECORD DE LA SEMAINE', mois: 'RECORD DU MOIS',
 };
 const RECORD_PILL_LABELS = {
-    perso: 'NOUVEAU RECORD PERSO', piste: 'MEILLEUR TEMPS ABSOLU',
-    semaine: 'MEILLEUR TEMPS DE LA SEMAINE', mois: 'MEILLEUR TEMPS DU MOIS',
+  perso: 'NOUVEAU RECORD PERSO', piste: 'MEILLEUR TEMPS ABSOLU',
+  semaine: 'MEILLEUR TEMPS DE LA SEMAINE', mois: 'MEILLEUR TEMPS DU MOIS',
+};
+// Visuel par defaut de chaque portee si card_record_picks n'a rien (ou un id
+// inconnu) : c'est le meme mapping que le catalogue de settings.js.
+const RECORD_DEFAULT_BY_SCOPE = {
+  perso: '01r-track-record', piste: '11r-record-piste',
+  semaine: '12r-record-semaine', mois: '13r-record-mois',
 };
 
 function recordPill(t, text) {
-    return `<div style="margin-top:34px;display:inline-block;padding:12px 26px;border-radius:999px;border:1px solid ${t.accent};font:700 15px 'Mono',monospace;letter-spacing:.08em;color:${t.accent};text-transform:uppercase">${text}</div>`;
+  return `<div style="margin-top:34px;display:inline-block;padding:12px 26px;border-radius:999px;border:1px solid ${t.accent};font:700 15px 'Mono',monospace;letter-spacing:.08em;color:${t.accent};text-transform:uppercase">${text}</div>`;
 }
 function checkeredGlyph(t, size) {
-    const s = size || 48;
-    return `<div style="width:${s}px;height:${s}px;background-image:repeating-conic-gradient(${t.text} 0% 25%, transparent 0% 50%);background-size:${s / 4}px ${s / 4}px;border-radius:6px;opacity:.9"></div>`;
+  const s = size || 48;
+  return `<span style="display:inline-block;vertical-align:middle;width:${s}px;height:${Math.round(s * 0.7)}px;background-image:repeating-conic-gradient(${t.accent} 0% 25%, transparent 0% 50%);background-size:${Math.round(s / 4)}px ${Math.round(s / 4)}px"></span>`;
+}
+// Titre de record encadre de deux damiers, comme sur les visuels de reference.
+function recordTitle(t, label) {
+  return `<div style="display:flex;align-items:center;gap:18px;font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">` +
+    checkeredGlyph(t, 34) + `<span>${label}</span>` + checkeredGlyph(t, 34) + `</div>`;
+}
+// Ancien temps barre -> nouveau temps, commun aux deux visuels de record perso.
+function recordDelta(t, ctx, bigSize) {
+  return (ctx.prevTime
+    ? `<div style="display:flex;align-items:baseline;gap:34px;margin-top:34px">
+         <span style="font:700 60px 'UI',sans-serif;color:${t.muted};text-decoration:line-through">${ctx.prevTime}<span style="font-size:.36em">s</span></span>
+         <span style="font:400 34px 'Mono',monospace;color:${t.muted}">&rarr;</span>
+         <span style="font:700 ${bigSize || 100}px 'UI',sans-serif;color:${t.accent}">${ctx.newTime}<span style="font-size:.34em;color:${t.muted}">s</span></span>
+       </div>`
+    : `<div style="font:700 ${bigSize || 100}px 'UI',sans-serif;color:${t.accent};margin-top:34px">${ctx.newTime}<span style="font-size:.34em;color:${t.muted}">s</span></div>`);
 }
 
 const RECORD_BODIES = {
-    perso: (t, pilot, ctx) => `
-        <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${ctx.label}</div>
-            ${ctx.prevTime ? `<div style="font:700 58px 'UI',sans-serif;color:${t.muted};text-decoration:line-through;margin-top:32px">${ctx.prevTime}</div>` : ''}
-                <div style="font:700 140px 'UI',sans-serif;color:${t.text};margin-top:${ctx.prevTime ? '10px' : '38px'}">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
-                    ${ctx.deltaTxt ? `<div style="margin-top:16px;font:700 19px 'Mono',monospace;color:${t.accent}">${ctx.deltaTxt}</div>` : ''}
-                        ${recordPill(t, RECORD_PILL_LABELS.perso)}`,
+  // Record personnel, mise en page « track hero » (chrono seul, centre).
+  '01r-track-record': (t, pilot, ctx) => `
+    ${recordTitle(t, ctx.label)}
+    ${recordDelta(t, ctx, 100)}
+    ${ctx.deltaTxt ? recordPill(t, ctx.deltaTxt + ' &middot; ' + RECORD_PILL_LABELS.perso) : recordPill(t, RECORD_PILL_LABELS.perso)}`,
 
-    piste: (t, pilot, ctx) => `
-        ${checkeredGlyph(t, 56)}
-            <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent};margin-top:22px">${ctx.label}</div>
-                <div style="font:700 130px 'UI',sans-serif;color:${t.text};margin-top:16px">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
-                    ${ctx.prevTime ? `<div style="margin-top:14px;font:400 18px 'Mono',monospace;color:${t.muted}">ANCIEN RECORD ${ctx.prevTime}s ${ctx.deltaTxt ? '&middot; ' + ctx.deltaTxt : ''}</div>` : ''}
-                        ${recordPill(t, RECORD_PILL_LABELS.piste)}`,
+  // Record personnel, mise en page « avatar central » (meme contenu, avatar
+  // en medaillon au-dessus).
+  '02r-avatar-record': (t, pilot, ctx) => `
+    <div style="width:300px;height:300px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.accent};box-shadow:0 0 60px ${t.accent}44;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:34px">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 280, scheme: pilot.scheme })}</div>
+    ${recordTitle(t, ctx.label)}
+    ${recordDelta(t, ctx, 92)}
+    ${ctx.deltaTxt ? recordPill(t, ctx.deltaTxt + ' &middot; ' + RECORD_PILL_LABELS.perso) : recordPill(t, RECORD_PILL_LABELS.perso)}`,
 
-    semaine: (t, pilot, ctx) => {
-          const days = isoWeekDays(ctx.recordDate);
-          const dow = (ctx.recordDate.getDay() + 6) % 7;
-          const grid = days.map((d, i) => `
-                <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
-                        <div style="font:400 13px 'Mono',monospace;letter-spacing:.05em;color:${t.muted}">${DOW_FR[i]}</div>
-                                <div style="width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:700 16px 'UI',sans-serif;${i === dow ? `background:${t.accent};color:#0a0a0a` : `border:1px solid ${t.border};color:${t.muted}`}">${d.getDate()}</div>
-                                      </div>`).join('');
-          const endDate = days[6];
-          const rangeTxt = `SEMAINE DU ${pad2(days[0].getDate())} AU ${pad2(endDate.getDate())} ${MONTH_FR[endDate.getMonth()].toUpperCase()} ${endDate.getFullYear()}`;
-          return `
-                <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${ctx.label}</div>
-                      <div style="font:700 110px 'UI',sans-serif;color:${t.text};margin-top:18px">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
-                            <div style="display:flex;gap:14px;margin-top:38px">${grid}</div>
-                                  <div style="margin-top:24px;font:400 17px 'Mono',monospace;letter-spacing:.05em;color:${t.muted}">${rangeTxt}</div>
-                                        ${recordPill(t, RECORD_PILL_LABELS.semaine)}`;
-    },
+  // Record de la piste : cartouche encadre, drapeau a damier, ancien record.
+  '11r-record-piste': (t, pilot, ctx) => `
+    <div style="width:100%;border:1px solid ${t.accent};background:${t.accent}14;padding:54px 40px;display:flex;flex-direction:column;align-items:center">
+      ${checkeredGlyph(t, 64)}
+      <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent};margin-top:22px">${ctx.label}</div>
+      <div style="font:700 140px 'UI',sans-serif;color:${t.accent};line-height:1;margin-top:16px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+      ${ctx.prevTime ? `<div style="margin-top:16px;font:400 18px 'Mono',monospace;letter-spacing:.06em;color:${t.muted}">ANCIEN RECORD ${ctx.prevTime}s${ctx.deltaTxt ? ' &middot; ' + ctx.deltaTxt : ''}</div>` : ''}
+      ${recordPill(t, RECORD_PILL_LABELS.piste)}
+    </div>`,
 
-    mois: (t, pilot, ctx) => {
-          const y = ctx.recordDate.getFullYear(), m = ctx.recordDate.getMonth();
-          const daysInMonth = new Date(y, m + 1, 0).getDate();
-          const dayOfMonth = ctx.recordDate.getDate();
-          const dots = Array.from({ length: daysInMonth }, (_, i) => {
-                  const on = i + 1 === dayOfMonth;
-                  return `<div style="width:16px;height:16px;border-radius:50%;${on ? `background:${t.accent}` : `border:1.5px solid ${t.border}`}"></div>`;
-          }).join('');
-          return `
-                <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">${ctx.label}</div>
-                      <div style="font:700 110px 'UI',sans-serif;color:${t.text};margin-top:18px">${ctx.newTime}<span style="font-size:.3em;color:${t.muted}">s</span></div>
-                            <div style="display:grid;grid-template-columns:repeat(7, 16px);gap:12px;margin-top:34px;max-width:220px">${dots}</div>
-                                  <div style="margin-top:24px;font:400 20px 'Mono',monospace;letter-spacing:.15em;color:${t.muted};text-transform:uppercase">${MONTH_FR[m]} ${y}</div>
-                                        ${recordPill(t, RECORD_PILL_LABELS.mois)}`;
-    },
+  // Record de la semaine : bandeau des 7 jours, le jour du record en accent.
+  '12r-record-semaine': (t, pilot, ctx) => {
+    const days = isoWeekDays(ctx.recordDate);
+    const dow = (ctx.recordDate.getDay() + 6) % 7;
+    const grid = days.map((d, i) => `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
+        <div style="font:400 13px 'Mono',monospace;letter-spacing:.05em;color:${t.muted}">${DOW_FR[i]}</div>
+        <div style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;font:700 18px 'UI',sans-serif;${i === dow ? `background:${t.accent};color:${t.bg}` : `border:1px solid ${t.border};color:${t.muted}`}">${pad2(d.getDate())}</div>
+      </div>`).join('');
+    const end = days[6];
+    const rangeTxt = `SEMAINE DU ${pad2(days[0].getDate())} AU ${pad2(end.getDate())} ${MONTH_FR[end.getMonth()].toUpperCase()} ${end.getFullYear()}`;
+    return `
+      ${recordTitle(t, ctx.label)}
+      <div style="font:700 130px 'UI',sans-serif;color:${t.accent};line-height:1;margin-top:18px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+      <div style="display:flex;gap:16px;margin-top:40px">${grid}</div>
+      <div style="margin-top:26px;font:400 17px 'Mono',monospace;letter-spacing:.06em;color:${t.muted}">${rangeTxt}</div>
+      ${recordPill(t, RECORD_PILL_LABELS.semaine)}`;
+  },
+
+  // Record du mois : semis de pastilles (une par jour), le jour du record allume.
+  '13r-record-mois': (t, pilot, ctx) => {
+    const y = ctx.recordDate.getFullYear(), m = ctx.recordDate.getMonth();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const dayOfMonth = ctx.recordDate.getDate();
+    const dots = Array.from({ length: daysInMonth }, (_, i) => {
+      const on = i + 1 === dayOfMonth;
+      return `<div style="width:18px;height:18px;border-radius:50%;${on ? `background:${t.accent};box-shadow:0 0 18px ${t.accent}` : `border:1.5px solid ${t.border}`}"></div>`;
+    }).join('');
+    return `
+      ${recordTitle(t, ctx.label)}
+      <div style="font:700 130px 'UI',sans-serif;color:${t.accent};line-height:1;margin-top:18px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+      <div style="display:grid;grid-template-columns:repeat(7, 18px);gap:16px;margin-top:40px;justify-content:center">${dots}</div>
+      <div style="margin-top:26px;font:400 20px 'Mono',monospace;letter-spacing:.18em;color:${t.accent};text-transform:uppercase">${MONTH_FR[m]} ${y}</div>
+      ${recordPill(t, RECORD_PILL_LABELS.mois)}`;
+  },
 };
+
+function pickRecordConcept(scope) {
+  const chosen = (CARD_RECORD_PICKS || {})[scope];
+  if (chosen && RECORD_BODIES[chosen]) return chosen;
+  return RECORD_DEFAULT_BY_SCOPE[scope] || RECORD_DEFAULT_BY_SCOPE.perso;
+}
 
 /** Carte de record — un pilote qui vient de battre un record (scope donne). */
 export async function recordCardPNGBytes(regId, scope, payload) {
-    const pilot = (allResults || []).find((r) => r.regId === regId);
-    if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
-    const t = themeColors();
-    const newTime = (payload && payload.time != null) ? fmtPdfTime(payload.time)
-          : (pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--');
-    const prevTime = (payload && payload.prev != null) ? fmtPdfTime(payload.prev) : null;
-    const deltaTxt = (payload && payload.delta != null) ? '-' + fmtPdfTime(payload.delta) + 's' : null;
-    const recordDate = parseRecordDate(payload && payload.date);
-    const ctx = {
-          label: RECORD_SCOPE_LABELS[scope] || 'NOUVEAU RECORD',
-          newTime, prevTime, deltaTxt, recordDate,
-    };
-    const build = RECORD_BODIES[scope] || RECORD_BODIES.perso;
-    return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot));
+  const pilot = (allResults || []).find((r) => r.regId === regId);
+  if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
+  const t = themeColors();
+  const sc = RECORD_SCOPE_LABELS[scope] ? scope : 'perso';
+  const newTime = (payload && payload.time != null) ? fmtPdfTime(payload.time)
+    : (pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--');
+  const prevTime = (payload && payload.prev != null) ? fmtPdfTime(payload.prev) : null;
+  const deltaTxt = (payload && payload.delta != null) ? '-' + fmtPdfTime(payload.delta) + 's' : null;
+  const ctx = {
+    label: RECORD_SCOPE_LABELS[sc],
+    newTime, prevTime, deltaTxt,
+    recordDate: parseRecordDate(payload && payload.date),
+  };
+  const id = (payload && payload.concept && RECORD_BODIES[payload.concept]) ? payload.concept : pickRecordConcept(sc);
+  const build = RECORD_BODIES[id] || RECORD_BODIES['01r-track-record'];
+  return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot));
 }
 
 // Rasterise un fragment HTML 1080x1920 en PNG (ArrayBuffer). Reutilise
