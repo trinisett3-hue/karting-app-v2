@@ -75,7 +75,7 @@ let PDF_LOGO_URL = null;
 // (par session) reste le repli pour les sessions plus anciennes ou tant que ce
 // reglage global n'a pas ete rempli — voir l'ecrasement juste apres la lecture de
 // `session` dans load() ci-dessous.
-let SITE_CIRCUIT_NAME = null; let CARD_POSITION_PICKS = []; let CARD_RECORD_PICKS = {}; let CARD_TAGLINE = '';
+let SITE_CIRCUIT_NAME = null; let CARD_POSITION_PICKS = []; let CARD_RECORD_PICKS = {}; let CARD_TAGLINE = ''; let CARD_ADDRESS = '';
 
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
 // <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
@@ -131,7 +131,7 @@ if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'cl
 
 const logoUrl = data.value && data.value.logo_url;
 PDF_LOGO_URL = logoUrl || null;
-SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null; CARD_POSITION_PICKS = Array.isArray(data.value && data.value.card_position_picks) ? data.value.card_position_picks : []; CARD_RECORD_PICKS = (data.value && data.value.card_record_picks) || {}; CARD_TAGLINE = (data.value && data.value.card_tagline) || '';
+SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null; CARD_POSITION_PICKS = Array.isArray(data.value && data.value.card_position_picks) ? data.value.card_position_picks : []; CARD_RECORD_PICKS = (data.value && data.value.card_record_picks) || {}; CARD_TAGLINE = (data.value && data.value.card_tagline) || ''; CARD_ADDRESS = (data.value && data.value.card_address) || '';
 if (logoUrl) {
 const header = document.querySelector('.circuit-header');
 if (header && !document.getElementById('circuit-logo')) {
@@ -1675,6 +1675,127 @@ export async function fullPDFBytes() {
 const CARD_W = 1080;
 const CARD_H = 1920;
 
+/* ==================================================================
+   CARTES PARTAGEABLES — SOCLE DU GABARIT UNIQUE
+   Un seul habillage (fond + tete + pied) est construit ici et reutilise
+   par les 15 concepts : seul le BLOC CENTRAL change d'un concept a
+   l'autre, exactement comme les PDF de classement qui partagent un
+   en-tete et un pied de page communs. Toutes les couleurs viennent des
+   jetons de theme (--c-*), donc le meme gabarit se decline sur les 8
+   themes sans code specifique.
+   Geometrie reprise des visuels de reference (702x1248) remise a
+   l'echelle de la carte finale (1080x1920, facteur 1.5385).
+   ================================================================== */
+
+// Trois roles typographiques distincts, conformes aux visuels de reference.
+// Le moteur nommait auparavant 'UI' et 'Mono' : deux familles qui n'existent
+// nulle part, donc TOUT retombait en sans-serif systeme — d'ou la typo plate
+// des cartes livrees.
+//  - CARD_UI   : titres et pseudos (grotesque large)
+//  - CARD_MONO : libelles, adresse, accroche, ligne meta (chasse fixe)
+//  - CARD_NUM  : chronos et positions (Teko, deja chargee par results.html)
+const CARD_UI = "system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif";
+const CARD_MONO = "ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,'DejaVu Sans Mono',monospace";
+const CARD_NUM = "'Teko','Barlow Condensed','Arial Narrow',sans-serif";
+
+// Chrono de carte : fmtCardTime() force le prefixe minutes ("00:47.014"), ce qui
+// est juste dans un tableau de classement mais faux sur une carte ou le chrono
+// est le sujet. Sous la minute on affiche donc "47.014".
+function fmtCardTime(sec) {
+  const n = Number(sec);
+  if (!Number.isFinite(n) || n < 0) return '--';
+  if (n < 60) return n.toFixed(3);
+  return `${Math.floor(n / 60)}:${(n % 60).toFixed(3).padStart(6, '0')}`;
+}
+
+// Resout une couleur CSS (hex, rgb(), jeton deja calcule) en rgba(...) avec
+// l'alpha demande : les jetons de theme sont tantot hexadecimaux, tantot
+// rgba(), on ne peut donc pas concatener un suffixe hexadecimal a l'aveugle.
+function cardRGBA(cssColor, alpha) {
+  const el = document.createElement('div');
+  el.style.color = '#000';
+  el.style.color = cssColor;
+  document.body.appendChild(el);
+  const rgb = getComputedStyle(el).color;
+  document.body.removeChild(el);
+  const m = (rgb.match(/[\d.]+/g) || ['255', '255', '255']).map(Number);
+  return `rgba(${m[0] | 0},${m[1] | 0},${m[2] | 0},${alpha})`;
+}
+
+// Fond de carte : degrade vertical + halo chaud central + halo bas + stries
+// diagonales + vignette. Rendu en SVG puis pose en <img> plutot qu'en
+// empilement de degrades CSS : html2canvas ne sait pas composer plusieurs
+// couches de gradients (les cartes sortaient sans aucun fond), alors qu'il
+// rasterise une image SVG data-URI exactement comme le navigateur.
+function cardBackgroundDataURI(t) {
+  const a = (o) => cardRGBA(t.accent, o);
+  const stripes = [];
+  for (let i = 0, y = -640; y < 2560; i++, y += 270) {
+    const o1 = (i % 3 === 0) ? 0.16 : (i % 3 === 1 ? 0.10 : 0.07);
+    stripes.push(`<rect x="-560" y="${y}" width="2200" height="15" fill="${a(o1)}"/>`);
+    stripes.push(`<rect x="-560" y="${y + 88}" width="2200" height="9" fill="${a(o1 * 0.55)}"/>`);
+  }
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">` +
+    `<defs>` +
+    `<linearGradient id="b" x1="0" y1="0" x2="0.25" y2="1">` +
+    `<stop offset="0" stop-color="${t.surface}"/>` +
+    `<stop offset="0.38" stop-color="${cardRGBA(t.surface, 0.75)}"/>` +
+    `<stop offset="1" stop-color="${cardRGBA(t.bg, 1)}"/>` +
+    `</linearGradient>` +
+    `<radialGradient id="gc" cx="0.5" cy="0.5" r="0.62">` +
+    `<stop offset="0" stop-color="${a(0.06)}"/><stop offset="1" stop-color="${a(0)}"/>` +
+    `</radialGradient>` +
+    `<radialGradient id="gb" cx="0.3" cy="1" r="0.72">` +
+    `<stop offset="0" stop-color="${a(0.07)}"/><stop offset="1" stop-color="${a(0)}"/>` +
+    `</radialGradient>` +
+    `<radialGradient id="gt" cx="0.12" cy="0.02" r="0.55">` +
+    `<stop offset="0" stop-color="${a(0.035)}"/><stop offset="1" stop-color="${a(0)}"/>` +
+    `</radialGradient>` +
+    `<radialGradient id="v" cx="0.5" cy="0.46" r="0.8">` +
+    `<stop offset="0.5" stop-color="rgba(0,0,0,0)"/><stop offset="1" stop-color="rgba(0,0,0,0.6)"/>` +
+    `</radialGradient>` +
+    `</defs>` +
+    `<rect width="1080" height="1920" fill="${t.bg}"/>` +
+    `<rect width="1080" height="1920" fill="url(#b)"/>` +
+    `<g transform="rotate(-10.8 540 960)">${stripes.join('')}</g>` +
+    `<rect width="1080" height="1920" fill="url(#gc)"/>` +
+    `<rect width="1080" height="1920" fill="url(#gb)"/>` +
+    `<rect width="1080" height="1920" fill="url(#gt)"/>` +
+    `<rect width="1080" height="1920" fill="url(#v)"/>` +
+    `</svg>`;
+  return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+}
+
+function cardBackgroundHTML(t) {
+  return `<img src="${cardBackgroundDataURI(t)}" alt="" style="position:absolute;left:0;top:0;width:1080px;height:1920px;display:block">`;
+}
+
+// Drapeau de nationalite dessine en SVG : les emoji drapeaux ne sont pas
+// rasterises de la meme facon d'une machine a l'autre — et pas du tout sous
+// Chrome/Linux, ou l'on obtient les deux lettres du pays dans un cadre.
+const CARD_FLAGS = {
+  FR: '<rect width="1" height="2" fill="#002654"/><rect x="1" width="1" height="2" fill="#fff"/><rect x="2" width="1" height="2" fill="#ce1126"/>',
+  BE: '<rect width="1" height="2" fill="#111"/><rect x="1" width="1" height="2" fill="#fae042"/><rect x="2" width="1" height="2" fill="#ed2939"/>',
+  IT: '<rect width="1" height="2" fill="#008c45"/><rect x="1" width="1" height="2" fill="#f4f5f0"/><rect x="2" width="1" height="2" fill="#cd212a"/>',
+  LU: '<rect width="3" height="0.667" fill="#ed2939"/><rect y="0.667" width="3" height="0.666" fill="#fff"/><rect y="1.333" width="3" height="0.667" fill="#00a1de"/>',
+  DE: '<rect width="3" height="0.667" fill="#111"/><rect y="0.667" width="3" height="0.666" fill="#dd0000"/><rect y="1.333" width="3" height="0.667" fill="#ffce00"/>',
+  NL: '<rect width="3" height="0.667" fill="#ae1c28"/><rect y="0.667" width="3" height="0.666" fill="#fff"/><rect y="1.333" width="3" height="0.667" fill="#21468b"/>',
+  ES: '<rect width="3" height="2" fill="#aa151b"/><rect y="0.5" width="3" height="1" fill="#f1bf00"/>',
+  CH: '<rect width="3" height="2" fill="#d52b1e"/><rect x="1.3" y="0.45" width="0.4" height="1.1" fill="#fff"/><rect x="0.85" y="0.8" width="1.3" height="0.4" fill="#fff"/>',
+  GB: '<rect width="3" height="2" fill="#012169"/><path d="M0 0L3 2M3 0L0 2" stroke="#fff" stroke-width="0.4"/><path d="M0 0L3 2M3 0L0 2" stroke="#c8102e" stroke-width="0.22"/><path d="M1.5 0V2M0 1H3" stroke="#fff" stroke-width="0.66"/><path d="M1.5 0V2M0 1H3" stroke="#c8102e" stroke-width="0.4"/>',
+  US: '<rect width="3" height="2" fill="#fff"/><g fill="#b22234"><rect width="3" height="0.154"/><rect y="0.308" width="3" height="0.154"/><rect y="0.615" width="3" height="0.154"/><rect y="0.923" width="3" height="0.154"/><rect y="1.231" width="3" height="0.154"/><rect y="1.538" width="3" height="0.154"/><rect y="1.846" width="3" height="0.154"/></g><rect width="1.2" height="1.077" fill="#3c3b6e"/>',
+  OTHER: '<rect width="3" height="2" fill="#fff"/><g fill="#111"><rect width="0.75" height="0.5"/><rect x="1.5" width="0.75" height="0.5"/><rect x="0.75" y="0.5" width="0.75" height="0.5"/><rect x="2.25" y="0.5" width="0.75" height="0.5"/><rect y="1" width="0.75" height="0.5"/><rect x="1.5" y="1" width="0.75" height="0.5"/><rect x="0.75" y="1.5" width="0.75" height="0.5"/><rect x="2.25" y="1.5" width="0.75" height="0.5"/></g>',
+};
+
+function cardFlagHTML(nat, w) {
+  const body = CARD_FLAGS[nat] || CARD_FLAGS.OTHER;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3 2" width="3" height="2">${body}</svg>`;
+  const uri = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+  const width = w || 68;
+  return `<img src="${uri}" alt="" style="width:${width}px;height:${Math.round(width * 2 / 3)}px;display:block;border-radius:3px">`;
+}
+
 function cardResultsURL() {
   const u = new URL('/results.html', window.location.origin);
   if (resultsToken) u.searchParams.set('result', resultsToken);
@@ -1720,38 +1841,57 @@ function isoWeekDays(dt) {
     return Array.from({ length: 7 }, (_, i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d; });
 }
 
+/* --- TETE DE CARTE ---------------------------------------------------
+   Logo, nom du circuit, adresse, filet, accroche, QR. Strictement
+   identique sur les 15 concepts. */
 function cardHeaderHTML(t) {
-    const circuit = escapeHTML(SITE_CIRCUIT_NAME || (sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
-    const tagline = escapeHTML(CARD_TAGLINE || '');
-    const logo = PDF_LOGO_URL
-      ? `<img src="${PDF_LOGO_URL}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:contain;border-radius:50%;background:${t.surface}">`
-          : `<div style="width:100%;height:100%;border-radius:50%;border:2px solid ${t.accent};display:flex;align-items:center;justify-content:center;font:700 26px 'UI',sans-serif;color:${t.accent}">${escapeHTML((circuit || 'K').charAt(0))}</div>`;
-    return `
-        <div style="position:absolute;left:74px;top:50px;width:64px;height:64px">${logo}</div>
-            <div style="position:absolute;left:154px;top:52px;right:250px">
-                  <div style="font:700 28px 'UI',sans-serif;letter-spacing:.05em;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${circuit}</div>
-                        ${tagline ? `<div style="font:400 17px 'Mono',monospace;color:${t.muted};margin-top:8px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tagline}</div>` : ''}
-                            </div>
-                                <div style="position:absolute;right:74px;top:40px">${cardQRHTML(cardResultsURL(), 150)}</div>
-                                    <div style="position:absolute;left:74px;right:74px;top:196px;height:1px;background:${t.border}"></div>
-                                      `;
+  const circuit = escapeHTML(SITE_CIRCUIT_NAME || (sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+  const tagline = escapeHTML(CARD_TAGLINE || '');
+  const address = escapeHTML(CARD_ADDRESS || '');
+  const logo = PDF_LOGO_URL
+    ? `<img src="${PDF_LOGO_URL}" crossorigin="anonymous" style="width:100%;height:100%;object-fit:contain;border-radius:50%;background:${t.surface}">`
+    : `<div style="width:100%;height:100%;border-radius:50%;border:2px solid ${t.accent};display:flex;align-items:center;justify-content:center;font:700 30px ${CARD_UI};line-height:1;color:${t.accent}">${escapeHTML((circuit || 'K').charAt(0))}</div>`;
+  return `
+    <div style="position:absolute;left:74px;top:322px;width:72px;height:72px">${logo}</div>
+    <div style="position:absolute;left:178px;top:312px;right:270px">
+      <div style="font:700 40px ${CARD_UI};line-height:1.5;letter-spacing:.045em;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${circuit}</div>
+      ${address ? `<div style="font:400 20px ${CARD_MONO};line-height:1.5;letter-spacing:.02em;color:${t.muted};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${address}</div>` : ''}
+    </div>
+    <div style="position:absolute;right:72px;top:278px">${cardQRHTML(cardResultsURL(), 160)}</div>
+    <div style="position:absolute;left:74px;width:712px;top:448px;height:1px;background:${t.border}"></div>
+    ${tagline ? `<div style="position:absolute;left:74px;right:74px;top:466px;font:400 20px ${CARD_MONO};line-height:1.6;letter-spacing:.02em;color:${t.muted};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tagline}</div>` : ''}`;
 }
 
+
+/* --- PIED DE CARTE ---------------------------------------------------
+   Filet, avatar en cercle (l'ancien cadre de 64px recevait un SVG force a
+   200px : l'avatar sortait entierement du cadre et n'apparaissait pas),
+   drapeau de nationalite, PSEUDO, ligne meta. Strictement identique sur
+   les 15 concepts. */
 function cardFooterHTML(t, pilot) {
-    const laps = pilot.hasTime ? String(pilot.lapsCount) + ' tours' : '';
-    const type = escapeHTML((sessionInfo && sessionInfo.session_type) || '');
-    const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
-    const meta = ['Kart ' + (pilot.kart ?? '-'), laps, type, date].filter(Boolean).join(' &middot; ');
-    return `
-        <div style="position:absolute;left:74px;bottom:230px;width:64px;height:64px;border-radius:50%;overflow:hidden;background:${t.surface}">${cardAvatarHTML(pilot, CARD_AV_FOOTER)}</div>
-            <div style="position:absolute;left:154px;bottom:258px;right:74px;font:700 30px 'UI',sans-serif;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(pilot.name)}</div>
-                <div style="position:absolute;left:74px;bottom:206px;right:74px;font:400 19px 'Mono',monospace;letter-spacing:.03em;color:${t.muted};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${meta}</div>
-                  `;
+  const laps = pilot.hasTime ? String(pilot.lapsCount) + ' tours' : '';
+  const type = escapeHTML((sessionInfo && sessionInfo.session_type) || '');
+  const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  const meta = ['Kart ' + (pilot.kart ?? '-'), laps, type, date].filter(Boolean).join(' &middot; ');
+  return `
+    <div style="position:absolute;left:74px;right:74px;top:1402px;height:1px;background:${t.border}"></div>
+    <div style="position:absolute;left:74px;top:1436px;width:104px;height:104px;border-radius:50%;overflow:hidden;background:${t.surface};border:2px solid ${cardRGBA(t.accent, .55)};box-sizing:border-box">${cardAvatarHTML(pilot, CARD_AV_FOOTER)}</div>
+    <div style="position:absolute;left:206px;top:1440px;right:74px;height:62px;display:flex;align-items:center">
+      <div style="flex:0 0 auto;margin-right:24px">${cardFlagHTML(pilot.nat, 66)}</div>
+      <div style="flex:1 1 auto;min-width:0;font:700 42px ${CARD_UI};line-height:62px;letter-spacing:.01em;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(pilot.name)}</div>
+    </div>
+    <div style="position:absolute;left:206px;top:1506px;right:74px;font:400 21px ${CARD_MONO};line-height:1.6;letter-spacing:.03em;color:${t.muted};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${meta}</div>`;
 }
 
+
+/* Zone centrale : la SEULE partie qui change d'un concept a l'autre.
+   Centree sur le milieu exact de la carte (y=960), comme les visuels de
+   reference — l'ancienne boite top:250/bottom:400 recentrait le contenu
+   trop haut et laissait un vide enorme sous le bloc. */
 function cardBodyWrap(inner) {
-    return `<div style="position:absolute;left:74px;right:74px;top:250px;bottom:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden">${inner}</div>`;
+  return `<div style="position:absolute;left:74px;right:74px;top:540px;bottom:540px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden">${inner}</div>`;
 }
+
 
 // --- Variante de carte : pro-signature / standard-classic -------------------
 // Les gabarits existent en deux variantes : standard-classic (avatars kart ou
@@ -1774,7 +1914,7 @@ function cardAvatarHTML(pilot, base) {
     const src = signatureAvatarDataURLSync(kart, o);
     if (src) return '<img src="' + src + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block">';
   }
-  return genAvatarSVG(kart, o);
+  return genAvatarSVG(kart, Object.assign({}, o, { size: null }));
 }
 
 // A appeler et await AVANT renderCardPNG() : le cache Signature est asynchrone,
@@ -1790,7 +1930,7 @@ async function prewarmCardAvatars(pilot) {
 }
 
 function cardShell(t, bodyInner, pilot) {
-    return cardHeaderHTML(t) + cardBodyWrap(bodyInner) + cardFooterHTML(t, pilot);
+    return cardBackgroundHTML(t) + cardHeaderHTML(t) + cardBodyWrap(bodyInner) + cardFooterHTML(t, pilot);
 }
 
 // --- Concepts POSITION -----------------------------------------------------
@@ -1806,26 +1946,26 @@ function cardCheckerBG(t, op) {
 
 const POSITION_BODIES = {
   '01-track-hero': (t, pilot, ctx) => `
-    <div style="font:400 22px 'Mono',monospace;letter-spacing:.32em;color:${t.muted}">POSITION FINALE</div>
-    <div style="font:700 280px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:16px">P${ctx.pos}</div>
-    <div style="font:700 86px 'UI',sans-serif;color:${t.text};margin-top:8px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>
-    <div style="font:400 20px 'Mono',monospace;letter-spacing:.28em;color:${t.muted};margin-top:26px">MEILLEUR TOUR</div>`,
+    <div style="font:400 21px ${CARD_MONO};letter-spacing:.32em;color:${t.muted}">POSITION FINALE</div>
+    <div style="font:700 320px ${CARD_NUM};line-height:.82;color:${t.accent};margin-top:20px">P${ctx.pos}</div>
+    <div style="font:700 168px ${CARD_NUM};line-height:.9;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.3em;color:${t.muted}">s</span></div>
+    <div style="font:400 20px ${CARD_MONO};letter-spacing:.28em;color:${t.muted};margin-top:24px">MEILLEUR TOUR</div>`,
 
   '02-avatar-central': (t, pilot, ctx) => `
     <div style="width:320px;height:320px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.accent};box-shadow:0 0 60px ${t.accent}44;display:flex;align-items:center;justify-content:center;overflow:hidden">${cardAvatarHTML(pilot, CARD_AV_HERO)}</div>
-    <div style="font:700 190px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:34px">P${ctx.pos}</div>
-    <div style="font:700 76px 'UI',sans-serif;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>`,
+    <div style="font:700 190px ${CARD_NUM};line-height:.85;color:${t.accent};margin-top:34px">P${ctx.pos}</div>
+    <div style="font:700 76px ${CARD_NUM};color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>`,
 
   '03-chrono-editorial': (t, pilot, ctx) => `
     <div style="width:100%;display:flex;align-items:baseline;gap:16px">
-      <span style="font:700 120px 'UI',sans-serif;color:${t.accent}">P${ctx.pos}</span>
-      <span style="font:400 22px 'Mono',monospace;color:${t.muted};letter-spacing:.05em">/ ${ctx.totalPilots} PILOTES</span>
+      <span style="font:700 120px ${CARD_NUM};color:${t.accent}">P${ctx.pos}</span>
+      <span style="font:400 22px ${CARD_MONO};color:${t.muted};letter-spacing:.05em">/ ${ctx.totalPilots} PILOTES</span>
     </div>
     ${cardRule(t, 28)}
-    <div style="width:100%;text-align:left;font:700 140px 'UI',sans-serif;color:${t.text}">${ctx.time}</div>
-    <div style="width:100%;text-align:left;font:400 20px 'Mono',monospace;letter-spacing:.24em;color:${t.muted};margin-top:10px">SECONDES &middot; MEILLEUR TOUR</div>
+    <div style="width:100%;text-align:left;font:700 140px ${CARD_NUM};color:${t.text}">${ctx.time}</div>
+    <div style="width:100%;text-align:left;font:400 20px ${CARD_MONO};letter-spacing:.24em;color:${t.muted};margin-top:10px">SECONDES &middot; MEILLEUR TOUR</div>
     ${cardRule(t, 28)}
-    <div style="display:flex;justify-content:space-between;width:100%;font:700 17px 'Mono',monospace;letter-spacing:.05em;color:${t.muted};text-transform:uppercase">
+    <div style="display:flex;justify-content:space-between;width:100%;font:700 17px ${CARD_MONO};letter-spacing:.05em;color:${t.muted};text-transform:uppercase">
       <span>Session ${escapeHTML(ctx.sessionType)}</span><span>${ctx.laps} tours</span><span>${escapeHTML(ctx.dateTxt)}</span>
     </div>`,
 
@@ -1833,12 +1973,12 @@ const POSITION_BODIES = {
   // bas a droite, chrono cale sur le bas du triangle.
   '04-split-diagonal': (t, pilot, ctx) => `
     <div style="position:relative;width:100%;height:100%">
-      <div style="position:absolute;left:0;top:40px;font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.muted}">POSITION</div>
-      <div style="position:absolute;left:0;top:78px;font:700 220px 'UI',sans-serif;line-height:.85;color:${t.accent}">P${ctx.pos}</div>
+      <div style="position:absolute;left:0;top:40px;font:400 20px ${CARD_MONO};letter-spacing:.3em;color:${t.muted}">POSITION</div>
+      <div style="position:absolute;left:0;top:78px;font:700 220px ${CARD_NUM};line-height:.85;color:${t.accent}">P${ctx.pos}</div>
       <div style="position:absolute;right:0;bottom:0;width:62%;height:58%;${cardCheckerBG(t, .12)}"></div>
       <div style="position:absolute;left:-4%;bottom:16%;width:118%;height:2px;background:${t.accent};transform:rotate(-24deg);transform-origin:left center"></div>
-      <div style="position:absolute;right:0;bottom:132px;text-align:right;font:400 18px 'Mono',monospace;letter-spacing:.22em;color:${t.muted}">MEILLEUR TOUR &middot; ${ctx.laps} TOURS</div>
-      <div style="position:absolute;right:0;bottom:52px;font:700 96px 'UI',sans-serif;color:${t.text}">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
+      <div style="position:absolute;right:0;bottom:132px;text-align:right;font:400 18px ${CARD_MONO};letter-spacing:.22em;color:${t.muted}">MEILLEUR TOUR &middot; ${ctx.laps} TOURS</div>
+      <div style="position:absolute;right:0;bottom:52px;font:700 96px ${CARD_NUM};color:${t.text}">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
     </div>`,
 
   // Deux colonnes : chrono a gauche, releve des tours reels a droite, le
@@ -1847,22 +1987,22 @@ const POSITION_BODIES = {
     const laps = (pilot.lapsArr || []).slice(0, 20);
     const rows = laps.map((l) => {
       const best = pilot.bestLap != null && Math.abs(l.time - pilot.bestLap) < 1e-6;
-      return `<div style="display:flex;justify-content:space-between;font:400 17px 'Mono',monospace;letter-spacing:.04em;color:${best ? t.accent : t.muted};line-height:1.85">` +
-        `<span>${pad2(l.idx)}</span><span>${fmtPdfTime(l.time)}</span></div>`;
-    }).join('') || `<div style="font:400 17px 'Mono',monospace;color:${t.muted}">--</div>`;
+      return `<div style="display:flex;justify-content:space-between;font:400 17px ${CARD_MONO};letter-spacing:.04em;color:${best ? t.accent : t.muted};line-height:1.85">` +
+        `<span>${pad2(l.idx)}</span><span>${fmtCardTime(l.time)}</span></div>`;
+    }).join('') || `<div style="font:400 17px ${CARD_MONO};color:${t.muted}">--</div>`;
     return `
       <div style="width:100%;display:flex;gap:44px;align-items:flex-start;text-align:left">
         <div style="flex:1 1 auto;min-width:0">
-          <div style="font:400 19px 'Mono',monospace;letter-spacing:.26em;color:${t.muted}">MEILLEUR TOUR</div>
-          <div style="font:700 132px 'UI',sans-serif;color:${t.text};line-height:1;margin-top:12px">${ctx.time}</div>
-          <div style="font:400 18px 'Mono',monospace;letter-spacing:.26em;color:${t.muted};margin-top:10px">SECONDES</div>
+          <div style="font:400 19px ${CARD_MONO};letter-spacing:.26em;color:${t.muted}">MEILLEUR TOUR</div>
+          <div style="font:700 132px ${CARD_NUM};color:${t.text};line-height:1;margin-top:12px">${ctx.time}</div>
+          <div style="font:400 18px ${CARD_MONO};letter-spacing:.26em;color:${t.muted};margin-top:10px">SECONDES</div>
           <div style="margin-top:54px;display:flex;align-items:baseline;gap:14px">
-            <span style="font:700 84px 'UI',sans-serif;color:${t.accent}">P${ctx.pos}</span>
-            <span style="font:400 20px 'Mono',monospace;color:${t.muted}">/ ${ctx.totalPilots}</span>
+            <span style="font:700 84px ${CARD_NUM};color:${t.accent}">P${ctx.pos}</span>
+            <span style="font:400 20px ${CARD_MONO};color:${t.muted}">/ ${ctx.totalPilots}</span>
           </div>
         </div>
         <div style="flex:0 0 320px;border-left:1px solid ${t.border};padding-left:32px">
-          <div style="font:400 15px 'Mono',monospace;letter-spacing:.2em;color:${t.muted};margin-bottom:14px">TEMPS AU TOUR</div>
+          <div style="font:400 15px ${CARD_MONO};letter-spacing:.2em;color:${t.muted};margin-bottom:14px">TEMPS AU TOUR</div>
           ${rows}
         </div>
       </div>`;
@@ -1870,11 +2010,11 @@ const POSITION_BODIES = {
 
   '06-bloc-massif': (t, pilot, ctx) => `
     <div style="width:100%;display:flex;align-items:center;gap:34px;text-align:left">
-      <div style="background:${t.accent};color:${t.bg};font:700 140px 'UI',sans-serif;padding:18px 36px;line-height:1">P${ctx.pos}</div>
+      <div style="background:${t.accent};color:${t.bg};font:700 140px ${CARD_NUM};padding:18px 36px;line-height:1">P${ctx.pos}</div>
       <div>
-        <div style="font:400 18px 'Mono',monospace;letter-spacing:.2em;color:${t.muted}">MEILLEUR TOUR</div>
-        <div style="font:700 84px 'UI',sans-serif;color:${t.text}">${ctx.time}<span style="font-size:.35em;color:${t.muted}">s</span></div>
-        <div style="margin-top:24px;font:700 17px 'Mono',monospace;letter-spacing:.1em;color:${t.muted};text-transform:uppercase;line-height:1.9">
+        <div style="font:400 18px ${CARD_MONO};letter-spacing:.2em;color:${t.muted}">MEILLEUR TOUR</div>
+        <div style="font:700 84px ${CARD_NUM};color:${t.text}">${ctx.time}<span style="font-size:.35em;color:${t.muted}">s</span></div>
+        <div style="margin-top:24px;font:700 17px ${CARD_MONO};letter-spacing:.1em;color:${t.muted};text-transform:uppercase;line-height:1.9">
           ${ctx.laps} tours<br>session ${escapeHTML(ctx.sessionType)}<br>${ctx.totalPilots} pilotes
         </div>
       </div>
@@ -1883,9 +2023,9 @@ const POSITION_BODIES = {
   '07-damier-dissous': (t, pilot, ctx) => `
     <div style="position:relative;width:100%;display:flex;flex-direction:column;align-items:center">
       <div style="position:absolute;inset:-60px 0 auto 0;height:340px;${cardCheckerBG(t, .10)}"></div>
-      <div style="font:700 20px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};position:relative">MEILLEUR TOUR</div>
-      <div style="font:800 220px 'UI',sans-serif;color:${t.text};line-height:.85;margin-top:14px;position:relative">${ctx.time}</div>
-      <div style="font:400 22px 'Mono',monospace;letter-spacing:.3em;color:${t.muted};margin-top:16px;position:relative">SECONDES</div>
+      <div style="font:700 20px ${CARD_MONO};letter-spacing:.3em;color:${t.muted};position:relative">MEILLEUR TOUR</div>
+      <div style="font:800 220px ${CARD_NUM};color:${t.text};line-height:.85;margin-top:14px;position:relative">${ctx.time}</div>
+      <div style="font:400 22px ${CARD_MONO};letter-spacing:.3em;color:${t.muted};margin-top:16px;position:relative">SECONDES</div>
     </div>`,
 
   // Ligne d'arrivee : le chrono, une regle graduee dont le segment accent
@@ -1897,15 +2037,15 @@ const POSITION_BODIES = {
     const ratio = Math.max(0, Math.min(1, (n - ctx.pos + 1) / n));
     return `
       <div style="width:100%;text-align:left">
-        <div style="font:400 19px 'Mono',monospace;letter-spacing:.24em;color:${t.muted}">MEILLEUR TOUR &mdash; SESSION ${escapeHTML(String(ctx.sessionType).toUpperCase())}</div>
-        <div style="font:700 150px 'UI',sans-serif;color:${t.text};line-height:1;margin-top:14px">${ctx.time}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+        <div style="font:400 19px ${CARD_MONO};letter-spacing:.24em;color:${t.muted}">MEILLEUR TOUR &mdash; SESSION ${escapeHTML(String(ctx.sessionType).toUpperCase())}</div>
+        <div style="font:700 150px ${CARD_NUM};color:${t.text};line-height:1;margin-top:14px">${ctx.time}<span style="font-size:.28em;color:${t.muted}">s</span></div>
         <div style="position:relative;margin-top:30px;height:56px">
           <div style="position:absolute;left:0;right:0;top:0;height:2px;background:${t.border}"></div>
           <div style="position:absolute;left:0;top:0;height:2px;width:${(ratio * 100).toFixed(1)}%;background:${t.accent}"></div>
           <div style="position:absolute;left:0;right:0;top:2px;display:flex">${ticks}</div>
-          <div style="position:absolute;right:0;top:-14px;background:${t.accent};color:${t.bg};font:700 30px 'UI',sans-serif;padding:6px 16px">P${ctx.pos}</div>
+          <div style="position:absolute;right:0;top:-14px;background:${t.accent};color:${t.bg};font:700 30px ${CARD_UI};padding:6px 16px">P${ctx.pos}</div>
         </div>
-        <div style="margin-top:26px;font:400 17px 'Mono',monospace;letter-spacing:.12em;color:${t.muted};text-transform:uppercase">${ctx.laps} tours enregistr&eacute;s &middot; ${ctx.totalPilots} pilotes en piste</div>
+        <div style="margin-top:26px;font:400 17px ${CARD_MONO};letter-spacing:.12em;color:${t.muted};text-transform:uppercase">${ctx.laps} tours enregistr&eacute;s &middot; ${ctx.totalPilots} pilotes en piste</div>
       </div>`;
   },
 
@@ -1913,12 +2053,12 @@ const POSITION_BODIES = {
   '09-grille-indice': (t, pilot, ctx) => {
     const row = (k, v, accent) => `
       <div style="display:flex;justify-content:space-between;align-items:baseline;padding:22px 0;border-bottom:1px solid ${t.border}">
-        <span style="font:400 17px 'Mono',monospace;letter-spacing:.18em;color:${t.muted};text-transform:uppercase">${k}</span>
-        <span style="font:700 ${accent ? '52px' : '30px'} 'UI',sans-serif;color:${accent ? t.accent : t.text}">${v}</span>
+        <span style="font:400 17px ${CARD_MONO};letter-spacing:.18em;color:${t.muted};text-transform:uppercase">${k}</span>
+        <span style="font:700 ${accent ? '52px' : '30px'} ${CARD_NUM};color:${accent ? t.accent : t.text}">${v}</span>
       </div>`;
     return `
       <div style="width:100%;text-align:left">
-        <div style="font:400 18px 'Mono',monospace;letter-spacing:.28em;color:${t.muted}">FICHE DE COURSE</div>
+        <div style="font:400 18px ${CARD_MONO};letter-spacing:.28em;color:${t.muted}">FICHE DE COURSE</div>
         <div style="height:2px;background:${t.accent};margin:16px 0 6px"></div>
         ${row('Position', 'P' + ctx.pos, true)}
         ${row('Meilleur tour', ctx.time + ' s')}
@@ -1933,11 +2073,11 @@ const POSITION_BODIES = {
   // dessus.
   '10-filigrane': (t, pilot, ctx) => `
     <div style="position:relative;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center">
-      <div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);font:800 420px 'UI',sans-serif;line-height:.8;color:${t.text};opacity:.06;text-align:center">${pilot.kart != null ? pilot.kart : '--'}</div>
-      <div style="position:relative;font:400 18px 'Mono',monospace;letter-spacing:.24em;color:${t.muted};text-transform:uppercase">Kart ${pilot.kart != null ? pilot.kart : '-'} &middot; ${escapeHTML(pilot.name)}</div>
-      <div style="position:relative;font:700 210px 'UI',sans-serif;line-height:.9;color:${t.accent};margin-top:18px">P${ctx.pos}</div>
-      <div style="position:relative;font:700 82px 'UI',sans-serif;color:${t.text};margin-top:6px">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
-      <div style="position:relative;font:400 18px 'Mono',monospace;letter-spacing:.28em;color:${t.muted};margin-top:20px">MEILLEUR TOUR</div>
+      <div style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);font:800 420px ${CARD_NUM};line-height:.8;color:${t.text};opacity:.06;text-align:center">${pilot.kart != null ? pilot.kart : '--'}</div>
+      <div style="position:relative;font:400 18px ${CARD_MONO};letter-spacing:.24em;color:${t.muted};text-transform:uppercase">Kart ${pilot.kart != null ? pilot.kart : '-'} &middot; ${escapeHTML(pilot.name)}</div>
+      <div style="position:relative;font:700 210px ${CARD_NUM};line-height:.9;color:${t.accent};margin-top:18px">P${ctx.pos}</div>
+      <div style="position:relative;font:700 82px ${CARD_NUM};color:${t.text};margin-top:6px">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
+      <div style="position:relative;font:400 18px ${CARD_MONO};letter-spacing:.28em;color:${t.muted};margin-top:20px">MEILLEUR TOUR</div>
     </div>`,
 };
 
@@ -1953,11 +2093,11 @@ function positionCtx(pilot) {
   const list = allResults || [];
   const prev = list.find((r) => r.pos === pilot.pos - 1);
   let gapPrev = '--';
-  if (pilot.hasTime && prev && prev.hasTime) gapPrev = '&minus; ' + fmtPdfTime(pilot.total - prev.total) + ' s';
+  if (pilot.hasTime && prev && prev.hasTime) gapPrev = '&minus; ' + fmtCardTime(pilot.total - prev.total) + ' s';
   else if (pilot.pos === 1) gapPrev = 'Leader';
   return {
     pos: pilot.pos,
-    time: pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--',
+    time: pilot.bestLap != null ? fmtCardTime(pilot.bestLap) : '--',
     laps: pilot.hasTime ? pilot.lapsCount : '--',
     totalPilots: list.length,
     sessionType: (sessionInfo && sessionInfo.session_type) || '--',
@@ -1999,28 +2139,48 @@ const RECORD_DEFAULT_BY_SCOPE = {
   semaine: '12r-record-semaine', mois: '13r-record-mois',
 };
 
+// Pastille de delta. Sans text-transform : "-0.831s" devenait "-0.831S".
 function recordPill(t, text) {
-  return `<div style="margin-top:34px;display:inline-block;padding:12px 26px;border-radius:999px;border:1px solid ${t.accent};font:700 15px 'Mono',monospace;letter-spacing:.08em;color:${t.accent};text-transform:uppercase">${text}</div>`;
+  return `<div style="margin-top:64px;display:inline-block;padding:15px 36px;border-radius:999px;border:1px solid ${t.accent};font:500 22px ${CARD_MONO};letter-spacing:.08em;color:${t.accent}">${text}</div>`;
 }
+
+// Damier dessine en SVG : html2canvas ignore repeating-conic-gradient, les
+// drapeaux disparaissaient purement et simplement du rendu.
 function checkeredGlyph(t, size) {
   const s = size || 48;
-  return `<span style="display:inline-block;vertical-align:middle;width:${s}px;height:${Math.round(s * 0.7)}px;background-image:repeating-conic-gradient(${t.accent} 0% 25%, transparent 0% 50%);background-size:${Math.round(s / 4)}px ${Math.round(s / 4)}px"></span>`;
+  const cells = [];
+  for (let y = 0; y < 3; y++) for (let x = 0; x < 4; x++) if ((x + y) % 2 === 0) cells.push(`<rect x="${x}" y="${y}" width="1" height="1"/>`);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 5 5.6" width="5" height="5.6">` +
+    `<rect x="0" y="0" width="0.32" height="5.6" fill="${t.muted}"/>` +
+    `<g fill="${t.accent}" transform="translate(0.42 0.3)">${cells.join('')}</g></svg>`;
+  return `<img src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}" alt="" style="width:${s}px;height:${Math.round(s * 1.12)}px;display:block;flex:0 0 auto">`;
 }
 // Titre de record encadre de deux damiers, comme sur les visuels de reference.
 function recordTitle(t, label) {
-  return `<div style="display:flex;align-items:center;gap:18px;font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent}">` +
-    checkeredGlyph(t, 34) + `<span>${label}</span>` + checkeredGlyph(t, 34) + `</div>`;
+  return `<div style="display:flex;align-items:center;gap:30px;font:400 21px ${CARD_MONO};letter-spacing:.3em;color:${t.muted}">` +
+    checkeredGlyph(t, 42) + `<span>${label}</span>` + checkeredGlyph(t, 42) + `</div>`;
 }
 // Ancien temps barre -> nouveau temps, commun aux deux visuels de record perso.
+// La barre est un div positionne : html2canvas place text-decoration:line-through
+// tres au-dessus des chiffres avec une police condensee (un trait flottait seul
+// au-dessus de "AVANT").
 function recordDelta(t, ctx, bigSize) {
+  const big = bigSize || 130;
   return (ctx.prevTime
-    ? `<div style="display:flex;align-items:baseline;gap:34px;margin-top:34px">
-         <span style="font:700 60px 'UI',sans-serif;color:${t.muted};text-decoration:line-through">${ctx.prevTime}<span style="font-size:.36em">s</span></span>
-         <span style="font:400 34px 'Mono',monospace;color:${t.muted}">&rarr;</span>
-         <span style="font:700 ${bigSize || 100}px 'UI',sans-serif;color:${t.accent}">${ctx.newTime}<span style="font-size:.34em;color:${t.muted}">s</span></span>
+    ? `<div style="display:flex;align-items:flex-end;gap:64px;margin-top:52px">
+         <div style="display:flex;flex-direction:column;align-items:center">
+           <div style="font:400 20px ${CARD_MONO};letter-spacing:.28em;color:${t.muted};margin-bottom:14px">AVANT</div>
+           <div style="position:relative;font:700 ${Math.round(big * 0.82)}px ${CARD_NUM};line-height:.8;color:${t.muted}">${ctx.prevTime}<span style="font-size:.36em">s</span><div style="position:absolute;left:0;right:${Math.round(big * 0.34)}px;top:60%;height:4px;background:${t.muted};opacity:.9"></div></div>
+         </div>
+         <div style="font:400 44px ${CARD_MONO};color:${t.muted};padding-bottom:16px">&rarr;</div>
+         <div style="display:flex;flex-direction:column;align-items:center">
+           <div style="font:400 20px ${CARD_MONO};letter-spacing:.28em;color:${t.muted};margin-bottom:14px">AUJOURD'HUI</div>
+           <div style="font:700 ${big}px ${CARD_NUM};line-height:.8;color:${t.accent}">${ctx.newTime}<span style="font-size:.34em;color:${t.muted}">s</span></div>
+         </div>
        </div>`
-    : `<div style="font:700 ${bigSize || 100}px 'UI',sans-serif;color:${t.accent};margin-top:34px">${ctx.newTime}<span style="font-size:.34em;color:${t.muted}">s</span></div>`);
+    : `<div style="font:700 ${big}px ${CARD_NUM};line-height:.8;color:${t.accent};margin-top:44px">${ctx.newTime}<span style="font-size:.34em;color:${t.muted}">s</span></div>`);
 }
+
 
 const RECORD_BODIES = {
   // Record personnel, mise en page « track hero » (chrono seul, centre).
@@ -2041,9 +2201,9 @@ const RECORD_BODIES = {
   '11r-record-piste': (t, pilot, ctx) => `
     <div style="width:100%;border:1px solid ${t.accent};background:${t.accent}14;padding:54px 40px;display:flex;flex-direction:column;align-items:center">
       ${checkeredGlyph(t, 64)}
-      <div style="font:400 20px 'Mono',monospace;letter-spacing:.3em;color:${t.accent};margin-top:22px">${ctx.label}</div>
-      <div style="font:700 140px 'UI',sans-serif;color:${t.accent};line-height:1;margin-top:16px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
-      ${ctx.prevTime ? `<div style="margin-top:16px;font:400 18px 'Mono',monospace;letter-spacing:.06em;color:${t.muted}">ANCIEN RECORD ${ctx.prevTime}s${ctx.deltaTxt ? ' &middot; ' + ctx.deltaTxt : ''}</div>` : ''}
+      <div style="font:400 20px ${CARD_MONO};letter-spacing:.3em;color:${t.accent};margin-top:22px">${ctx.label}</div>
+      <div style="font:700 140px ${CARD_NUM};color:${t.accent};line-height:1;margin-top:16px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+      ${ctx.prevTime ? `<div style="margin-top:16px;font:400 18px ${CARD_MONO};letter-spacing:.06em;color:${t.muted}">ANCIEN RECORD ${ctx.prevTime}s${ctx.deltaTxt ? ' &middot; ' + ctx.deltaTxt : ''}</div>` : ''}
       ${recordPill(t, RECORD_PILL_LABELS.piste)}
     </div>`,
 
@@ -2053,16 +2213,16 @@ const RECORD_BODIES = {
     const dow = (ctx.recordDate.getDay() + 6) % 7;
     const grid = days.map((d, i) => `
       <div style="display:flex;flex-direction:column;align-items:center;gap:8px">
-        <div style="font:400 13px 'Mono',monospace;letter-spacing:.05em;color:${t.muted}">${DOW_FR[i]}</div>
-        <div style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;font:700 18px 'UI',sans-serif;${i === dow ? `background:${t.accent};color:${t.bg}` : `border:1px solid ${t.border};color:${t.muted}`}">${pad2(d.getDate())}</div>
+        <div style="font:400 13px ${CARD_MONO};letter-spacing:.05em;color:${t.muted}">${DOW_FR[i]}</div>
+        <div style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;font:700 18px ${CARD_UI};${i === dow ? `background:${t.accent};color:${t.bg}` : `border:1px solid ${t.border};color:${t.muted}`}">${pad2(d.getDate())}</div>
       </div>`).join('');
     const end = days[6];
     const rangeTxt = `SEMAINE DU ${pad2(days[0].getDate())} AU ${pad2(end.getDate())} ${MONTH_FR[end.getMonth()].toUpperCase()} ${end.getFullYear()}`;
     return `
       ${recordTitle(t, ctx.label)}
-      <div style="font:700 130px 'UI',sans-serif;color:${t.accent};line-height:1;margin-top:18px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+      <div style="font:700 130px ${CARD_NUM};color:${t.accent};line-height:1;margin-top:18px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
       <div style="display:flex;gap:16px;margin-top:40px">${grid}</div>
-      <div style="margin-top:26px;font:400 17px 'Mono',monospace;letter-spacing:.06em;color:${t.muted}">${rangeTxt}</div>
+      <div style="margin-top:26px;font:400 17px ${CARD_MONO};letter-spacing:.06em;color:${t.muted}">${rangeTxt}</div>
       ${recordPill(t, RECORD_PILL_LABELS.semaine)}`;
   },
 
@@ -2077,9 +2237,9 @@ const RECORD_BODIES = {
     }).join('');
     return `
       ${recordTitle(t, ctx.label)}
-      <div style="font:700 130px 'UI',sans-serif;color:${t.accent};line-height:1;margin-top:18px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
+      <div style="font:700 130px ${CARD_NUM};color:${t.accent};line-height:1;margin-top:18px">${ctx.newTime}<span style="font-size:.28em;color:${t.muted}">s</span></div>
       <div style="display:grid;grid-template-columns:repeat(7, 18px);gap:16px;margin-top:40px;justify-content:center">${dots}</div>
-      <div style="margin-top:26px;font:400 20px 'Mono',monospace;letter-spacing:.18em;color:${t.accent};text-transform:uppercase">${MONTH_FR[m]} ${y}</div>
+      <div style="margin-top:26px;font:400 20px ${CARD_MONO};letter-spacing:.18em;color:${t.accent};text-transform:uppercase">${MONTH_FR[m]} ${y}</div>
       ${recordPill(t, RECORD_PILL_LABELS.mois)}`;
   },
 };
@@ -2096,10 +2256,10 @@ export async function recordCardPNGBytes(regId, scope, payload) {
   if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
   const t = themeColors();
   const sc = RECORD_SCOPE_LABELS[scope] ? scope : 'perso';
-  const newTime = (payload && payload.time != null) ? fmtPdfTime(payload.time)
-    : (pilot.bestLap != null ? fmtPdfTime(pilot.bestLap) : '--');
-  const prevTime = (payload && payload.prev != null) ? fmtPdfTime(payload.prev) : null;
-  const deltaTxt = (payload && payload.delta != null) ? '-' + fmtPdfTime(payload.delta) + 's' : null;
+  const newTime = (payload && payload.time != null) ? fmtCardTime(payload.time)
+    : (pilot.bestLap != null ? fmtCardTime(pilot.bestLap) : '--');
+  const prevTime = (payload && payload.prev != null) ? fmtCardTime(payload.prev) : null;
+  const deltaTxt = (payload && payload.delta != null) ? '-' + fmtCardTime(payload.delta) + 's' : null;
   const ctx = {
     label: RECORD_SCOPE_LABELS[sc],
     newTime, prevTime, deltaTxt,
@@ -2119,7 +2279,7 @@ async function renderCardPNG(bodyHTML) {
     const t = themeColors();
     const node = document.createElement('div');
     node.style.cssText = `position:relative;width:${CARD_W}px;height:${CARD_H}px;overflow:hidden;` +
-          `background:${t.bg};font-family:'UI',system-ui,sans-serif;color:${t.text}`;
+          `background:${t.bg};font-family:${CARD_UI};color:${t.text}`;
     node.innerHTML = bodyHTML;
     const canvas = await sectionToCanvas(node, CARD_W, t.bg, 1);
     return new Promise((resolve, reject) => {
