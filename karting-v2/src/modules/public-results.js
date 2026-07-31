@@ -2021,7 +2021,14 @@ function cardShell(t, bodyInner, pilot, cid) {
 
 function cardRule(t, m) { return `<div style="width:100%;height:1px;background:${t.border};margin:${m || 26}px 0"></div>`; }
 function cardCheckerBG(t, op) {
-  return `background-image:repeating-conic-gradient(${t.text} 0% 25%, transparent 0% 50%);background-size:40px 40px;opacity:${op || .10}`;
+  // html2canvas 1.4.1 ignore repeating-conic-gradient : le damier etait donc
+  // simplement INVISIBLE sur les cartes exportees (constate en prod le 31/07
+  // sur 04-split-diagonal). On passe par une tuile SVG en data-URI, que
+  // html2canvas sait bien rasteriser.
+  const tile = `<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80">` +
+    `<rect x="0" y="0" width="40" height="40" fill="${t.text}"/>` +
+    `<rect x="40" y="40" width="40" height="40" fill="${t.text}"/></svg>`;
+  return `background-image:url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(tile)}");background-size:80px 80px;background-repeat:repeat;opacity:${op || .10}`;
 }
 
 const POSITION_BODIES = {
