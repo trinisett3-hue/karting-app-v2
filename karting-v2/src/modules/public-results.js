@@ -1,6 +1,6 @@
 // Module de la page publique de résultats (results.html) — accès par QR code / lien,
 // sans auth. Reprend à l'identique la logique de l'ancien results.html monofichier :
-// résolution de session par public_results_token, classement (temps total), podium, 
+// résolution de session par public_results_token, classement (temps total), podium,
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
 // Chargement paresseux (30/07, audit du 28/07 section 1.2) : kart-avatar.js
@@ -1795,7 +1795,7 @@ function cardBGLayers(t, cid) {
       push(grid(68, 0.045));
       break;
     case '07-damier-dissous':
-      push(checkerFade(68, 340, 19, (r, n) => 0.008 + 0.05 * Math.sin(Math.PI * (r / (n - 1)))));
+      push(checkerFade(68, 340, 19, (r, n) => 0.004 + 0.055 * Math.pow(Math.sin(Math.PI * (r / (n - 1))), 3)));
       break;
     case '01r-track-record':
       push(stripes(210, 12, 7, 0.20, 0.14));
@@ -2078,7 +2078,7 @@ const POSITION_BODIES = {
     <div style="position:relative;width:100%;height:100%">
       <div style="position:absolute;left:0;top:40px;font:400 20px ${CARD_MONO};letter-spacing:.3em;color:${t.muted}">POSITION</div>
       <div style="position:absolute;left:0;top:78px;font:700 220px ${CARD_NUM};line-height:.85;color:${t.accent}">P${ctx.pos}</div>
-      <div style="position:absolute;right:0;bottom:132px;text-align:right;font:400 18px ${CARD_MONO};letter-spacing:.22em;color:${t.muted}">MEILLEUR TOUR &middot; ${ctx.laps} TOURS</div>
+      <div style="position:absolute;right:0;bottom:196px;text-align:right;font:400 18px ${CARD_MONO};letter-spacing:.22em;color:${t.muted}">MEILLEUR TOUR &middot; ${ctx.laps} TOURS</div>
       <div style="position:absolute;right:0;bottom:52px;text-align:right;font:700 96px ${CARD_NUM};color:${t.text}">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
     </div>`,
 
