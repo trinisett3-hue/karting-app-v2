@@ -216,6 +216,23 @@ async function loadRegistrationConfig(token) {
   }
 }
 
+// 31/07 (correctif couleurs) : cette page avait un accent rouge fixe
+// (--acc dans le <style> du haut), independant du theme choisi dans
+// Parametres > Apparence, alors que la page resultats le suit (data-theme).
+// Meme table de couleurs que resultats (public-results.js / initTheme MAP)
+// tant que public_registration_config() ne relaie pas encore le theme —
+// best effort : si cfg.results_theme est absent, rien ne change (repli rouge).
+const THEME_ACCENT = {
+  classic: '#ff2a2a', neon: '#00d4ff', carbon: '#c9a84c', checkered: '#ece8dd',
+  endurance: '#ffb238', pitlane: '#f0c419', champagne: '#d9b978', arctic: '#1a6fbd',
+};
+function applyThemeAccent(themeKey) {
+  const hex = THEME_ACCENT[String(themeKey || '').trim()];
+  if (!hex) return;
+  document.documentElement.style.setProperty('--acc', hex);
+  document.documentElement.style.setProperty('--acc-deep', hex);
+}
+
 function applyCircuitBranding(cfg) {
   // 31/07 : le nom du circuit etait ecrit en dur dans les 4 en-tetes de cette
   // page. Il vient desormais TOUJOURS de Parametres > Identite du circuit
@@ -223,6 +240,7 @@ function applyCircuitBranding(cfg) {
   const circuitName = String(cfg && cfg.circuit_name || '').trim() || 'Karting';
   document.querySelectorAll('.js-circuit-name').forEach(el => { el.textContent = circuitName; });
   document.title = 'Inscription — ' + circuitName;
+  if (cfg && cfg.results_theme) applyThemeAccent(cfg.results_theme);
   const wrap = document.getElementById('circuit-logo-wrap');
   if (wrap) {
     wrap.innerHTML = cfg.logo_url
@@ -327,9 +345,15 @@ function renderSessionPicker(list, currentToken, venueToken) {
   });
 }
 
-function hideChoiceButtons(hide) {
+// 31/07 (correctif) : on ne masque plus les boutons "Premiere fois" /
+// "Deja pilote" quand plusieurs sessions sont ouvertes — le pilote doit voir
+// le choix ET la liste deroulante de session sur le meme ecran. Les boutons
+// sont juste desactives tant qu'aucune session n'est choisie.
+function disableChoiceButtons(disable) {
   document.querySelectorAll('#screen-0 .choice-btn').forEach(b => {
-    b.style.display = hide ? 'none' : '';
+    b.disabled = disable;
+    b.style.opacity = disable ? '.4' : '';
+    b.style.pointerEvents = disable ? 'none' : '';
   });
 }
 
@@ -340,7 +364,8 @@ export async function initRegisterPage() {
 
   if (!token) {
     // Sans lien direct : on n'affiche plus "Lien invalide" si on connait le
-    // circuit — on propose la liste des sessions ouvertes.
+    // circuit — on propose la liste des sessions ouvertes, sur le meme ecran
+    // que le choix Premiere fois / Deja pilote (boutons desactives en attendant).
     if (venueToken) {
       const list = await loadOpenSessions(venueToken);
       if (list.length === 1) {
@@ -348,9 +373,9 @@ export async function initRegisterPage() {
         window.location.replace('register.html' + q);
         return;
       }
-      hideChoiceButtons(true);
+      disableChoiceButtons(true);
       if (list.length) {
-        document.getElementById('session-name').textContent = 'Plusieurs sessions sont ouvertes';
+        document.getElementById('session-name').textContent = 'Choisis ta session';
         renderSessionPicker(list, '', venueToken);
       } else {
         document.getElementById('session-name').textContent = 'Aucune session ouverte pour le moment';
