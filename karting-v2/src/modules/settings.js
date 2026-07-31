@@ -125,6 +125,7 @@ state.prefs.avatar_outline = state.prefs.avatar_outline !== false;
 state.prefs.avatar_shape = state.prefs.avatar_shape || 'round';
 state.prefs.card_qr_url = state.prefs.card_qr_url || '';
 state.prefs.card_tagline = String(state.prefs.card_tagline || '').slice(0, CARD_TAGLINE_MAX);
+state.prefs.card_address = String(state.prefs.card_address || '').slice(0, 60);
 if (!Array.isArray(state.prefs.card_position_picks)) state.prefs.card_position_picks = [];
 state.prefs.card_position_picks = state.prefs.card_position_picks.slice(0, CARD_POSITION_MAX);
 if (!state.prefs.card_record_picks || typeof state.prefs.card_record_picks !== 'object') {
@@ -139,6 +140,8 @@ const elUrl = document.getElementById('pref-card-url');
 if (elUrl) elUrl.value = state.prefs.card_qr_url || '';
 const elTag = document.getElementById('pref-card-tagline');
 if (elTag) elTag.value = state.prefs.card_tagline || '';
+const elAddr = document.getElementById('pref-card-address');
+if (elAddr) elAddr.value = state.prefs.card_address || '';
 updateTaglineCount();
 renderCardQR();
 
@@ -910,6 +913,7 @@ avatar_outline: !!document.getElementById('pref-avatar-outline')?.checked,
 avatar_shape: document.getElementById('pref-avatar-shape')?.value || 'round',
 card_qr_url: (document.getElementById('pref-card-url')?.value || '').trim().slice(0, 179),
 card_tagline: (document.getElementById('pref-card-tagline')?.value || '').trim().slice(0, CARD_TAGLINE_MAX),
+card_address: (document.getElementById('pref-card-address')?.value || '').trim().slice(0, 60),
 card_position_picks: (state.prefs.card_position_picks || []).slice(0, CARD_POSITION_MAX),
 card_record_picks: state.prefs.card_record_picks || {},
 logo_url: state.prefs.logo_url || null,
