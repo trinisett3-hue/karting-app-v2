@@ -75,6 +75,13 @@ let PDF_LOGO_URL = null;
 // (par session) reste le repli pour les sessions plus anciennes ou tant que ce
 // reglage global n'a pas ete rempli — voir l'ecrasement juste apres la lecture de
 // `session` dans load() ci-dessous.
+// Noms de circuit dedies au rendu PDF (Parametres > Identite du circuit).
+// circuit_name reste la source de verite AFFICHEE PARTOUT AILLEURS (page web
+// publique, cartes partageables, apercus). Les deux champs ci-dessous ne
+// concernent QUE les exports PDF : l'en-tete (zone etroite de la fiche pilote,
+// d'ou une limite de caracteres plus courte cote admin) et le pied de page.
+// Vides => on retombe sur circuit_name : aucun reglage obligatoire.
+let PDF_CIRCUIT_HEAD = ''; let PDF_CIRCUIT_FOOT = '';
 let SITE_CIRCUIT_NAME = null; let CARD_POSITION_PICKS = []; let CARD_RECORD_PICKS = {}; let CARD_TAGLINE = ''; let CARD_ADDRESS = '';
 
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
@@ -101,6 +108,20 @@ function genAvatarSVG(kart, opts) {
   if (PDF_AVATAR_MODE === 'pilot') return pilotAvatarSVG ? pilotAvatarSVG(kart, null, { ...opts, hidePlate: true }) : '';
   return kartAvatarSVG ? kartAvatarSVG(kart, opts) : '';
 }
+
+/* Nom du circuit : UNE seule fonction, plus aucun litteral en dur.
+   Ordre de priorite : reglage global (Parametres > Identite du circuit),
+   puis sessions.circuit_name herite, puis un repli neutre. */
+function circuitName() {
+  const g = String(SITE_CIRCUIT_NAME || '').trim();
+  if (g) return g;
+  const s = String((sessionInfo && sessionInfo.circuit_name) || '').trim();
+  return s || 'Circuit';
+}
+// En-tete des PDF : champ dedie s'il est rempli, sinon le nom du circuit.
+function circuitNamePdfHead() { return String(PDF_CIRCUIT_HEAD || '').trim() || circuitName(); }
+// Pied de page des PDF : idem.
+function circuitNamePdfFoot() { return String(PDF_CIRCUIT_FOOT || '').trim() || circuitName(); }
 
 /* ------------------------------------------------------------------
 THEME — Lu depuis app_settings (key='global'), défini dans
@@ -131,7 +152,14 @@ if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'cl
 
 const logoUrl = data.value && data.value.logo_url;
 PDF_LOGO_URL = logoUrl || null;
-SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null; CARD_POSITION_PICKS = Array.isArray(data.value && data.value.card_position_picks) ? data.value.card_position_picks : []; CARD_RECORD_PICKS = (data.value && data.value.card_record_picks) || {}; CARD_TAGLINE = (data.value && data.value.card_tagline) || ''; CARD_ADDRESS = (data.value && data.value.card_address) || '';
+SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null; CARD_POSITION_PICKS = Array.isArray(data.value && data.value.card_position_picks) ? data.value.card_position_picks : []; CARD_RECORD_PICKS = (data.value && data.value.card_record_picks) || {}; CARD_TAGLINE = (data.value && data.value.card_tagline) || ''; CARD_ADDRESS = (data.value && data.value.card_address) || ''; PDF_CIRCUIT_HEAD = String((data.value && data.value.circuit_name_pdf_header) || '').trim(); PDF_CIRCUIT_FOOT = String((data.value && data.value.circuit_name_pdf_footer) || '').trim();
+// 31/07 : le nom du circuit est pose des le retour de la config, sans attendre
+// load() — la page ne doit jamais afficher de nom en dur, meme brievement, ni
+// sur le chemin d'erreur (session archivee, jeton invalide).
+const nameEl = document.getElementById('circuit-name');
+if (nameEl) nameEl.textContent = circuitName();
+document.title = 'Resultats — ' + circuitName();
+
 if (logoUrl) {
 const header = document.querySelector('.circuit-header');
 if (header && !document.getElementById('circuit-logo')) {
@@ -371,9 +399,119 @@ exactement comme loadRanking() côté admin — pas le meilleur tour seul ;
 inscrit apparaît en fin de classement, marqué "Kart libre" ;
 - la nationalité vient d'abord de l'inscription, puis du profil pilote.
 ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+PAGE VENUE — le "QR unique" du circuit (31/07)
+Les QR par session ont ete supprimes cote admin : il n'y a plus qu'UN
+seul QR permanent, affiche a l'accueil du circuit, qui pointe vers
+results.html?v=<public_venue_token>. Cette page s'actualise toute
+seule : elle liste les sessions ouvertes a l'inscription du jour et
+les resultats publies recemment, via le RPC public_venue_sessions
+(SECURITY DEFINER, aucune donnee nominative exposee).
+Le lien direct ?result=TOKEN envoye par e-mail continue de fonctionner
+exactement comme avant : on ne passe ici QUE si ?result est absent.
+------------------------------------------------------------------ */
+function venueTime(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  } catch (e) { return ''; }
+}
+
+function venueRow(href, tag, title, meta) {
+  return `<a class="venue-row" href="${href}">
+<span class="venue-tag">${escapeHTML(tag)}</span>
+<span class="venue-txt"><b>${escapeHTML(title)}</b><i>${escapeHTML(meta)}</i></span>
+<svg class="venue-chev" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+</a>`;
+}
+
+function venueShell(inner) {
+  return `<style>
+.venue-wrap{max-width:640px;margin:0 auto;padding:8px 0 40px}
+.venue-block{margin:0 0 26px}
+.venue-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut,#7580a6)}
+.venue-h:after{content:"";flex:1;height:1px;background:currentColor;opacity:.25}
+.venue-row{display:flex;align-items:center;gap:14px;padding:16px 18px;margin:0 0 10px;border:1px solid var(--bd,rgba(224,232,255,.09));border-radius:14px;background:var(--sf,rgba(255,255,255,.03));text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+.venue-row:hover{border-color:var(--acc,#ffb238);transform:translateY(-1px)}
+.venue-tag{flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:6px 10px;border-radius:999px;background:var(--acc,#ffb238);color:#0b0b0f;white-space:nowrap}
+.venue-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
+.venue-txt b{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-txt i{font-style:normal;font-size:13px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-chev{flex:0 0 auto;opacity:.45}
+.venue-empty{padding:18px;border:1px dashed var(--bd,rgba(224,232,255,.14));border-radius:14px;font-size:14px;opacity:.6}
+.venue-note{margin:28px 0 0;font-size:12.5px;line-height:1.6;opacity:.45;text-align:center}
+</style><div class="venue-wrap">${inner}</div>`;
+}
+
+export async function renderVenuePicker(venueToken) {
+  const host = document.getElementById('podium-wrap');
+  if (!host) return false;
+  ['top10-rows', 'page2-ranking', 'page3-accordion'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '';
+  });
+  const nav = document.querySelector('.page-nav, .results-nav');
+  if (nav) nav.style.display = 'none';
+  host.className = '';
+  host.innerHTML = venueShell('<div class="venue-empty">Chargement…</div>');
+
+  const { data, error } = await db.rpc('public_venue_sessions', { _venue_token: venueToken });
+  if (error || !data) {
+    host.innerHTML = venueShell('<div class="venue-empty">Lien invalide ou circuit introuvable.</div>');
+    return false;
+  }
+  const open = Array.isArray(data.open_sessions) ? data.open_sessions : [];
+  const done = Array.isArray(data.recent_results) ? data.recent_results : [];
+  const venueName = String(data.venue_name || '').trim();
+  if (venueName) {
+    const nameEl = document.getElementById('circuit-name');
+    if (nameEl) nameEl.textContent = venueName;
+    document.title = venueName;
+  }
+  const dEl = document.getElementById('session-date');
+  if (dEl) dEl.textContent = new Date().toLocaleDateString('fr-FR');
+  const lEl = document.getElementById('session-label');
+  if (lEl) lEl.textContent = 'Accueil';
+
+  let html = '';
+  html += '<div class="venue-block"><div class="venue-h">Je m’inscris</div>';
+  html += open.length
+    ? open.map(s => venueRow(
+        'register.html?session=' + encodeURIComponent(s.registration_token),
+        'Ouvert',
+        s.title || 'Session',
+        [venueTime(s.starts_at), s.circuit_name || ''].filter(Boolean).join(' · ')
+      )).join('')
+    : '<div class="venue-empty">Aucune session ouverte a l’inscription pour le moment.</div>';
+  html += '</div>';
+
+  html += '<div class="venue-block"><div class="venue-h">Mes résultats</div>';
+  html += done.length
+    ? done.map(s => venueRow(
+        '?result=' + encodeURIComponent(s.results_token),
+        'Résultats',
+        s.title || 'Session',
+        [venueTime(s.starts_at), 'publié à ' + venueTime(s.published_at)].filter(Boolean).join(' · ')
+      )).join('')
+    : '<div class="venue-empty">Aucun résultat publié pour l’instant. Reviens après ta session.</div>';
+  html += '</div>';
+
+  html += '<p class="venue-note">Cette page se met à jour automatiquement : garde-la en favori ou rescanne le QR du circuit à tout moment.</p>';
+  host.innerHTML = venueShell(html);
+  return true;
+}
+
 export async function load() {
-const token = new URLSearchParams(window.location.search).get('result');
-if (!token) return fail();
+const params0 = new URLSearchParams(window.location.search);
+const token = params0.get('result');
+// 31/07 : plus de resultat "brut". Sans ?result=TOKEN, on ne tombe plus en
+// erreur : si un token de circuit (?v=) est present on affiche le selecteur
+// de sessions (QR unique permanent). Sinon seulement, message d'erreur.
+if (!token) {
+  const venueToken = params0.get('v') || params0.get('venue');
+  if (venueToken) { await renderVenuePicker(venueToken); return false; }
+  return fail();
+}
 resultsToken = token;
 rankingCache.clear();
 palmaresCache.clear();
@@ -399,7 +537,8 @@ applyRegistrationNavLink(session);
 // modification supplementaire.
 if (SITE_CIRCUIT_NAME) sessionInfo.circuit_name = SITE_CIRCUIT_NAME;
 
-document.getElementById('circuit-name').textContent = session.circuit_name || 'Circuit de Trinisette';
+document.getElementById('circuit-name').textContent = circuitName();
+document.title = 'Resultats — ' + circuitName();
 document.getElementById('session-label').textContent = session.title || '--';
 document.getElementById('session-date').textContent = fmtSessionDate(session.session_date);
 
@@ -790,9 +929,10 @@ function ensurePdfStyles() {
 .pdfx-head-band{position:relative;padding:16px 24px;background:linear-gradient(120deg,var(--c-accent-glow,rgba(255,42,42,.35)),transparent 65%),var(--c-surface-2);border-bottom:1px solid var(--c-border);display:flex;align-items:center;justify-content:space-between;gap:16px}
 .pdfx-page.landscape .pdfx-head-band{padding:14px 28px}
 .pdfx-head-band::after{content:'';position:absolute;top:8px;right:8px;width:18px;height:18px;border-top:2px solid var(--c-accent);border-right:2px solid var(--c-accent);opacity:.5}
-.pdfx-head-left .pdfx-circuit-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:22px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;transform:skewX(-6deg);transform-origin:left}
-.pdfx-head-left .pdfx-session-lbl{font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-accent);margin-top:2px}
-.pdfx-head-right{text-align:right}
+.pdfx-head-left{min-width:0;flex:1 1 auto;overflow:hidden}
+.pdfx-head-left .pdfx-circuit-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:22px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding-right:.22em;line-height:1.32}
+.pdfx-head-left .pdfx-session-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c-accent);margin-top:2px}
+.pdfx-head-right{text-align:right;flex:0 0 auto;min-width:0;max-width:34%;overflow:hidden}
 .pdfx-head-right .pdfx-date{font-size:11.5px;font-weight:700;letter-spacing:.05em;color:var(--c-muted);text-transform:uppercase}
 .pdfx-head-right .pdfx-count{font-size:10.5px;color:var(--c-muted);margin-top:2px}
 /* 🆕 v19 : logo du circuit dans le bandeau du PDF "Classement complet" — placé entre
@@ -883,9 +1023,10 @@ function ensurePdfStyles() {
 .pdfx-page.landscape .pdfx-rank-head.with-sec,.pdfx-page.landscape .pdfx-rank-row.with-sec{grid-template-columns:24px 26px minmax(108px,1fr) 34px 34px 62px 50px 43px 43px 43px;gap:3px}
 
 /* ---------- Pied de page ---------- */
-.pdfx-sheet-footer{display:flex;justify-content:space-between;align-items:center;padding:9px 24px 14px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
+.pdfx-sheet-footer{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 24px 14px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted)}
 .pdfx-page.landscape .pdfx-sheet-footer{padding:9px 28px 14px}
 .pdfx-sheet-footer b{color:var(--c-text)}
+.pdfx-sheet-footer span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ---------- Bandeau allégé des pages 2+ (classement) ---------- */
 .pdfx-rank-header-mini{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 24px;border-bottom:1px solid var(--c-border)}
@@ -925,7 +1066,7 @@ function ensurePdfStyles() {
    debordement n'est plus atteignable, quel que soit le nom du circuit
    ou le libelle de la session. */
 .pdfx-id-block{min-width:0;flex:1 1 92px}
-.pdfx-pilot-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text);transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.4}
+.pdfx-pilot-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text);transform:skewX(-6deg);transform-origin:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;line-height:1.4;padding-right:.22em}
 .pdfx-id-meta{display:flex;gap:7px;row-gap:3px;margin-top:3px;flex-wrap:wrap}
 .pdfx-id-meta .item{font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap}
 .pdfx-id-meta .item b{color:var(--c-accent);font-size:1.05em}
@@ -938,7 +1079,7 @@ function ensurePdfStyles() {
 .pdfx-summary-row.best .txt .v{color:var(--c-accent)}
 .pdfx-circuit-block{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-width:0;max-width:200px;margin-left:auto}
 .pdfx-circuit-text{text-align:right;min-width:0;overflow:hidden;flex:1 1 auto}
-.pdfx-circuit-block .pdfx-c-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12.5px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pdfx-circuit-block .pdfx-c-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12.5px;text-transform:uppercase;color:var(--c-text);letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding-right:.22em;line-height:1.34}
 .pdfx-circuit-meta{display:flex;flex-direction:column;gap:2px;margin-top:2px;align-items:flex-end;min-width:0}
 .pdfx-circuit-meta .item{display:flex;align-items:center;gap:4px;font-size:8.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--c-muted);white-space:nowrap;min-width:0;max-width:100%}
 .pdfx-circuit-meta .item svg{width:10px;height:10px;stroke:var(--c-accent);flex-shrink:0}
@@ -1164,7 +1305,20 @@ ${secCells}
 // fiche pilote coupait le texte au caractère près sans « … » — cause identique
 // (html2canvas ignore text-overflow), corrigée en ajoutant ces éléments à la
 // liste déjà utilisée pour le nom du pilote.
-const PDFX_FIT_SEL = '.pdfx-pilot-name,.pdfx-p-name,.pdfx-pv-name,.pdfx-rank-row .name,.pdfx-sheet-header-mini .mini-name,.pdfx-rank-header-mini .mini-name,.pdfx-c-name,.pdfx-circuit-meta .item span,.pdfx-summary-row .txt .k,.pdfx-summary-row .txt .v';
+// 31/07 : l'en-tete des PDF (nom du circuit + libelle de session, bande du
+// classement complet ET bloc circuit de la fiche pilote) n'etait PAS dans cette
+// liste — d'ou le texte "un peu mange" signale en prod. Toutes les zones de
+// texte a largeur contrainte y sont desormais, en-tete et pied de page inclus.
+const PDFX_FIT_SEL = [
+  '.pdfx-pilot-name', '.pdfx-p-name', '.pdfx-pv-name', '.pdfx-rank-row .name',
+  '.pdfx-sheet-header-mini .mini-name', '.pdfx-rank-header-mini .mini-name',
+  '.pdfx-c-name', '.pdfx-circuit-meta .item span',
+  '.pdfx-summary-row .txt .k', '.pdfx-summary-row .txt .v',
+  '.pdfx-head-left .pdfx-circuit-name', '.pdfx-head-left .pdfx-session-lbl',
+  '.pdfx-head-right .pdfx-date', '.pdfx-head-right .pdfx-count',
+  '.pdfx-sheet-footer span', '.pdfx-id-meta .item',
+  '.pdfx-sheet-header-mini .mini-tag', '.pdfx-rank-header-mini .mini-tag',
+].join(',');
 function pdfxFitTexts(page) {
   page.querySelectorAll(PDFX_FIT_SEL).forEach(el => {
     const start = parseFloat(getComputedStyle(el).fontSize);
@@ -1271,7 +1425,8 @@ export async function buildFullPDF() {
     const t = themeColors();
     const showSec = sectorsEnabled();
     const results = allResults;
-    const title = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+    const title = escapeHTML(circuitNamePdfHead());
+    const footName = escapeHTML(circuitNamePdfFoot());
     const label = escapeHTML((sessionInfo && sessionInfo.title) || 'Classement');
     const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
     const dateShort = escapeHTML(sessionInfo && sessionInfo.session_date
@@ -1293,7 +1448,7 @@ ${headLogo}
 <div class="pdfx-count">${results.length} pilotes</div>
 </div>
 </div>`;
-    const footer = `<div class="pdfx-sheet-footer"><span>${title} · <b>${date}</b></span><span><b>Trinisette</b> Karting</span></div>`;
+    const footer = `<div class="pdfx-sheet-footer"><span>${footName}</span><span><b>${date}</b></span></div>`;
 
     const remaining = results.slice();
     const pages = [];
@@ -1476,7 +1631,8 @@ export async function buildPilotPDF(pilot) {
     const t = themeColors();
     const showSec = sectorsEnabled();
     const sectorsPresent = showSec ? [0, 1, 2].filter(i => pilot.lapsArr.some(l => l.sectors && Number.isFinite(l.sectors[i]))) : [];
-    const circuitTxt = escapeHTML((sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+    const circuitTxt = escapeHTML(circuitNamePdfHead());
+    const circuitFoot = escapeHTML(circuitNamePdfFoot());
     const sessionTxt = escapeHTML((sessionInfo && sessionInfo.title) || 'Session');
     const dateTxt = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
     const dateShort = escapeHTML(sessionInfo && sessionInfo.session_date
@@ -1533,10 +1689,10 @@ ${palmaresHTML(palmares)}
 </div>
 <div class="pdfx-circuit-logo">${PDF_LOGO_URL
       ? `<img src="${PDF_LOGO_URL}" alt="Logo" crossorigin="anonymous" style="width:100%;height:100%;object-fit:contain;border-radius:inherit;background:var(--c-surface)">`
-      : pdfxInitial((sessionInfo && sessionInfo.circuit_name) || 'Trinisette')}</div>
+      : pdfxInitial(circuitNamePdfHead())}</div>
 </div>
 </div>`;
-    const footer = `<div class="pdfx-sheet-footer"><span>${circuitTxt} · <b>${dateTxt}</b></span><span><b>Trinisette</b> Karting</span></div>`;
+    const footer = `<div class="pdfx-sheet-footer"><span>${circuitFoot}</span><span><b>${dateTxt}</b></span></div>`;
 
     const remaining = pilot.lapsArr.slice();
     const pages = [];
@@ -1941,7 +2097,7 @@ function isoWeekDays(dt) {
    Logo, nom du circuit, adresse, filet, accroche, QR. Strictement
    identique sur les 15 concepts. */
 function cardHeaderHTML(t) {
-  const circuit = escapeHTML(SITE_CIRCUIT_NAME || (sessionInfo && sessionInfo.circuit_name) || 'Circuit de Trinisette');
+  const circuit = escapeHTML(circuitName());
   const tagline = escapeHTML(CARD_TAGLINE || '');
   const address = escapeHTML(CARD_ADDRESS || '');
   const logo = PDF_LOGO_URL
