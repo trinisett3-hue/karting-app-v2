@@ -383,7 +383,15 @@ if (pdfBtn) pdfBtn.addEventListener('click', (e) => { e.stopPropagation(); downl
 function applyRegistrationNavLink(session) {
   const link = document.getElementById('nav-register-link');
   if (!link) return;
-  if (session && session.registration_token) {
+  // 31/07 (correctif navigation) : le jeton de circuit ?v= doit survivre au
+  // changement d'onglet, sinon on retombe sur "register.html" nu (lien mort).
+  // Le circuit prime : avec ?v=, l'onglet Inscription affiche toujours
+  // "Choisis ta session" avec les sessions actives du circuit.
+  const p = new URLSearchParams(window.location.search);
+  const venueToken = p.get('v') || p.get('venue');
+  if (venueToken) {
+    link.href = 'register.html?v=' + encodeURIComponent(venueToken);
+  } else if (session && session.registration_token) {
     link.href = 'register.html?session=' + encodeURIComponent(session.registration_token);
   }
 }
@@ -519,7 +527,7 @@ export async function renderVenuePicker(venueToken) {
   html += '<div class="venue-block"><div class="venue-h">Sessions terminées</div>';
   html += done.length
     ? done.map(s => venueRow(
-        '?result=' + encodeURIComponent(s.results_token),
+        '?result=' + encodeURIComponent(s.results_token) + '&v=' + encodeURIComponent(venueToken),
         'Résultats',
         s.title || 'Session',
         [venueTime(s.starts_at), 'publié à ' + venueTime(s.published_at)].filter(Boolean).join(' · ')
