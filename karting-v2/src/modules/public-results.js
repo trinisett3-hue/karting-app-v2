@@ -498,7 +498,11 @@ export async function renderVenuePicker(venueToken) {
     host.innerHTML = venueShell('<div class="venue-empty">Lien invalide ou circuit introuvable.</div>');
     return false;
   }
-  const open = Array.isArray(data.open_sessions) ? data.open_sessions : [];
+  // 31/07 (correctif) : l'onglet Resultats ne doit montrer QUE les sessions
+  // terminees (resultats publies) — les sessions ouvertes a l'inscription
+  // vivent exclusivement sous l'onglet Inscription (register.html). Les deux
+  // listes etaient melangees sur le meme ecran, ce qui n'avait pas de sens
+  // quand on vient consulter un resultat.
   const done = Array.isArray(data.recent_results) ? data.recent_results : [];
   const venueName = String(data.venue_name || '').trim();
   if (venueName) {
@@ -512,18 +516,7 @@ export async function renderVenuePicker(venueToken) {
   if (lEl) lEl.textContent = 'Accueil';
 
   let html = '';
-  html += '<div class="venue-block"><div class="venue-h">Je m’inscris</div>';
-  html += open.length
-    ? open.map(s => venueRow(
-        'register.html?session=' + encodeURIComponent(s.registration_token),
-        'Ouvert',
-        s.title || 'Session',
-        [venueTime(s.starts_at), s.circuit_name || ''].filter(Boolean).join(' · ')
-      )).join('')
-    : '<div class="venue-empty">Aucune session ouverte a l’inscription pour le moment.</div>';
-  html += '</div>';
-
-  html += '<div class="venue-block"><div class="venue-h">Mes résultats</div>';
+  html += '<div class="venue-block"><div class="venue-h">Sessions terminées</div>';
   html += done.length
     ? done.map(s => venueRow(
         '?result=' + encodeURIComponent(s.results_token),
