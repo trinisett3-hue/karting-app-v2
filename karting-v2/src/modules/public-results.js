@@ -1764,14 +1764,16 @@ function cardBGLayers(t, cid) {
     return out.join('');
   };
   // damier (07-damier-dissous, 08-ligne-arrivee)
-  const checker = (cell, y0, y1, fill, mask) => {
+  const checker = (cell, y0, rows, fillFn) => {
     const out = [];
-    for (let y = y0; y < y1; y += cell) {
-      for (let x = 0; x < 1080; x += cell) {
-        if (((x / cell) + (y / cell)) % 2 === 0) out.push(`<rect x="${x}" y="${y}" width="${cell}" height="${cell}"/>`);
+    const cols = Math.ceil(1080 / cell);
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if ((r + c) % 2 !== 0) continue;
+        out.push(`<rect x="${c * cell}" y="${y0 + r * cell}" width="${cell}" height="${cell}" fill="${fillFn(r, rows)}"/>`);
       }
     }
-    return `<g fill="${fill}"${mask ? ` mask="url(#${mask})"` : ''}>${out.join('')}</g>`;
+    return out.join('');
   };
 
   switch (cid) {
@@ -1803,11 +1805,10 @@ function cardBGLayers(t, cid) {
       push(`<rect x="0" y="430" width="14" height="520" fill="${a(0.8)}"/>`);
       break;
     case '07-damier-dissous':
-      push(`<mask id="dis"><linearGradient id="disg" x1="0" y1="0" x2="0" y2="1"><stop offset="0.14" stop-color="#000"/><stop offset="0.42" stop-color="#fff"/><stop offset="0.78" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient><rect width="1080" height="1920" fill="url(#disg)"/></mask>`);
-      push(checker(68, 340, 1620, cardRGBA(t.text, 0.055), 'dis'));
+      push(checker(68, 340, 19, (r, n) => cardRGBA(t.text, 0.008 + 0.05 * Math.sin(Math.PI * (r / (n - 1))))));
       break;
     case '08-ligne-arrivee':
-      push(checker(60, 1180, 1300, cardRGBA(t.text, 0.16), null));
+      push(checker(60, 1180, 2, () => cardRGBA(t.text, 0.16)));
       push(`<rect x="0" y="1172" width="1080" height="3" fill="${a(0.6)}"/>`);
       push(`<rect x="0" y="1300" width="1080" height="3" fill="${a(0.6)}"/>`);
       break;
