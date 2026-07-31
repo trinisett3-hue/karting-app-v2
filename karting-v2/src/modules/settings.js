@@ -114,7 +114,11 @@ state.prefs.sector_count = Number(state.prefs.sector_count || 3);
 // affiche partout (voir commentaire au-dessus de renderLogoPreview plus bas et
 // public-results.js > initTheme()).
 state.prefs.date_format = state.prefs.date_format === 'mdy' ? 'mdy' : 'dmy';
-state.prefs.circuit_name = state.prefs.circuit_name || '';
+state.prefs.circuit_name = String(state.prefs.circuit_name || '').slice(0, CIRCUIT_NAME_MAX);
+// Deux noms dedies aux exports PDF (31/07). Vides = on retombe sur circuit_name
+// cote public-results.js, donc aucune migration ni valeur par defaut a poser.
+state.prefs.circuit_name_pdf_header = String(state.prefs.circuit_name_pdf_header || '').slice(0, CIRCUIT_HEAD_MAX);
+state.prefs.circuit_name_pdf_footer = String(state.prefs.circuit_name_pdf_footer || '').slice(0, CIRCUIT_FOOT_MAX);
 state.prefs.results_theme = state.prefs.results_theme || 'classic';
 state.prefs.avatar_mode = state.prefs.avatar_mode || 'kart';
 state.prefs.avatar_pack = state.prefs.avatar_pack || 'classic';
@@ -154,6 +158,12 @@ const dateFmtEl = document.getElementById('pref-date-format');
 if (dateFmtEl) dateFmtEl.value = state.prefs.date_format || 'dmy';
 const circuitNameEl = document.getElementById('pref-circuit-name');
 if (circuitNameEl) circuitNameEl.value = state.prefs.circuit_name || '';
+const circuitHeadEl = document.getElementById('pref-circuit-name-pdf-header');
+if (circuitHeadEl) circuitHeadEl.value = state.prefs.circuit_name_pdf_header || '';
+const circuitFootEl = document.getElementById('pref-circuit-name-pdf-footer');
+if (circuitFootEl) circuitFootEl.value = state.prefs.circuit_name_pdf_footer || '';
+updateCircuitCounts();
+loadVenueLink();
 document.getElementById('pref-laps-enabled').checked = state.prefs.laps_enabled;
 document.getElementById('pref-karts-locked').checked = state.prefs.karts_locked;
 toggleLapsField();
@@ -895,7 +905,9 @@ default_karts: karts,
 default_laps: laps,
 time_unit: unit,
 date_format: document.getElementById('pref-date-format')?.value === 'mdy' ? 'mdy' : 'dmy',
-circuit_name: (document.getElementById('pref-circuit-name')?.value || '').trim().slice(0, 60),
+circuit_name: (document.getElementById('pref-circuit-name')?.value || '').trim().slice(0, CIRCUIT_NAME_MAX),
+circuit_name_pdf_header: (document.getElementById('pref-circuit-name-pdf-header')?.value || '').trim().slice(0, CIRCUIT_HEAD_MAX),
+circuit_name_pdf_footer: (document.getElementById('pref-circuit-name-pdf-footer')?.value || '').trim().slice(0, CIRCUIT_FOOT_MAX),
 laps_enabled: lapsEnabled,
 karts_locked: kartsLocked,
 kart_numbers: state.prefs.kart_numbers || [],
@@ -979,6 +991,33 @@ sel.value = cur;
 //                 est declenche par le serveur des qu'un chrono bat la reference, jamais
 //                 a la main. Un pilote qui bat plusieurs records recoit plusieurs cartes,
 //                 toujours accompagnees de sa carte de position.
+
+/* Limites de caracteres des noms de circuit (31/07).
+   CIRCUIT_NAME_MAX : nom affiche partout (web, cartes, apercus).
+   CIRCUIT_HEAD_MAX : en-tete PDF. La zone la plus etroite est le bloc circuit de
+   la FICHE PILOTE (200px de large a 12.5px) : au-dela de ~28 caracteres la police
+   se reduit. On borne donc la saisie plutot que de laisser rapetisser.
+   CIRCUIT_FOOT_MAX : pied de page PDF, pleine largeur, donc plus permissif. */
+export const CIRCUIT_NAME_MAX = 40;
+export const CIRCUIT_HEAD_MAX = 28;
+export const CIRCUIT_FOOT_MAX = 60;
+
+// Compteurs "x / max" sous les trois champs, meme principe que updateTaglineCount().
+export function updateCircuitCounts() {
+  const pairs = [
+    ['pref-circuit-name', 'pref-circuit-name-count', CIRCUIT_NAME_MAX],
+    ['pref-circuit-name-pdf-header', 'pref-circuit-name-pdf-header-count', CIRCUIT_HEAD_MAX],
+    ['pref-circuit-name-pdf-footer', 'pref-circuit-name-pdf-footer-count', CIRCUIT_FOOT_MAX],
+  ];
+  pairs.forEach(([inputId, outId, max]) => {
+    const inp = document.getElementById(inputId);
+    const out = document.getElementById(outId);
+    if (!inp || !out) return;
+    const len = (inp.value || '').length;
+    out.textContent = len + ' / ' + max;
+    out.style.color = len >= max ? 'var(--acc)' : 'var(--mut)';
+  });
+}
 
 export const CARD_TAGLINE_MAX = 46;   // 642 px utiles / ~14 px par glyphe Mono 20 px
 export const CARD_POSITION_MAX = 5;
@@ -1077,6 +1116,62 @@ export function updateTaglineCount() {
 const el = document.getElementById('pref-card-tagline');
 const out = document.getElementById('tagline-count');
 if (el && out) out.textContent = String(el.value.length);
+}
+
+// =====================================================================================
+// QR UNIQUE DU CIRCUIT (31/07)
+// =====================================================================================
+// Les deux QR par session (inscription + resultats) ont ete retires de l'onglet
+// Sessions : ils obligeaient a reimprimer un QR a chaque course. A la place, un
+// seul QR permanent par circuit, base sur tenants.public_venue_token, qui pointe
+// vers results.html?v=<token>. Cette page liste d'elle-meme les sessions ouvertes
+// et les resultats publies (RPC public_venue_sessions).
+let _venueLinkCache = null;
+
+export async function loadVenueLink() {
+  const input = document.getElementById('venue-link');
+  const box = document.getElementById('venue-qr');
+  if (!input && !box) return '';
+  let url = _venueLinkCache;
+  if (!url) {
+    const { data, error } = await db.from('tenants').select('public_venue_token').limit(1).maybeSingle();
+    if (error || !data || !data.public_venue_token) {
+      if (input) input.value = '';
+      if (box) box.innerHTML = '';
+      return '';
+    }
+    url = window.location.origin + '/results?v=' + data.public_venue_token;
+    _venueLinkCache = url;
+  }
+  if (input) input.value = url;
+  if (box) {
+    try { box.innerHTML = qrSVG(url); } catch (e) { box.innerHTML = ''; }
+  }
+  return url;
+}
+
+export async function copyVenueLink() {
+  const url = document.getElementById('venue-link')?.value || await loadVenueLink();
+  if (!url) return;
+  try {
+    await navigator.clipboard.writeText(url);
+    const el = document.getElementById('venue-link');
+    if (el) { const old = el.value; el.value = 'Lien copie !'; setTimeout(() => { el.value = old; }, 1200); }
+  } catch (e) { /* presse-papiers indisponible : le champ reste selectionnable */ }
+}
+
+export async function downloadVenueQR() {
+  const box = document.getElementById('venue-qr');
+  const svg = box && box.querySelector('svg');
+  if (!svg) return;
+  const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'qr-circuit.svg';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
 }
 
 // QR genere localement (module qr.js) : aucun appel a un service tiers, donc l'URL du
