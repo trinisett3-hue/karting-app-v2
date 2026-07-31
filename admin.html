@@ -377,6 +377,7 @@ updateThemeToggleUI();
 <option value="entrainement">Entrainement</option>
 </select>
 </div>
+<button class="btn btn-ghost btn-sm" onclick="copyLink('reg')" style="align-self:flex-end">Copier le lien d'inscription</button>
 <button class="btn btn-primary btn-sm" id="det-save-btn" style="display:none;align-self:flex-end" onclick="saveDetailMeta()">Enregistrer</button>
 </div>
 <div class="field" style="margin-top:10px">
@@ -385,12 +386,10 @@ updateThemeToggleUI();
 </div>
 </div>
 
-<div style="display:grid;grid-template-columns:auto minmax(0,0.6fr) minmax(0,2fr);gap:12px;align-items:stretch;min-width:0">
-<div class="qr-card">
-<div class="qr-lbl">QR Inscription</div>
-<div class="qr-wrap" onclick="zoomQR('reg')" id="qr-reg-wrap"></div>
-<button class="btn btn-ghost btn-sm" onclick="copyLink('reg')">Copier le lien</button>
-</div>
+<!-- QR par session retires le 31/07 : un QR unique et permanent (page circuit)
+     pointe desormais vers la liste des sessions ouvertes et des resultats
+     publies, qui s'actualise toute seule. Les liens restent copiables. -->
+<div style="display:grid;grid-template-columns:minmax(0,0.6fr) minmax(0,2fr);gap:12px;align-items:stretch;min-width:0">
 <div class="card" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;padding:12px 8px">
 <div class="ctitle" style="margin:0;font-size:10px">Occupation</div>
 <div style="font-size:22px;font-weight:900" id="det-occ-main">--/--</div>
@@ -465,22 +464,18 @@ updateThemeToggleUI();
 <div class="g3" id="stats-session-grid"></div>
 </div>
 
-<div class="g2">
+<div>
 <div class="card">
 <div class="ctitle">Classement</div>
 <div id="ranking-preview"><div class="empty">Importe les chronos.</div></div>
 <div class="flex" style="margin-top:14px">
 <button class="btn btn-yel btn-sm" onclick="publishResults()">Publier</button>
 <button class="btn btn-ghost btn-sm" onclick="copyLink('res')">Copier lien</button>
+<button class="btn btn-ghost btn-sm" onclick="togglePres()">Mode presentation</button>
 <button class="btn btn-ghost btn-sm" onclick="exportActiveCSV()">Exporter CSV</button>
 <button class="btn btn-ghost btn-sm" id="btn-pdf-active" onclick="exportActivePDF(this)">Exporter PDF</button>
 </div>
 <div class="msg" id="msg-res"></div>
-</div>
-<div class="qr-card">
-<div class="qr-lbl">QR Resultats</div>
-<div class="qr-wrap" onclick="zoomQR('res')" id="qr-res-wrap"></div>
-<button class="btn btn-ghost btn-sm" onclick="togglePres()">Mode presentation</button>
 </div>
 </div>
 <div class="card" style="margin-top:8px">
@@ -730,11 +725,52 @@ updateThemeToggleUI();
 <div style="font-size:11px;color:var(--mut);margin-bottom:14px">Ces informations s'affichent sur la page publique de resultats et dans les exports PDF.</div>
 <div class="field">
 <label>Nom du circuit</label>
-<input type="text" id="pref-circuit-name" maxlength="60" placeholder="Ex: Circuit de Trinisette" oninput="markPrefsDirty()"/>
+<input type="text" id="pref-circuit-name" maxlength="40" placeholder="Ex: Circuit du Val de Loire" oninput="markPrefsDirty();updateCircuitCounts()"/>
+<div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:10px;color:var(--mut)">
+<span>Affiche sur la page publique de resultats, les cartes partageables et les apercus.</span>
+<span id="pref-circuit-name-count" style="white-space:nowrap">0 / 40</span>
+</div>
 <!-- Nouveau champ (refonte 30/07) : aucun equivalent ecrivable n'existait jusqu'ici, le
      nom du circuit n'etait lu que depuis sessions.circuit_name par session (voir
      public-results.js). Le branchement de savePrefs()/loadPrefs() vers app_settings
      reste a faire cote back — voir le rapport de refonte. -->
+</div>
+
+<!-- 31/07 : deux noms dedies au rendu PDF. Laisser vide = le PDF reprend
+     simplement "Nom du circuit" ci-dessus. -->
+<div class="field" style="margin-top:12px">
+<label>Nom du circuit sur l'en-tete (PDF)</label>
+<input type="text" id="pref-circuit-name-pdf-header" maxlength="28" placeholder="Laisser vide = identique au nom du circuit" oninput="markPrefsDirty();updateCircuitCounts()"/>
+<div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:10px;color:var(--mut)">
+<span>Zone etroite sur la fiche pilote : version courte recommandee.</span>
+<span id="pref-circuit-name-pdf-header-count" style="white-space:nowrap">0 / 28</span>
+</div>
+</div>
+<div class="field" style="margin-top:12px">
+<label>Nom du circuit en bas de page (PDF)</label>
+<input type="text" id="pref-circuit-name-pdf-footer" maxlength="60" placeholder="Laisser vide = identique au nom du circuit" oninput="markPrefsDirty();updateCircuitCounts()"/>
+<div style="display:flex;justify-content:space-between;gap:8px;margin-top:4px;font-size:10px;color:var(--mut)">
+<span>Pied de page des deux exports PDF (fiche pilote et classement complet).</span>
+<span id="pref-circuit-name-pdf-footer-count" style="white-space:nowrap">0 / 60</span>
+</div>
+</div>
+<!-- 31/07 : remplace les deux QR par session (inscription + resultats) qui ont
+     ete supprimes de l'onglet Sessions. Un seul QR permanent, a imprimer une
+     fois et a afficher a l'accueil : la page pointee se met a jour toute seule
+     avec les sessions ouvertes et les resultats publies. -->
+<div style="margin:18px 0;padding:16px 0;border-top:1px solid var(--bord)">
+<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">QR unique du circuit (permanent)</div>
+<div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+<div id="venue-qr" style="width:150px;height:150px;background:#fff;border-radius:10px;padding:8px;display:flex;align-items:center;justify-content:center"></div>
+<div style="flex:1 1 240px;min-width:0">
+<div style="font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:8px">Ce QR ne change jamais. Imprime-le une seule fois : les pilotes y retrouvent les sessions ouvertes du jour et les resultats publies, sans que tu aies rien a refaire a chaque session.</div>
+<input type="text" id="venue-link" readonly style="width:100%;font-size:11px" value=""/>
+<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+<button class="btn btn-ghost btn-sm" onclick="copyVenueLink()">Copier le lien</button>
+<button class="btn btn-ghost btn-sm" onclick="downloadVenueQR()">Telecharger le QR</button>
+</div>
+</div>
+</div>
 </div>
 <div style="margin:18px 0;padding:16px 0;border-top:1px solid var(--bord);border-bottom:1px solid var(--bord)">
 <div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Logo du circuit</div>
