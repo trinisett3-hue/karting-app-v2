@@ -217,6 +217,12 @@ async function loadRegistrationConfig(token) {
 }
 
 function applyCircuitBranding(cfg) {
+  // 31/07 : le nom du circuit etait ecrit en dur dans les 4 en-tetes de cette
+  // page. Il vient desormais TOUJOURS de Parametres > Identite du circuit
+  // (app_settings.circuit_name, relaye par public_registration_config).
+  const circuitName = String(cfg && cfg.circuit_name || '').trim() || 'Karting';
+  document.querySelectorAll('.js-circuit-name').forEach(el => { el.textContent = circuitName; });
+  document.title = 'Inscription — ' + circuitName;
   const wrap = document.getElementById('circuit-logo-wrap');
   if (wrap) {
     wrap.innerHTML = cfg.logo_url
@@ -258,12 +264,106 @@ function applyResultsNavLink(cfg) {
   }
 }
 
+/* ---------------------------------------------------------------------------
+   SELECTEUR DE SESSION (31/07)
+   Le staff peut ouvrir plusieurs sessions en meme temps, et il n'y a plus
+   qu'un seul QR permanent pour le circuit (?v=<public_venue_token>) : le
+   pilote doit donc pouvoir CHOISIR sa session. Les sessions ouvertes du jour
+   viennent du RPC public_venue_sessions (SECURITY DEFINER, rien de nominatif).
+   - ?session=TOKEN seul  -> comportement historique inchange (lien direct).
+   - ?v=TOKEN             -> liste deroulante des sessions ouvertes.
+   - les deux             -> session pre-selectionnee + possibilite d'en changer.
+   -------------------------------------------------------------------------- */
+const SESSION_PICKER_CSS = `<style id="sess-pick-css">
+.sess-pick{margin:14px 0 18px;text-align:left}
+.sess-pick label{display:block;font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin:0 0 7px}
+.sess-pick select{width:100%;padding:14px 16px;font:inherit;font-size:16px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:inherit;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;background-size:20px;padding-right:44px}
+.sess-pick select:focus{outline:none;border-color:var(--acc,#ffb238)}
+.sess-pick .hint{margin:7px 0 0;font-size:12.5px;opacity:.5}
+</style>`;
+
+async function loadOpenSessions(venueToken) {
+  try {
+    const { data, error } = await db.rpc('public_venue_sessions', { _venue_token: venueToken });
+    if (error || !data) return [];
+    return Array.isArray(data.open_sessions) ? data.open_sessions : [];
+  } catch (e) { return []; }
+}
+
+function sessionPickerTime(iso) {
+  if (!iso) return '';
+  try { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
+  catch (e) { return ''; }
+}
+
+function renderSessionPicker(list, currentToken, venueToken) {
+  const host = document.getElementById('screen-0');
+  const anchorEl = document.getElementById('session-name');
+  if (!host || !anchorEl) return;
+  let box = document.getElementById('sess-pick');
+  if (!box) {
+    if (!document.getElementById('sess-pick-css')) {
+      document.head.insertAdjacentHTML('beforeend', SESSION_PICKER_CSS);
+    }
+    box = document.createElement('div');
+    box.className = 'sess-pick';
+    box.id = 'sess-pick';
+    anchorEl.insertAdjacentElement('afterend', box);
+  }
+  const opts = list.map(s => {
+    const t = String(s.registration_token || '');
+    const lbl = [sessionPickerTime(s.starts_at), s.title || 'Session'].filter(Boolean).join(' — ');
+    return `<option value="${t}"${t === currentToken ? ' selected' : ''}>${lbl}</option>`;
+  }).join('');
+  box.innerHTML = `<label for="sess-pick-sel">Choisis ta session</label>
+<select id="sess-pick-sel">${currentToken ? '' : '<option value="">— Sélectionne —</option>'}${opts}</select>
+<p class="hint">${list.length} session${list.length > 1 ? 's' : ''} ouverte${list.length > 1 ? 's' : ''} aujourd’hui.</p>`;
+  const sel = document.getElementById('sess-pick-sel');
+  sel.addEventListener('change', () => {
+    const v = sel.value;
+    if (!v) return;
+    const q = '?session=' + encodeURIComponent(v) + (venueToken ? '&v=' + encodeURIComponent(venueToken) : '');
+    window.location.href = 'register.html' + q;
+  });
+}
+
+function hideChoiceButtons(hide) {
+  document.querySelectorAll('#screen-0 .choice-btn').forEach(b => {
+    b.style.display = hide ? 'none' : '';
+  });
+}
+
 export async function initRegisterPage() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('session');
+  const venueToken = params.get('v') || params.get('venue');
+
   if (!token) {
+    // Sans lien direct : on n'affiche plus "Lien invalide" si on connait le
+    // circuit — on propose la liste des sessions ouvertes.
+    if (venueToken) {
+      const list = await loadOpenSessions(venueToken);
+      if (list.length === 1) {
+        const q = '?session=' + encodeURIComponent(list[0].registration_token) + '&v=' + encodeURIComponent(venueToken);
+        window.location.replace('register.html' + q);
+        return;
+      }
+      hideChoiceButtons(true);
+      if (list.length) {
+        document.getElementById('session-name').textContent = 'Plusieurs sessions sont ouvertes';
+        renderSessionPicker(list, '', venueToken);
+      } else {
+        document.getElementById('session-name').textContent = 'Aucune session ouverte pour le moment';
+      }
+      return;
+    }
     document.getElementById('session-name').textContent = 'Lien invalide';
     return;
+  }
+  if (venueToken) {
+    loadOpenSessions(venueToken).then(list => {
+      if (list.length > 1) renderSessionPicker(list, token, venueToken);
+    });
   }
   regState.registrationToken = token;
   // Plus de lecture directe de public.sessions avec la cle anon : id et titre
