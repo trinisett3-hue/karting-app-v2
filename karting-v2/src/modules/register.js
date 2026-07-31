@@ -275,11 +275,46 @@ function applyCircuitBranding(cfg) {
 // que d'être masqué : le visiteur peut toujours cliquer et voir un message
 // "aucun résultat" cohérent, moins déroutant qu'un lien qui disparaît.
 function applyResultsNavLink(cfg) {
+  // 31/07 (correctif navigation) : le jeton de circuit ?v= etait perdu au
+  // changement d'onglet — on atterrissait sur "results.html" nu, sans aucune
+  // information. Le circuit prime desormais sur la session : tant qu'on
+  // connait ?v=, l'onglet Resultats renvoie vers le selecteur de sessions
+  // terminees du circuit (meme lien, contenu qui se met a jour tout seul).
+  const p = new URLSearchParams(window.location.search);
+  const venueToken = p.get('v') || p.get('venue');
+  let href = 'results.html';
+  if (venueToken) href = 'results.html?v=' + encodeURIComponent(venueToken);
+  else if (cfg && cfg.results_token) href = 'results.html?result=' + encodeURIComponent(cfg.results_token);
   const link = document.getElementById('nav-results-link');
-  if (!link) return;
-  if (cfg && cfg.results_token) {
-    link.href = 'results.html?result=' + encodeURIComponent(cfg.results_token);
+  if (link) link.href = href;
+  renderVenueTabs(href);
+}
+
+// La pilule flottante Inscription/Resultats chevauchait le titre : on la
+// remplace par des onglets integres a l'entete, identiques a ceux de la page
+// resultats (meme design, meme contrat de lien).
+function renderVenueTabs(resultsHref) {
+  const floatSwitch = document.querySelector('.page-switch');
+  if (floatSwitch) floatSwitch.remove();
+  const anchor = document.querySelector('#screen-0 .subtitle');
+  if (!anchor) return;
+  if (!document.getElementById('venue-tabs-css')) {
+    document.head.insertAdjacentHTML('beforeend', `<style id="venue-tabs-css">
+.venue-tabs{display:flex;gap:8px;justify-content:center;margin:16px 0 4px;padding-top:14px;border-top:1px solid rgba(255,255,255,.12)}
+.venue-tabs a,.venue-tabs span{padding:8px 20px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
+.venue-tabs a{background:rgba(255,255,255,.05);color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.1)}
+.venue-tabs a:hover{color:#fff}
+.venue-tabs span{background:var(--acc,#ffb238);color:#0b0b0f}
+</style>`);
   }
+  let tabs = document.getElementById('venue-tabs');
+  if (!tabs) {
+    tabs = document.createElement('div');
+    tabs.id = 'venue-tabs';
+    tabs.className = 'venue-tabs';
+    anchor.insertAdjacentElement('afterend', tabs);
+  }
+  tabs.innerHTML = '<span>Inscription</span><a href="' + resultsHref + '" id="nav-results-link">Résultats</a>';
 }
 
 /* ---------------------------------------------------------------------------
@@ -361,18 +396,17 @@ export async function initRegisterPage() {
   const params = new URLSearchParams(window.location.search);
   const token = params.get('session');
   const venueToken = params.get('v') || params.get('venue');
+  applyResultsNavLink(null);
 
   if (!token) {
     // Sans lien direct : on n'affiche plus "Lien invalide" si on connait le
     // circuit — on propose la liste des sessions ouvertes, sur le meme ecran
     // que le choix Premiere fois / Deja pilote (boutons desactives en attendant).
     if (venueToken) {
+      // 31/07 : plus de redirection automatique quand une seule session est
+      // ouverte — l'ecran "Choisis ta session" doit TOUJOURS s'afficher et
+      // l'URL doit rester ?v=<circuit> (un seul lien, contenu evolutif).
       const list = await loadOpenSessions(venueToken);
-      if (list.length === 1) {
-        const q = '?session=' + encodeURIComponent(list[0].registration_token) + '&v=' + encodeURIComponent(venueToken);
-        window.location.replace('register.html' + q);
-        return;
-      }
       disableChoiceButtons(true);
       if (list.length) {
         document.getElementById('session-name').textContent = 'Choisis ta session';
