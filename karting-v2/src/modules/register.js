@@ -335,10 +335,20 @@ const SESSION_PICKER_CSS = `<style id="sess-pick-css">
 .sess-pick .hint{margin:7px 0 0;font-size:12.5px;opacity:.5}
 </style>`;
 
+// 31/07 : on memorise aussi le nom du circuit renvoye par le RPC — sur
+// l'ecran "Choisis ta session" aucune session n'est encore selectionnee, donc
+// public_registration_config() n'a pas ete appele et l'entete affichait
+// "KARTING" tout court au lieu du nom du circuit.
+let lastVenueName = '';
 async function loadOpenSessions(venueToken) {
   try {
     const { data, error } = await db.rpc('public_venue_sessions', { _venue_token: venueToken });
     if (error || !data) return [];
+    lastVenueName = String(data.venue_name || '').trim();
+    if (lastVenueName) {
+      document.querySelectorAll('.js-circuit-name').forEach(el => { el.textContent = lastVenueName; });
+      document.title = 'Inscription — ' + lastVenueName;
+    }
     return Array.isArray(data.open_sessions) ? data.open_sessions : [];
   } catch (e) { return []; }
 }
