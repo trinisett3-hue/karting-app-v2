@@ -1730,43 +1730,42 @@ function cardRGBA(cssColor, alpha) {
 function cardBackgroundDataURI(t) {
   const a = (o) => cardRGBA(t.accent, o);
   const stripes = [];
-  for (let i = 0, y = -640; y < 2560; i++, y += 270) {
-    const o1 = (i % 3 === 0) ? 0.16 : (i % 3 === 1 ? 0.10 : 0.07);
-    stripes.push(`<rect x="-560" y="${y}" width="2200" height="15" fill="${a(o1)}"/>`);
-    stripes.push(`<rect x="-560" y="${y + 88}" width="2200" height="9" fill="${a(o1 * 0.55)}"/>`);
+  for (let y = -900; y < 2900; y += 275) {
+    stripes.push(`<rect x="-700" y="${y}" width="2500" height="14" fill="${a(0.16)}"/>`);
+    stripes.push(`<rect x="-700" y="${y + 92}" width="2500" height="9" fill="${a(0.12)}"/>`);
   }
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">` +
     `<defs>` +
-    `<linearGradient id="b" x1="0" y1="0" x2="0.25" y2="1">` +
+    `<linearGradient id="b" x1="0" y1="0" x2="0.18" y2="1">` +
     `<stop offset="0" stop-color="${t.surface}"/>` +
-    `<stop offset="0.38" stop-color="${cardRGBA(t.surface, 0.75)}"/>` +
-    `<stop offset="1" stop-color="${cardRGBA(t.bg, 1)}"/>` +
+    `<stop offset="0.3" stop-color="${t.bg}"/>` +
+    `<stop offset="1" stop-color="${t.bg}"/>` +
     `</linearGradient>` +
-    `<radialGradient id="gc" cx="0.5" cy="0.5" r="0.62">` +
-    `<stop offset="0" stop-color="${a(0.06)}"/><stop offset="1" stop-color="${a(0)}"/>` +
-    `</radialGradient>` +
-    `<radialGradient id="gb" cx="0.3" cy="1" r="0.72">` +
+    `<linearGradient id="warm" x1="0" y1="0" x2="0" y2="1">` +
+    `<stop offset="0.58" stop-color="${a(0)}"/>` +
+    `<stop offset="0.8" stop-color="${a(0.04)}"/>` +
+    `<stop offset="1" stop-color="${a(0.12)}"/>` +
+    `</linearGradient>` +
+    `<radialGradient id="gtl" cx="0" cy="0" r="0.42">` +
     `<stop offset="0" stop-color="${a(0.07)}"/><stop offset="1" stop-color="${a(0)}"/>` +
     `</radialGradient>` +
-    `<radialGradient id="gt" cx="0.12" cy="0.02" r="0.55">` +
-    `<stop offset="0" stop-color="${a(0.035)}"/><stop offset="1" stop-color="${a(0)}"/>` +
+    `<radialGradient id="gtr" cx="1" cy="0.03" r="0.42">` +
+    `<stop offset="0" stop-color="rgba(90,120,255,0.05)"/><stop offset="1" stop-color="rgba(90,120,255,0)"/>` +
     `</radialGradient>` +
-    `<radialGradient id="v" cx="0.5" cy="0.46" r="0.8">` +
-    `<stop offset="0.5" stop-color="rgba(0,0,0,0)"/><stop offset="1" stop-color="rgba(0,0,0,0.6)"/>` +
+    `<radialGradient id="gc" cx="0.5" cy="0.44" r="0.28">` +
+    `<stop offset="0" stop-color="${a(0.05)}"/><stop offset="1" stop-color="${a(0)}"/>` +
     `</radialGradient>` +
     `</defs>` +
     `<rect width="1080" height="1920" fill="${t.bg}"/>` +
-    `<rect width="1080" height="1920" fill="url(#b)"/>` +
-    `<g transform="rotate(-10.8 540 960)">${stripes.join('')}</g>` +
+        `<g transform="rotate(-15.5 540 960)">${stripes.join('')}</g>` +
+    `<rect width="1080" height="1920" fill="url(#gtl)"/>` +
+    `<rect width="1080" height="1920" fill="url(#gtr)"/>` +
     `<rect width="1080" height="1920" fill="url(#gc)"/>` +
-    `<rect width="1080" height="1920" fill="url(#gb)"/>` +
-    `<rect width="1080" height="1920" fill="url(#gt)"/>` +
-    `<rect width="1080" height="1920" fill="url(#v)"/>` +
+    `<rect width="1080" height="1920" fill="url(#warm)"/>` +
     `</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
-
 function cardBackgroundHTML(t) {
   return `<img src="${cardBackgroundDataURI(t)}" alt="" style="position:absolute;left:0;top:0;width:1080px;height:1920px;display:block">`;
 }
@@ -1948,7 +1947,7 @@ const POSITION_BODIES = {
   '01-track-hero': (t, pilot, ctx) => `
     <div style="font:400 21px ${CARD_MONO};letter-spacing:.32em;color:${t.muted}">POSITION FINALE</div>
     <div style="font:700 320px ${CARD_NUM};line-height:.82;color:${t.accent};margin-top:20px">P${ctx.pos}</div>
-    <div style="font:700 168px ${CARD_NUM};line-height:.9;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.3em;color:${t.muted}">s</span></div>
+    <div style="font:700 152px ${CARD_NUM};line-height:.9;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.3em;color:${t.muted}">s</span></div>
     <div style="font:400 20px ${CARD_MONO};letter-spacing:.28em;color:${t.muted};margin-top:24px">MEILLEUR TOUR</div>`,
 
   '02-avatar-central': (t, pilot, ctx) => `
@@ -2170,7 +2169,7 @@ function recordDelta(t, ctx, bigSize) {
     ? `<div style="display:flex;align-items:flex-end;gap:64px;margin-top:52px">
          <div style="display:flex;flex-direction:column;align-items:center">
            <div style="font:400 20px ${CARD_MONO};letter-spacing:.28em;color:${t.muted};margin-bottom:14px">AVANT</div>
-           <div style="position:relative;font:700 ${Math.round(big * 0.82)}px ${CARD_NUM};line-height:.8;color:${t.muted}">${ctx.prevTime}<span style="font-size:.36em">s</span><div style="position:absolute;left:0;right:${Math.round(big * 0.34)}px;top:60%;height:4px;background:${t.muted};opacity:.9"></div></div>
+           <div style="position:relative;font:700 ${Math.round(big * 0.82)}px ${CARD_NUM};line-height:.8;color:${t.muted}">${ctx.prevTime}<span style="font-size:.36em">s</span></div>
          </div>
          <div style="font:400 44px ${CARD_MONO};color:${t.muted};padding-bottom:16px">&rarr;</div>
          <div style="display:flex;flex-direction:column;align-items:center">
