@@ -1811,7 +1811,23 @@ function cardBGLayers(t, cid) {
       push(`<rect x="0" y="646" width="1080" height="2" fill="${a(0.45)}"/>`);
       push(`<rect x="0" y="1260" width="1080" height="2" fill="${a(0.45)}"/>`);
       break;
-    // 03, 04, 06, 08, 09, 10, 12r, 13r : fond neutre (references pixel 31/07).
+    case '04-split-diagonal': {
+      // Reference : filet or du bord gauche (y 1538) au bord droit (y 677),
+      // et damier FIN remplissant le triangle inferieur droit.
+      const cell = 30, out = [];
+      const yAt = (x) => 1538 + (677 - 1538) * (x / 1080);
+      for (let y = 0; y < 1920; y += cell) {
+        for (let x = 0; x < 1080; x += cell) {
+          if (((x / cell) + (y / cell)) % 2 !== 0) continue;
+          if (y + cell < yAt(x + cell)) continue;
+          out.push(`<rect x="${x}" y="${y}" width="${cell}" height="${cell}" fill="${cardRGBA(t.text, 0.05)}"/>`);
+        }
+      }
+      push(out.join(''));
+      push(`<polygon points="0,1538 1080,677 1080,681 0,1542" fill="${a(0.55)}"/>`);
+      break;
+    }
+    // 03, 06, 08, 09, 10, 12r, 13r : fond neutre (references pixel 31/07).
     default:
       break;
   }
@@ -2062,10 +2078,8 @@ const POSITION_BODIES = {
     <div style="position:relative;width:100%;height:100%">
       <div style="position:absolute;left:0;top:40px;font:400 20px ${CARD_MONO};letter-spacing:.3em;color:${t.muted}">POSITION</div>
       <div style="position:absolute;left:0;top:78px;font:700 220px ${CARD_NUM};line-height:.85;color:${t.accent}">P${ctx.pos}</div>
-      <div style="position:absolute;right:0;bottom:0;width:62%;height:58%;${cardCheckerBG(t, .12)}"></div>
-      <div style="position:absolute;left:-4%;bottom:16%;width:118%;height:2px;background:${t.accent};transform:rotate(-24deg);transform-origin:left center"></div>
       <div style="position:absolute;right:0;bottom:132px;text-align:right;font:400 18px ${CARD_MONO};letter-spacing:.22em;color:${t.muted}">MEILLEUR TOUR &middot; ${ctx.laps} TOURS</div>
-      <div style="position:absolute;right:0;bottom:52px;font:700 96px ${CARD_NUM};color:${t.text}">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
+      <div style="position:absolute;right:0;bottom:52px;text-align:right;font:700 96px ${CARD_NUM};color:${t.text}">${ctx.time}<span style="font-size:.36em;color:${t.muted}">s</span></div>
     </div>`,
 
   // Deux colonnes : chrono a gauche, releve des tours reels a droite, le
@@ -2109,7 +2123,6 @@ const POSITION_BODIES = {
 
   '07-damier-dissous': (t, pilot, ctx) => `
     <div style="position:relative;width:100%;display:flex;flex-direction:column;align-items:center">
-      <div style="position:absolute;inset:-60px 0 auto 0;height:340px;${cardCheckerBG(t, .10)}"></div>
       <div style="font:700 20px ${CARD_MONO};letter-spacing:.3em;color:${t.muted};position:relative">MEILLEUR TOUR</div>
       <div style="font:800 220px ${CARD_NUM};color:${t.text};line-height:.85;margin-top:14px;position:relative">${ctx.time}</div>
       <div style="font:400 22px ${CARD_MONO};letter-spacing:.3em;color:${t.muted};margin-top:16px;position:relative">SECONDES</div>
