@@ -1,6 +1,6 @@
 // Module de la page publique de résultats (results.html) — accès par QR code / lien,
 // sans auth. Reprend à l'identique la logique de l'ancien results.html monofichier :
-// résolution de session par public_results_token, classement (temps total), podium, 
+// résolution de session par public_results_token, classement (temps total), podium,
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
 // Chargement paresseux (30/07, audit du 28/07 section 1.2) : kart-avatar.js
@@ -1735,6 +1735,14 @@ function cardRGBA(cssColor, alpha) {
 // La couleur vient toujours du theme : accent + surfaces, rien n'est code en dur.
 
 function cardBGLayers(t, cid) {
+  // Fonds par concept, cales sur les JPG de reference (pack pro-signature).
+  // Verification pixel du 31/07 : la majorite des visuels ont un fond NEUTRE,
+  // toute la structure visible (regles or, damier, tuiles, calendrier, bloc
+  // accent, filigrane du numero de kart) appartient au CORPS de la carte et
+  // est deja rendue par POSITION_BODIES / RECORD_BODIES. Les motifs de fond
+  // ajoutes le 31/07 pour 03, 04, 06, 08, 09, 10, 12r et 13r etaient des
+  // inventions : ils sont supprimes. Seuls les fonds reellement presents sur
+  // les references sont conserves.
   const a = (o) => cardRGBA(t.accent, o);
   const L = [];
   const push = (s) => L.push(s);
@@ -1756,22 +1764,20 @@ function cardBGLayers(t, cid) {
     }
     return out.join('');
   };
-  // grille fine (05-telemetrie, 09-grille-indice)
+  // grille fine (05-telemetrie)
   const grid = (cell, op) => {
     const out = [];
     for (let x = 0; x <= 1080; x += cell) out.push(`<rect x="${x}" y="0" width="1" height="1920" fill="${a(op)}"/>`);
     for (let y = 0; y <= 1920; y += cell) out.push(`<rect x="0" y="${y}" width="1080" height="1" fill="${a(op)}"/>`);
     return out.join('');
   };
-  // damier (07-damier-dissous, 08-ligne-arrivee)
-  const checker = (cell, y0, rows, fillFn) => {
-    const out = [];
-    const cols = Math.ceil(1080 / cell);
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if ((r + c) % 2 !== 0) continue;
-        out.push(`<rect x="${c * cell}" y="${y0 + r * cell}" width="${cell}" height="${cell}" fill="${fillFn(r, rows)}"/>`);
-      }
+  // damier a fondu progressif (07-damier-dissous) : html2canvas n'applique pas
+  // les <mask> SVG dans une data-URI, l'opacite est donc rampee ligne a ligne.
+  const checkerFade = (cell, y0, rows, opFn) => {
+    const out = []; const cols = Math.ceil(1080 / cell);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      if ((r + c) % 2 !== 0) continue;
+      out.push(`<rect x="${c * cell}" y="${y0 + r * cell}" width="${cell}" height="${cell}" fill="${cardRGBA(t.text, opFn(r, rows))}"/>`);
     }
     return out.join('');
   };
@@ -1785,46 +1791,11 @@ function cardBGLayers(t, cid) {
       push(`<radialGradient id="av" cx="0.5" cy="0.43" r="0.34"><stop offset="0" stop-color="${a(0.10)}"/><stop offset="1" stop-color="${a(0)}"/></radialGradient>`);
       push(`<rect width="1080" height="1920" fill="url(#av)"/>`);
       break;
-    case '03-chrono-editorial': {
-      const out = [];
-      for (let y = 300; y < 1600; y += 118) out.push(`<rect x="74" y="${y}" width="932" height="1" fill="${a(0.05)}"/>`);
-      push(out.join(''));
-      push(`<rect x="74" y="290" width="3" height="1300" fill="${a(0.22)}"/>`);
-      break;
-    }
-    case '04-split-diagonal':
-      push(`<polygon points="0,1920 0,760 1080,300 1080,1920" fill="${t.surface2 || t.surface}" opacity="0.55"/>`);
-      push(`<polygon points="0,764 1080,304 1080,312 0,772" fill="${a(0.5)}"/>`);
-      break;
     case '05-telemetrie':
       push(grid(68, 0.045));
       break;
-    case '06-bloc-massif':
-      push(`<rect x="0" y="430" width="1080" height="520" fill="${t.surface}" opacity="0.75"/>`);
-      push(`<rect x="0" y="950" width="700" height="330" fill="${t.surface2 || t.surface}" opacity="0.6"/>`);
-      push(`<rect x="0" y="430" width="14" height="520" fill="${a(0.8)}"/>`);
-      break;
     case '07-damier-dissous':
-      push(checker(68, 340, 19, (r, n) => cardRGBA(t.text, 0.008 + 0.05 * Math.sin(Math.PI * (r / (n - 1))))));
-      break;
-    case '08-ligne-arrivee':
-      push(checker(60, 1180, 2, () => cardRGBA(t.text, 0.16)));
-      push(`<rect x="0" y="1172" width="1080" height="3" fill="${a(0.6)}"/>`);
-      push(`<rect x="0" y="1300" width="1080" height="3" fill="${a(0.6)}"/>`);
-      break;
-    case '09-grille-indice': {
-      const out = [];
-      for (let i = 0; i < 12; i++) {
-        const y = 360 + i * 96;
-        const x = (i % 2 === 0) ? 96 : 560;
-        out.push(`<rect x="${x}" y="${y}" width="420" height="60" rx="6" fill="${a(0.035)}"/>`);
-      }
-      push(out.join(''));
-      break;
-    }
-    case '10-filigrane':
-      push(`<circle cx="540" cy="930" r="420" fill="none" stroke="${a(0.06)}" stroke-width="10"/>`);
-      push(`<polygon points="540,690 790,1130 290,1130" fill="none" stroke="${a(0.05)}" stroke-width="10"/>`);
+      push(checkerFade(68, 340, 19, (r, n) => 0.008 + 0.05 * Math.sin(Math.PI * (r / (n - 1)))));
       break;
     case '01r-track-record':
       push(stripes(210, 12, 7, 0.20, 0.14));
@@ -1834,34 +1805,13 @@ function cardBGLayers(t, cid) {
       push(`<radialGradient id="avr" cx="0.5" cy="0.43" r="0.36"><stop offset="0" stop-color="${a(0.13)}"/><stop offset="1" stop-color="${a(0)}"/></radialGradient>`);
       push(`<rect width="1080" height="1920" fill="url(#avr)"/>`);
       break;
-    case '11r-record-piste': {
-      const out = [];
-      for (let i = 0; i < 36; i++) {
-        out.push(`<rect x="540" y="930" width="1300" height="7" fill="${a(0.05)}" transform="rotate(${i * 10} 540 930)"/>`);
-      }
-      push(`<g>${out.join('')}</g>`);
-      push(`<radialGradient id="brs" cx="0.5" cy="0.484" r="0.5"><stop offset="0" stop-color="${a(0.12)}"/><stop offset="1" stop-color="${a(0)}"/></radialGradient>`);
-      push(`<rect width="1080" height="1920" fill="url(#brs)"/>`);
+    case '11r-record-piste':
+      // bande centrale legerement plus claire, encadree par deux filets or
+      push(`<rect x="0" y="646" width="1080" height="616" fill="${a(0.035)}"/>`);
+      push(`<rect x="0" y="646" width="1080" height="2" fill="${a(0.45)}"/>`);
+      push(`<rect x="0" y="1260" width="1080" height="2" fill="${a(0.45)}"/>`);
       break;
-    }
-    case '12r-record-semaine': {
-      const out = [];
-      for (let i = 0; i < 7; i++) {
-        out.push(`<rect x="${60 + i * 140}" y="330" width="126" height="1200" rx="10" fill="${a(0.03)}"/>`);
-      }
-      push(out.join(''));
-      break;
-    }
-    case '13r-record-mois': {
-      const out = [];
-      for (let r = 0; r < 6; r++) {
-        for (let c = 0; c < 7; c++) {
-          out.push(`<rect x="${60 + c * 140}" y="${380 + r * 190}" width="126" height="150" rx="10" fill="${a(0.028)}"/>`);
-        }
-      }
-      push(out.join(''));
-      break;
-    }
+    // 03, 04, 06, 08, 09, 10, 12r, 13r : fond neutre (references pixel 31/07).
     default:
       break;
   }
