@@ -1727,21 +1727,151 @@ function cardRGBA(cssColor, alpha) {
 // empilement de degrades CSS : html2canvas ne sait pas composer plusieurs
 // couches de gradients (les cartes sortaient sans aucun fond), alors qu'il
 // rasterise une image SVG data-URI exactement comme le navigateur.
-function cardBackgroundDataURI(t) {
+// FONDS PAR CONCEPT — chaque visuel du catalogue a SON propre fond.
+// Erreur corrigee le 31/07 : un fond unique (les rayures diagonales de
+// 01-track-hero) etait applique aux 15 concepts. Les rayures n'appartiennent
+// qu'aux concepts "track". Le reste de la structure (halo des coins, degrade
+// chaud du bas) est bien commun a tous les visuels de reference.
+// La couleur vient toujours du theme : accent + surfaces, rien n'est code en dur.
+
+function cardBGLayers(t, cid) {
   const a = (o) => cardRGBA(t.accent, o);
-  const stripes = [];
-  for (let y = -900; y < 2900; y += 275) {
-    stripes.push(`<rect x="-700" y="${y}" width="2500" height="14" fill="${a(0.16)}"/>`);
-    stripes.push(`<rect x="-700" y="${y + 92}" width="2500" height="9" fill="${a(0.12)}"/>`);
+  const L = [];
+  const push = (s) => L.push(s);
+
+  // rayures diagonales (01-track-hero, 01r-track-record)
+  const stripes = (step, w1, w2, o1, o2) => {
+    const out = [];
+    for (let y = -900; y < 2900; y += step) {
+      out.push(`<rect x="-700" y="${y}" width="2500" height="${w1}" fill="${a(o1)}"/>`);
+      out.push(`<rect x="-700" y="${y + Math.round(step / 3)}" width="2500" height="${w2}" fill="${a(o2)}"/>`);
+    }
+    return `<g transform="rotate(-15.5 540 960)">${out.join('')}</g>`;
+  };
+  // anneaux concentriques (02-avatar-central, 02r-avatar-record)
+  const rings = (cx, cy, r0, r1, step, op) => {
+    const out = [];
+    for (let r = r0; r <= r1; r += step) {
+      out.push(`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${a(op)}" stroke-width="2"/>`);
+    }
+    return out.join('');
+  };
+  // grille fine (05-telemetrie, 09-grille-indice)
+  const grid = (cell, op) => {
+    const out = [];
+    for (let x = 0; x <= 1080; x += cell) out.push(`<rect x="${x}" y="0" width="1" height="1920" fill="${a(op)}"/>`);
+    for (let y = 0; y <= 1920; y += cell) out.push(`<rect x="0" y="${y}" width="1080" height="1" fill="${a(op)}"/>`);
+    return out.join('');
+  };
+  // damier (07-damier-dissous, 08-ligne-arrivee)
+  const checker = (cell, y0, y1, fill, mask) => {
+    const out = [];
+    for (let y = y0; y < y1; y += cell) {
+      for (let x = 0; x < 1080; x += cell) {
+        if (((x / cell) + (y / cell)) % 2 === 0) out.push(`<rect x="${x}" y="${y}" width="${cell}" height="${cell}"/>`);
+      }
+    }
+    return `<g fill="${fill}"${mask ? ` mask="url(#${mask})"` : ''}>${out.join('')}</g>`;
+  };
+
+  switch (cid) {
+    case '01-track-hero':
+      push(stripes(275, 14, 9, 0.16, 0.12));
+      break;
+    case '02-avatar-central':
+      push(rings(540, 830, 140, 980, 78, 0.05));
+      push(`<radialGradient id="av" cx="0.5" cy="0.43" r="0.34"><stop offset="0" stop-color="${a(0.10)}"/><stop offset="1" stop-color="${a(0)}"/></radialGradient>`);
+      push(`<rect width="1080" height="1920" fill="url(#av)"/>`);
+      break;
+    case '03-chrono-editorial': {
+      const out = [];
+      for (let y = 300; y < 1600; y += 118) out.push(`<rect x="74" y="${y}" width="932" height="1" fill="${a(0.05)}"/>`);
+      push(out.join(''));
+      push(`<rect x="74" y="290" width="3" height="1300" fill="${a(0.22)}"/>`);
+      break;
+    }
+    case '04-split-diagonal':
+      push(`<polygon points="0,1920 0,760 1080,300 1080,1920" fill="${t.surface2 || t.surface}" opacity="0.55"/>`);
+      push(`<polygon points="0,764 1080,304 1080,312 0,772" fill="${a(0.5)}"/>`);
+      break;
+    case '05-telemetrie':
+      push(grid(68, 0.045));
+      break;
+    case '06-bloc-massif':
+      push(`<rect x="0" y="430" width="1080" height="520" fill="${t.surface}" opacity="0.75"/>`);
+      push(`<rect x="0" y="950" width="700" height="330" fill="${t.surface2 || t.surface}" opacity="0.6"/>`);
+      push(`<rect x="0" y="430" width="14" height="520" fill="${a(0.8)}"/>`);
+      break;
+    case '07-damier-dissous':
+      push(`<mask id="dis"><linearGradient id="disg" x1="0" y1="0" x2="0" y2="1"><stop offset="0.14" stop-color="#000"/><stop offset="0.42" stop-color="#fff"/><stop offset="0.78" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient><rect width="1080" height="1920" fill="url(#disg)"/></mask>`);
+      push(checker(68, 340, 1620, cardRGBA(t.text, 0.055), 'dis'));
+      break;
+    case '08-ligne-arrivee':
+      push(checker(60, 1180, 1300, cardRGBA(t.text, 0.16), null));
+      push(`<rect x="0" y="1172" width="1080" height="3" fill="${a(0.6)}"/>`);
+      push(`<rect x="0" y="1300" width="1080" height="3" fill="${a(0.6)}"/>`);
+      break;
+    case '09-grille-indice': {
+      const out = [];
+      for (let i = 0; i < 12; i++) {
+        const y = 360 + i * 96;
+        const x = (i % 2 === 0) ? 96 : 560;
+        out.push(`<rect x="${x}" y="${y}" width="420" height="60" rx="6" fill="${a(0.035)}"/>`);
+      }
+      push(out.join(''));
+      break;
+    }
+    case '10-filigrane':
+      push(`<circle cx="540" cy="930" r="420" fill="none" stroke="${a(0.06)}" stroke-width="10"/>`);
+      push(`<polygon points="540,690 790,1130 290,1130" fill="none" stroke="${a(0.05)}" stroke-width="10"/>`);
+      break;
+    case '01r-track-record':
+      push(stripes(210, 12, 7, 0.20, 0.14));
+      break;
+    case '02r-avatar-record':
+      push(rings(540, 830, 150, 1000, 66, 0.06));
+      push(`<radialGradient id="avr" cx="0.5" cy="0.43" r="0.36"><stop offset="0" stop-color="${a(0.13)}"/><stop offset="1" stop-color="${a(0)}"/></radialGradient>`);
+      push(`<rect width="1080" height="1920" fill="url(#avr)"/>`);
+      break;
+    case '11r-record-piste': {
+      const out = [];
+      for (let i = 0; i < 36; i++) {
+        out.push(`<rect x="540" y="930" width="1300" height="7" fill="${a(0.05)}" transform="rotate(${i * 10} 540 930)"/>`);
+      }
+      push(`<g>${out.join('')}</g>`);
+      push(`<radialGradient id="brs" cx="0.5" cy="0.484" r="0.5"><stop offset="0" stop-color="${a(0.12)}"/><stop offset="1" stop-color="${a(0)}"/></radialGradient>`);
+      push(`<rect width="1080" height="1920" fill="url(#brs)"/>`);
+      break;
+    }
+    case '12r-record-semaine': {
+      const out = [];
+      for (let i = 0; i < 7; i++) {
+        out.push(`<rect x="${60 + i * 140}" y="330" width="126" height="1200" rx="10" fill="${a(0.03)}"/>`);
+      }
+      push(out.join(''));
+      break;
+    }
+    case '13r-record-mois': {
+      const out = [];
+      for (let r = 0; r < 6; r++) {
+        for (let c = 0; c < 7; c++) {
+          out.push(`<rect x="${60 + c * 140}" y="${380 + r * 190}" width="126" height="150" rx="10" fill="${a(0.028)}"/>`);
+        }
+      }
+      push(out.join(''));
+      break;
+    }
+    default:
+      break;
   }
+  return L.join('');
+}
+
+function cardBackgroundDataURI(t, cid) {
+  const a = (o) => cardRGBA(t.accent, o);
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">` +
     `<defs>` +
-    `<linearGradient id="b" x1="0" y1="0" x2="0.18" y2="1">` +
-    `<stop offset="0" stop-color="${t.surface}"/>` +
-    `<stop offset="0.3" stop-color="${t.bg}"/>` +
-    `<stop offset="1" stop-color="${t.bg}"/>` +
-    `</linearGradient>` +
     `<linearGradient id="warm" x1="0" y1="0" x2="0" y2="1">` +
     `<stop offset="0.58" stop-color="${a(0)}"/>` +
     `<stop offset="0.8" stop-color="${a(0.04)}"/>` +
@@ -1758,7 +1888,7 @@ function cardBackgroundDataURI(t) {
     `</radialGradient>` +
     `</defs>` +
     `<rect width="1080" height="1920" fill="${t.bg}"/>` +
-        `<g transform="rotate(-15.5 540 960)">${stripes.join('')}</g>` +
+    cardBGLayers(t, cid) +
     `<rect width="1080" height="1920" fill="url(#gtl)"/>` +
     `<rect width="1080" height="1920" fill="url(#gtr)"/>` +
     `<rect width="1080" height="1920" fill="url(#gc)"/>` +
@@ -1766,8 +1896,8 @@ function cardBackgroundDataURI(t) {
     `</svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
-function cardBackgroundHTML(t) {
-  return `<img src="${cardBackgroundDataURI(t)}" alt="" style="position:absolute;left:0;top:0;width:1080px;height:1920px;display:block">`;
+function cardBackgroundHTML(t, cid) {
+  return `<img src="${cardBackgroundDataURI(t, cid)}" alt="" style="position:absolute;left:0;top:0;width:1080px;height:1920px;display:block">`;
 }
 
 // Drapeau de nationalite dessine en SVG : les emoji drapeaux ne sont pas
@@ -1928,8 +2058,8 @@ async function prewarmCardAvatars(pilot) {
   } catch (e) { /* pack indisponible : repli standard-classic */ }
 }
 
-function cardShell(t, bodyInner, pilot) {
-    return cardBackgroundHTML(t) + cardHeaderHTML(t) + cardBodyWrap(bodyInner) + cardFooterHTML(t, pilot);
+function cardShell(t, bodyInner, pilot, cid) {
+    return cardBackgroundHTML(t, cid) + cardHeaderHTML(t) + cardBodyWrap(bodyInner) + cardFooterHTML(t, pilot);
 }
 
 // --- Concepts POSITION -----------------------------------------------------
@@ -2113,7 +2243,7 @@ export async function positionCardPNGBytes(regId, conceptId) {
   const id = (conceptId && POSITION_BODIES[conceptId]) ? conceptId : pickPositionConcept();
   const build = POSITION_BODIES[id] || POSITION_BODIES[POSITION_FALLBACK];
   await prewarmCardAvatars(pilot);
-  return renderCardPNG(cardShell(t, build(t, pilot, positionCtx(pilot)), pilot));
+  return renderCardPNG(cardShell(t, build(t, pilot, positionCtx(pilot)), pilot, id));
 }
 
 // --- Concepts RECORD --------------------------------------------------------
@@ -2267,7 +2397,7 @@ export async function recordCardPNGBytes(regId, scope, payload) {
   const id = (payload && payload.concept && RECORD_BODIES[payload.concept]) ? payload.concept : pickRecordConcept(sc);
   const build = RECORD_BODIES[id] || RECORD_BODIES['01r-track-record'];
   await prewarmCardAvatars(pilot);
-  return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot));
+  return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot, id));
 }
 
 // Rasterise un fragment HTML 1080x1920 en PNG (ArrayBuffer). Reutilise
