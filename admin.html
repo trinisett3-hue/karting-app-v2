@@ -983,6 +983,11 @@ et des cartes partageables. Ces réglages suivent le thème et les avatars chois
 <input type="text" id="pref-card-tagline" maxlength="46" placeholder="Reservez votre prochaine session en ligne" oninput="markPrefsDirty();updateTaglineCount()"/>
 <div style="font-size:11px;color:var(--mut);margin-top:4px"><span id="tagline-count">0</span>/46 caracteres. Au-dela, la ligne deborderait sur le QR code.</div>
 </div>
+<div class="field" style="margin:0">
+<label>Adresse affichee sur les cartes (sous le nom du circuit)</label>
+<input type="text" id="pref-card-address" maxlength="60" placeholder="12 rue du Circuit &mdash; Toulouse" oninput="markPrefsDirty()"/>
+<div style="font-size:11px;color:var(--mut);margin-top:4px">60 caracteres maximum. Laisser vide pour n afficher que le nom du circuit.</div>
+</div>
 </div>
 
 <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--bord)">
