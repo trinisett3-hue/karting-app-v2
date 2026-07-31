@@ -1,5 +1,5 @@
 // Point d'entrée de l'admin Karting V2 — orchestrateur.
-// 
+//
 // Rôle : (1) initialiser l'app au chargement de la page (identique au
 // window.addEventListener('DOMContentLoaded', ...) de l'original), (2) attacher toutes
 // les fonctions utilisées en onclick="..." dans le HTML sur `window`, puisque les modules
@@ -393,7 +393,10 @@ switchParamsSubtab: settings.switchParamsSubtab,
 selectResultsTheme: settings.selectResultsTheme,
 renderCardsTab: settings.renderCardsTab,
 renderCardQR: settings.renderCardQR,
+copyVenueLink: settings.copyVenueLink,
+downloadVenueQR: settings.downloadVenueQR,
 updateTaglineCount: settings.updateTaglineCount,
+updateCircuitCounts: settings.updateCircuitCounts,
 selectAvatarMode: settings.selectAvatarMode,
 selectAvatarPack: settings.selectAvatarPack,
 renderSignatureControls: settings.renderSignatureControls,
