@@ -1743,7 +1743,7 @@ function cardFooterHTML(t, pilot) {
     const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
     const meta = ['Kart ' + (pilot.kart ?? '-'), laps, type, date].filter(Boolean).join(' &middot; ');
     return `
-        <div style="position:absolute;left:74px;bottom:230px;width:64px;height:64px;border-radius:50%;overflow:hidden;background:${t.surface}">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 200, scheme: pilot.scheme })}</div>
+        <div style="position:absolute;left:74px;bottom:230px;width:64px;height:64px;border-radius:50%;overflow:hidden;background:${t.surface}">${cardAvatarHTML(pilot, CARD_AV_FOOTER)}</div>
             <div style="position:absolute;left:154px;bottom:258px;right:74px;font:700 30px 'UI',sans-serif;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(pilot.name)}</div>
                 <div style="position:absolute;left:74px;bottom:206px;right:74px;font:400 19px 'Mono',monospace;letter-spacing:.03em;color:${t.muted};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${meta}</div>
                   `;
@@ -1751,6 +1751,42 @@ function cardFooterHTML(t, pilot) {
 
 function cardBodyWrap(inner) {
     return `<div style="position:absolute;left:74px;right:74px;top:250px;bottom:400px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden">${inner}</div>`;
+}
+
+// --- Variante de carte : pro-signature / standard-classic -------------------
+// Les gabarits existent en deux variantes : standard-classic (avatars kart ou
+// pilote du plan standard) et pro-signature (pack Signature, plan Pro). Le
+// moteur de cartes ne consultait pas du tout le pack : toutes les cartes
+// sortaient en standard-classic, meme pour un circuit Pro. On retablit ici la
+// symetrie qui existe deja entre genAvatarDataURL() (qui a une branche
+// Signature) et genAvatarSVG() (qui n'en a pas). html2canvas rasterise sans
+// attendre le reseau : on lit donc le cache synchrone prechauffe par
+// prewarmCardAvatars(), et on retombe silencieusement sur l'avatar classique
+// quand le cache est froid ou le pack indisponible.
+const CARD_AV_FOOTER = { shape: 'circle', size: 200 };
+const CARD_AV_HERO = { shape: 'circle', size: 300 };
+const CARD_AV_RECORD = { shape: 'circle', size: 280 };
+
+function cardAvatarHTML(pilot, base) {
+  const kart = pilot ? pilot.kart : null;
+  const o = Object.assign({}, base, { scheme: pilot ? pilot.scheme : null });
+  if (signatureAvatarsActive()) {
+    const src = signatureAvatarDataURLSync(kart, o);
+    if (src) return '<img src="' + src + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block">';
+  }
+  return genAvatarSVG(kart, o);
+}
+
+// A appeler et await AVANT renderCardPNG() : le cache Signature est asynchrone,
+// la rasterisation ne l'est pas.
+async function prewarmCardAvatars(pilot) {
+  if (!signatureAvatarsActive() || !pilot) return;
+  const items = [{ kart: pilot.kart, scheme: pilot.scheme }];
+  try {
+    await prewarmSignatureAvatarDataURLs(items, CARD_AV_FOOTER);
+    await prewarmSignatureAvatarDataURLs(items, CARD_AV_HERO);
+    await prewarmSignatureAvatarDataURLs(items, CARD_AV_RECORD);
+  } catch (e) { /* pack indisponible : repli standard-classic */ }
 }
 
 function cardShell(t, bodyInner, pilot) {
@@ -1776,7 +1812,7 @@ const POSITION_BODIES = {
     <div style="font:400 20px 'Mono',monospace;letter-spacing:.28em;color:${t.muted};margin-top:26px">MEILLEUR TOUR</div>`,
 
   '02-avatar-central': (t, pilot, ctx) => `
-    <div style="width:320px;height:320px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.accent};box-shadow:0 0 60px ${t.accent}44;display:flex;align-items:center;justify-content:center;overflow:hidden">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 300, scheme: pilot.scheme })}</div>
+    <div style="width:320px;height:320px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.accent};box-shadow:0 0 60px ${t.accent}44;display:flex;align-items:center;justify-content:center;overflow:hidden">${cardAvatarHTML(pilot, CARD_AV_HERO)}</div>
     <div style="font:700 190px 'UI',sans-serif;line-height:.85;color:${t.accent};margin-top:34px">P${ctx.pos}</div>
     <div style="font:700 76px 'UI',sans-serif;color:${t.text};margin-top:10px">${ctx.time}<span style="font-size:.4em;color:${t.muted}">s</span></div>`,
 
@@ -1937,6 +1973,7 @@ export async function positionCardPNGBytes(regId, conceptId) {
   const t = themeColors();
   const id = (conceptId && POSITION_BODIES[conceptId]) ? conceptId : pickPositionConcept();
   const build = POSITION_BODIES[id] || POSITION_BODIES[POSITION_FALLBACK];
+  await prewarmCardAvatars(pilot);
   return renderCardPNG(cardShell(t, build(t, pilot, positionCtx(pilot)), pilot));
 }
 
@@ -1995,7 +2032,7 @@ const RECORD_BODIES = {
   // Record personnel, mise en page « avatar central » (meme contenu, avatar
   // en medaillon au-dessus).
   '02r-avatar-record': (t, pilot, ctx) => `
-    <div style="width:300px;height:300px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.accent};box-shadow:0 0 60px ${t.accent}44;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:34px">${genAvatarSVG(pilot.kart, { shape: 'circle', size: 280, scheme: pilot.scheme })}</div>
+    <div style="width:300px;height:300px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${t.accent};box-shadow:0 0 60px ${t.accent}44;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:34px">${cardAvatarHTML(pilot, CARD_AV_RECORD)}</div>
     ${recordTitle(t, ctx.label)}
     ${recordDelta(t, ctx, 92)}
     ${ctx.deltaTxt ? recordPill(t, ctx.deltaTxt + ' &middot; ' + RECORD_PILL_LABELS.perso) : recordPill(t, RECORD_PILL_LABELS.perso)}`,
@@ -2070,6 +2107,7 @@ export async function recordCardPNGBytes(regId, scope, payload) {
   };
   const id = (payload && payload.concept && RECORD_BODIES[payload.concept]) ? payload.concept : pickRecordConcept(sc);
   const build = RECORD_BODIES[id] || RECORD_BODIES['01r-track-record'];
+  await prewarmCardAvatars(pilot);
   return renderCardPNG(cardShell(t, build(t, pilot, ctx), pilot));
 }
 
