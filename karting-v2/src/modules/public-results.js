@@ -1,6 +1,6 @@
 // Module de la page publique de résultats (results.html) — accès par QR code / lien,
 // sans auth. Reprend à l'identique la logique de l'ancien results.html monofichier :
-// résolution de session par public_results_token, classement (temps total), podium, 
+// résolution de session par public_results_token, classement (temps total), podium,
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
 // Chargement paresseux (30/07, audit du 28/07 section 1.2) : kart-avatar.js
@@ -1926,8 +1926,8 @@ const MONTH_FR = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juille
 const DOW_FR = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
 function parseRecordDate(d) {
-    const dt = d ? new Date(String(d).slice(0, 10) + 'T00:00:00') : new Date(0);
-    return Number.isNaN(dt.getTime()) ? new Date(0) : dt;
+    const dt = d ? new Date(String(d).slice(0, 10) + 'T00:00:00') : new Date();
+    return Number.isNaN(dt.getTime()) ? new Date() : dt;
 }
 
 // Lundi de la semaine ISO contenant `dt`, et ses 6 jours suivants.
@@ -2359,7 +2359,7 @@ export async function recordCardPNGBytes(regId, scope, payload) {
   const newTime = (payload && payload.time != null) ? fmtCardTime(payload.time)
     : (pilot.bestLap != null ? fmtCardTime(pilot.bestLap) : '--');
   const prevTime = (payload && payload.prev != null) ? fmtCardTime(payload.prev) : null;
-  const deltaTxt = (payload && payload.delta != null) ? '-' + fmtCardTime(payload.delta) + 's' : null;
+  const deltaTxt = (payload && payload.delta != null) ? '-' + fmtCardTime(Math.abs(Number(payload.delta))) + 's' : null;
   const ctx = {
     label: RECORD_SCOPE_LABELS[sc],
     newTime, prevTime, deltaTxt,
