@@ -425,29 +425,73 @@ function venueTime(iso) {
   } catch (e) { return ''; }
 }
 
-function venueRow(href, tag, title, meta) {
-  return `<a class="venue-row" href="${href}">
+// 01/08 : la fenetre publique est de 3 h, "aujourd'hui / hier" n'avait donc
+// plus aucun sens. On affiche a la place le nombre de participants, la seule
+// information qui aide reellement le pilote a reconnaitre sa session.
+function venuePeople(n) {
+  const v = Number(n || 0);
+  if (!v) return '';
+  return v + (v > 1 ? ' participants' : ' participant');
+}
+
+function venueRow(href, tag, title, meta, hot) {
+  return `<a class="venue-row${hot ? ' hot' : ''}" href="${href}">
 <span class="venue-tag">${escapeHTML(tag)}</span>
 <span class="venue-txt"><b>${escapeHTML(title)}</b><i>${escapeHTML(meta)}</i></span>
 <svg class="venue-chev" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
 </a>`;
 }
 
+// Onglets en pilule centree. Volontairement AUTONOMES : ils ne sont plus
+// greffes dans l'entete de la page resultats (voir renderVenuePicker).
+function venueTabs(active, otherHref) {
+  const reg = active === 'register'
+    ? '<span>Inscription</span>'
+    : '<a href="' + otherHref + '">Inscription</a>';
+  const res = active === 'results'
+    ? '<span>Résultats</span>'
+    : '<a href="' + otherHref + '">Résultats</a>';
+  return '<nav class="venue-tabs" aria-label="Navigation">' + reg + res + '</nav>';
+}
+
+function venueHero(logoUrl, circuit, title, sub) {
+  const logo = logoUrl
+    ? '<img src="' + escapeHTML(logoUrl) + '" alt="">'
+    : '<span aria-hidden="true">\u{1F3C1}</span>';
+  return '<div class="venue-hero">' +
+    '<div class="venue-logo">' + logo + '</div>' +
+    (circuit ? '<div class="venue-circuit">' + escapeHTML(circuit) + '</div>' : '') +
+    '<h1 class="venue-title">' + escapeHTML(title) + '</h1>' +
+    (sub ? '<p class="venue-sub">' + escapeHTML(sub) + '</p>' : '') +
+    '</div>';
+}
+
+/* Toutes les couleurs sortent des variables du theme (--c-accent, --c-border,
+   --c-muted, --c-bg) : rien en dur, l'ecran suit Parametres > Apparence. */
 function venueShell(inner) {
   return `<style>
-.venue-wrap{max-width:640px;margin:0 auto;padding:8px 0 40px}
-.venue-block{margin:0 0 26px}
-.venue-h{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:13px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut,#7580a6)}
-.venue-h:after{content:"";flex:1;height:1px;background:currentColor;opacity:.25}
-.venue-row{display:flex;align-items:center;gap:14px;padding:16px 18px;margin:0 0 10px;border:1px solid var(--bd,rgba(224,232,255,.09));border-radius:14px;background:var(--sf,rgba(255,255,255,.03));text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
-.venue-row:hover{border-color:var(--acc,#ffb238);transform:translateY(-1px)}
-.venue-tag{flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:6px 10px;border-radius:999px;background:var(--acc,#ffb238);color:#0b0b0f;white-space:nowrap}
-.venue-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:3px}
-.venue-txt b{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.venue-txt i{font-style:normal;font-size:13px;opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.venue-chev{flex:0 0 auto;opacity:.45}
-.venue-empty{padding:18px;border:1px dashed var(--bd,rgba(224,232,255,.14));border-radius:14px;font-size:14px;opacity:.6}
-.venue-note{margin:28px 0 0;font-size:12.5px;line-height:1.6;opacity:.45;text-align:center}
+.venue-wrap{max-width:34rem;margin:0 auto;padding:0 .25rem 3rem;text-align:left}
+.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:max-content;margin:.5rem auto 1.9rem;padding:.19rem;border:1px solid var(--c-border);border-radius:999px;background:rgba(255,255,255,.04)}
+.venue-tabs a,.venue-tabs span{padding:.5rem 1.4rem;border-radius:999px;font-family:var(--font-body,inherit);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--c-muted);transition:color .15s}
+.venue-tabs a:hover{color:var(--c-text)}
+.venue-tabs span{background:var(--c-accent);color:var(--c-bg)}
+.venue-hero{text-align:center;margin:0 0 1.75rem}
+.venue-logo{width:3.25rem;height:3.25rem;border-radius:.9rem;margin:0 auto .85rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:var(--c-accent);color:var(--c-bg);overflow:hidden}
+.venue-logo img{width:100%;height:100%;object-fit:cover;display:block}
+.venue-circuit{font-size:.72rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--c-accent);margin:0 0 .6rem}
+.venue-title{font-family:var(--font-display,inherit);font-size:clamp(1.4rem,5vw,1.85rem);font-weight:600;line-height:1.15;margin:0 0 .35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-sub{margin:0;font-size:.85rem;line-height:1.5;color:var(--c-muted)}
+.venue-row{display:flex;align-items:center;gap:.8rem;padding:.95rem 1.05rem;margin:0 0 .55rem;border:1px solid var(--c-border);border-radius:.9rem;background:rgba(255,255,255,.03);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+.venue-row:hover{border-color:var(--c-accent);transform:translateY(-1px)}
+.venue-row.hot{border-color:color-mix(in srgb,var(--c-accent) 40%,transparent);background:color-mix(in srgb,var(--c-accent) 5%,transparent)}
+.venue-tag{flex:0 0 auto;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.38rem .55rem;border-radius:999px;background:rgba(255,255,255,.08);color:var(--c-muted);white-space:nowrap}
+.venue-row.hot .venue-tag{background:var(--c-accent);color:var(--c-bg)}
+.venue-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:.19rem}
+.venue-txt b{font-size:.95rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-txt i{font-style:normal;font-size:.78rem;color:var(--c-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-chev{flex:0 0 auto;opacity:.4}
+.venue-empty{padding:1.25rem;border:1px dashed var(--c-border);border-radius:.9rem;font-size:.87rem;line-height:1.6;color:var(--c-muted);text-align:center}
+.venue-note{margin:1.6rem 0 0;font-size:.75rem;line-height:1.6;color:var(--c-muted);opacity:.7;text-align:center}
 </style><div class="venue-wrap">${inner}</div>`;
 }
 
@@ -455,48 +499,23 @@ export async function renderVenuePicker(venueToken) {
   const host = document.getElementById('podium-wrap');
   if (!host) return false;
 
-  // 31/07 (correctif) : la page picker laissait apparaitre derriere elle le
-  // squelette de la page resultats (titre "Podium", section "Top 10" vide,
-  // pages 2/3, bouton PDF, pagination bas de page) — illogique puisqu'on est
-  // en train de CHOISIR une session, pas de consulter un resultat. On masque
-  // tout ce qui n'est pas l'entete + le contenu du picker lui-meme.
-  const podiumTitle = document.getElementById('podium-title');
-  if (podiumTitle) podiumTitle.style.display = 'none';
-  const top10TitleEl = document.getElementById('top10-title');
-  const top10Section = top10TitleEl ? top10TitleEl.closest('section') : null;
-  if (top10Section) top10Section.style.display = 'none';
-  ['page-screen-2', 'page-screen-3'].forEach(id => {
+  // 01/08 : l'ecran de selection n'emprunte plus RIEN a la page resultats.
+  // L'entete circuit (gros bloc centre avec halo, date et libelle de session)
+  // decrit une session precise : elle n'a aucun sens tant qu'aucune session
+  // n'est choisie. On la masque au meme titre que le podium, le top 10, les
+  // pages 2/3, le bouton PDF et la pagination.
+  ['podium-title', 'page-screen-2', 'page-screen-3'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
-  const pdfWrap = document.querySelector('.pdf-btn-wrap');
-  if (pdfWrap) pdfWrap.style.display = 'none';
-  const nav = document.querySelector('.page-nav, .results-nav');
-  if (nav) nav.style.display = 'none';
-
-  // La pilule flottante Inscription/Resultats chevauchait le titre du circuit
-  // et son lien "Inscription" perdait le jeton ?v= du circuit (le picker
-  // redevenait alors inaccessible depuis l'inscription). Remplacee par des
-  // onglets integres a l'entete, sur leur propre ligne.
+  const t10 = document.getElementById('top10-title');
+  const t10s = t10 ? t10.closest('section') : null;
+  if (t10s) t10s.style.display = 'none';
+  ['.circuit-header', '.pdf-btn-wrap', '.page-nav', '.results-nav'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => { el.style.display = 'none'; });
+  });
   const floatSwitch = document.querySelector('.page-switch');
   if (floatSwitch) floatSwitch.remove();
-  const header = document.querySelector('#page-screen-1 .circuit-header');
-  if (header && !document.getElementById('venue-tabs')) {
-    if (!document.getElementById('venue-tabs-css')) {
-      document.head.insertAdjacentHTML('beforeend', `<style id="venue-tabs-css">
-.venue-tabs{display:flex;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid var(--c-border,rgba(224,232,255,.12))}
-.venue-tabs a,.venue-tabs span{padding:8px 20px;border-radius:999px;font-family:var(--font-body,sans-serif);font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
-.venue-tabs a{background:rgba(255,255,255,.05);color:var(--c-muted,#7580a6);border:1px solid var(--c-border,rgba(224,232,255,.1))}
-.venue-tabs a:hover{color:var(--c-text,#eef1fb)}
-.venue-tabs span{background:var(--c-accent,#ffb238);color:#0b0b0f}
-</style>`);
-    }
-    const tabs = document.createElement('div');
-    tabs.id = 'venue-tabs';
-    tabs.className = 'venue-tabs';
-    tabs.innerHTML = '<a href="register.html?v=' + encodeURIComponent(venueToken) + '">Inscription</a><span>Résultats</span>';
-    header.appendChild(tabs);
-  }
 
   host.className = '';
   host.innerHTML = venueShell('<div class="venue-empty">Chargement…</div>');
@@ -506,37 +525,42 @@ export async function renderVenuePicker(venueToken) {
     host.innerHTML = venueShell('<div class="venue-empty">Lien invalide ou circuit introuvable.</div>');
     return false;
   }
-  // 31/07 (correctif) : l'onglet Resultats ne doit montrer QUE les sessions
-  // terminees (resultats publies) — les sessions ouvertes a l'inscription
-  // vivent exclusivement sous l'onglet Inscription (register.html). Les deux
-  // listes etaient melangees sur le meme ecran, ce qui n'avait pas de sens
-  // quand on vient consulter un resultat.
-  const done = Array.isArray(data.recent_results) ? data.recent_results : [];
+
+  // 01/08 : le theme n'est plus fige. Sans ?result=TOKEN on ne chargeait
+  // aucune config de site, la page restait donc sur son theme par defaut
+  // ("classic", rouge) meme quand le circuit avait choisi autre chose dans
+  // Parametres > Apparence. public_venue_sessions relaie desormais
+  // app_settings.global.results_theme : c'est LUI qui decide, jamais le code.
+  const theme = String(data.results_theme || '').trim();
+  if (theme) document.documentElement.setAttribute('data-theme', theme);
+
+  // Le nom affiche est celui configure dans Parametres > Identite du circuit,
+  // et non le nom technique du compte (qui faisait croire aux visiteurs qu'ils
+  // consultaient les donnees d'un autre circuit).
   const venueName = String(data.venue_name || '').trim();
-  if (venueName) {
-    const nameEl = document.getElementById('circuit-name');
-    if (nameEl) nameEl.textContent = venueName;
-    document.title = venueName;
-  }
-  const dEl = document.getElementById('session-date');
-  if (dEl) dEl.textContent = new Date().toLocaleDateString('fr-FR');
-  const lEl = document.getElementById('session-label');
-  if (lEl) lEl.textContent = 'Accueil';
+  if (venueName) document.title = venueName;
 
-  let html = '';
-  html += '<div class="venue-block"><div class="venue-h">Sessions terminées</div>';
-  html += done.length
-    ? done.map(s => venueRow(
+  const done = Array.isArray(data.recent_results) ? data.recent_results.slice() : [];
+  // Ordre chronologique inverse : la publication la plus recente en haut.
+  done.sort((a, b) => String(b.published_at || '').localeCompare(String(a.published_at || '')));
+
+  const rows = done.length
+    ? done.map((s, i) => venueRow(
         '?result=' + encodeURIComponent(s.results_token) + '&v=' + encodeURIComponent(venueToken),
-        'Résultats',
+        i === 0 ? 'Dernière' : 'Résultats',
         s.title || 'Session',
-        [venueTime(s.starts_at), 'publié à ' + venueTime(s.published_at)].filter(Boolean).join(' · ')
+        [venuePeople(s.participants), 'publié à ' + venueTime(s.published_at)].filter(Boolean).join(' · '),
+        i === 0
       )).join('')
-    : '<div class="venue-empty">Aucun résultat publié pour l’instant. Reviens après ta session.</div>';
-  html += '</div>';
+    : '<div class="venue-empty">Aucun résultat publié pour l’instant.<br>Reviens juste après ta session.</div>';
 
-  html += '<p class="venue-note">Cette page se met à jour automatiquement : garde-la en favori ou rescanne le QR du circuit à tout moment.</p>';
-  host.innerHTML = venueShell(html);
+  host.innerHTML = venueShell(
+    venueTabs('results', 'register.html?v=' + encodeURIComponent(venueToken)) +
+    venueHero(data.logo_url, venueName, 'Choisis ta session',
+              'Sélectionne la session que tu viens de courir pour voir le classement.') +
+    rows +
+    '<p class="venue-note">Les résultats restent affichés ici pendant 3 heures.<br>Le lien reçu par e-mail, lui, reste valable.</p>'
+  );
   return true;
 }
 
