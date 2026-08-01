@@ -26,6 +26,9 @@ let editingKey = null;
 const PAGE_SIZE = 20;
 let viewRows = [];
 let page = 1;
+// 🆕 v29 : filtre "uniquement les clients ayant accepte les offres". Se
+// combine avec la recherche texte plutot que de la remplacer.
+let promoOnly = false;
 
 function escapeHTML(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -134,11 +137,26 @@ function renderRegistryTable(rows) {
   }
   el.innerHTML =
     '<table class="tbl"><thead><tr>' +
-    '<th>Pseudo</th><th>Prenom</th><th>Nom</th><th>Email</th><th>Naissance</th><th>Nationalite</th>' +
+    '<th>Pseudo</th><th>Prenom</th><th>Nom</th><th>Email</th><th title="Consentement a recevoir les offres du circuit, donne par le pilote lui-meme a l\'inscription">Promo</th><th>Naissance</th><th>Nationalite</th>' +
     '<th>1ere course</th><th>Derniere course</th><th>Sessions</th><th>Actions</th>' +
     '</tr></thead><tbody>' +
     rows.map((r) => (rowKey(r) === editingKey ? editRowHTML(r) : displayRowHTML(r))).join('') +
     '</tbody></table>';
+}
+
+// 🆕 v29 : consentement marketing. La pastille est volontairement discrete
+// quand la reponse est "non" — c'est l'etat par defaut de la grande majorite
+// des lignes, la mettre en rouge donnerait l'impression d'une anomalie.
+function promoBadgeHTML(r) {
+  if (!r.promo_opt_in) {
+    return '<span class="promo-badge promo-no" title="Ce client n\'a pas accepte de recevoir les offres du circuit">Non</span>';
+  }
+  const since = r.promo_opt_in_at ? formatDate(r.promo_opt_in_at) : null;
+  return (
+    '<span class="promo-badge promo-yes" title="Consentement donne par le client' +
+    (since ? ' le ' + since : '') +
+    '">Oui</span>'
+  );
 }
 
 function displayRowHTML(r) {
@@ -161,6 +179,7 @@ function displayRowHTML(r) {
     '<td>' + escapeHTML(r.first_name) + '</td>' +
     '<td>' + escapeHTML(r.last_name) + '</td>' +
     '<td>' + escapeHTML(r.email) + '</td>' +
+    '<td>' + promoBadgeHTML(r) + '</td>' +
     '<td>' + (r.birth_date ? formatDate(r.birth_date) : '--') + '</td>' +
     '<td>' + natFlagLabel(r.nationality) + '</td>' +
     '<td>' + (r.first_seen ? formatDate(r.first_seen) : '--') + '</td>' +
@@ -180,12 +199,22 @@ function editRowHTML(r) {
   const birthCell = r.legacy
     ? '<span style="color:var(--mut)">--</span>'
     : inp('reg-edit-birth', r.birth_date || '', 'date');
+  // 🆕 v29 : le consentement marketing n'est PAS un champ que l'admin remplit.
+  // Il se donne uniquement par le pilote, sur la page d'inscription. Depuis le
+  // registre on ne peut donc que le RETIRER (droit d'opposition, typiquement
+  // apres un appel ou un mail du client) — jamais le cocher a sa place.
+  const promoCell =
+    promoBadgeHTML(r) +
+    (r.promo_opt_in
+      ? '<button class="btn btn-ghost btn-sm" style="margin-top:6px;display:block" onclick="withdrawPromoConsent(\'' + key + '\')">Retirer</button>'
+      : '');
   return (
     '<tr style="background:rgba(255,59,48,.05)">' +
     '<td>' + pseudoCell + '</td>' +
     '<td>' + inp('reg-edit-first', r.first_name) + '</td>' +
     '<td>' + inp('reg-edit-last', r.last_name) + '</td>' +
     '<td>' + inp('reg-edit-email', r.email, 'email') + '</td>' +
+    '<td>' + promoCell + '</td>' +
     '<td>' + birthCell + '</td>' +
     '<td><select id="reg-edit-nat" style="width:100%;min-width:110px;padding:6px 8px;font-size:12.5px;border-radius:6px;border:1px solid var(--bord);background:var(--bg);color:var(--txt)">' + natOptionsHTML(r.nationality) + '</select></td>' +
     '<td>' + (r.first_seen ? formatDate(r.first_seen) : '--') + '</td>' +
@@ -301,13 +330,17 @@ export async function loadRegistryTab(keepView) {
 // avec un titre explicite plutot que de le masquer : le reste de l'onglet Registre n'est
 // pas touche.
 async function refreshExportButtonState() {
-  const btn = document.getElementById('btn-registry-export');
-  if (!btn) return;
+  const btns = ['btn-registry-export', 'btn-registry-export-xlsx']
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  if (!btns.length) return;
   const allowed = await hasFeature('registry_export');
-  btn.disabled = !allowed;
-  btn.title = allowed ? '' : 'Reserve au plan Premium';
-  btn.style.opacity = allowed ? '' : '0.5';
-  btn.style.cursor = allowed ? '' : 'not-allowed';
+  btns.forEach((btn) => {
+    btn.disabled = !allowed;
+    btn.title = allowed ? '' : 'Reserve au plan Premium';
+    btn.style.opacity = allowed ? '' : '0.5';
+    btn.style.cursor = allowed ? '' : 'not-allowed';
+  });
 }
 
 // Recalcule `viewRows` depuis le champ de recherche. Isolé de
@@ -315,11 +348,28 @@ async function refreshExportButtonState() {
 // remettre la pagination à zéro.
 function applySearch() {
   const q = (document.getElementById('reg-search')?.value || '').trim().toLowerCase();
-  viewRows = !q
+  let rows = !q
     ? registryCache
     : registryCache.filter((r) =>
       [r.pseudo, r.first_name, r.last_name, r.email].some((v) => (v || '').toLowerCase().includes(q))
     );
+  // 🆕 v29 : filtre "opt-in promo". Il agit sur `viewRows`, donc l'export
+  // reprend exactement la liste filtree — c'est ce qui permet de sortir un
+  // fichier de diffusion propre sans avoir a trier a la main derriere.
+  if (promoOnly) rows = rows.filter((r) => !!r.promo_opt_in);
+  viewRows = rows;
+}
+
+export function togglePromoFilter() {
+  promoOnly = !promoOnly;
+  const btn = document.getElementById('btn-registry-promo-filter');
+  if (btn) {
+    btn.classList.toggle('on', promoOnly);
+    btn.setAttribute('aria-pressed', promoOnly ? 'true' : 'false');
+  }
+  page = 1;
+  applySearch();
+  renderRegistry();
 }
 
 export function filterRegistry() {
@@ -329,6 +379,33 @@ export function filterRegistry() {
   editingKey = null;
   applySearch();
   renderRegistry();
+}
+
+// 🆕 v29 : retrait du consentement marketing. Sens unique cote base aussi
+// (withdraw_promo_consent ne sait que passer promo_opt_in a false), pour que
+// personne ne puisse "reactiver" un consentement depuis l'admin.
+export async function withdrawPromoConsent(key) {
+  const r = registryCache.find((x) => rowKey(x) === key);
+  if (!r) return;
+  const who = r.legacy ? r.email : r.pseudo;
+  const ok = await confirmModal({
+    title: 'Retirer le consentement ?',
+    message:
+      who + ' ne recevra plus les offres du circuit. Ce retrait s\'applique à toutes ses inscriptions et ne peut pas être annulé depuis l\'admin : seul le pilote peut redonner son accord, en cochant la case sur la page d\'inscription.',
+    confirmLabel: 'Retirer le consentement',
+  });
+  if (!ok) return;
+  const { error } = await db.rpc('withdraw_promo_consent', {
+    _pilot_id: r.legacy ? null : r.pilot_id,
+    _email: r.legacy ? r.email : null,
+  });
+  if (error) {
+    showMsg('msg-registre', error.message || 'Erreur lors du retrait du consentement.', 'err');
+    return;
+  }
+  editingKey = null;
+  showMsg('msg-registre', 'Consentement retire pour ' + who + '.', 'ok');
+  await loadRegistryTab(true);
 }
 
 export async function confirmDeletePilot(pilotId, pseudo) {
@@ -372,6 +449,75 @@ function csvCell(value) {
   return /[;"\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
+// 🆕 v29 : une seule definition des colonnes pour le CSV et le XLSX. Avant, le
+// tableau d'entetes vivait dans exportRegistryCSV() ; ajouter une colonne
+// obligeait a la reporter a deux endroits, avec le risque classique d'un
+// fichier dont les entetes ne correspondent plus aux donnees.
+// 'Promo' est en Oui/Non (et non true/false) : c'est sur cette colonne que le
+// circuit trie ou filtre dans Excel pour sortir sa liste de diffusion.
+function registryMatrix(source) {
+  const rows = [[
+    'Pseudo', 'Prenom', 'Nom', 'Email', 'Promo', 'Promo depuis',
+    'Naissance', 'Nationalite', '1ere course', 'Derniere course', 'Sessions',
+  ]];
+  source.forEach((r) => {
+    rows.push([
+      r.legacy ? '(pre-v14)' : r.pseudo,
+      r.first_name || '',
+      r.last_name || '',
+      r.email || '',
+      r.promo_opt_in ? 'Oui' : 'Non',
+      r.promo_opt_in && r.promo_opt_in_at ? formatDate(r.promo_opt_in_at) : '',
+      r.birth_date ? formatDate(r.birth_date) : '',
+      natFlagLabel(r.nationality),
+      r.first_seen ? formatDate(r.first_seen) : '',
+      r.last_seen ? formatDate(r.last_seen) : '',
+      r.sessions_count || 0,
+    ]);
+  });
+  return rows;
+}
+
+function exportStamp() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// 🆕 v29 : export XLSX du registre. Le CSV reste la pour les imports machine,
+// mais c'est le XLSX qu'on ouvre dans Excel : entetes figees + filtre
+// automatique, donc trier sur "Promo" se fait en deux clics sans manipulation.
+export async function exportRegistryXLSX() {
+  if (!(await hasFeature('registry_export'))) {
+    showMsg('msg-registre', 'Export reserve au plan Premium.', 'err');
+    return;
+  }
+  if (typeof XLSX === 'undefined') {
+    showMsg('msg-registre', 'Module XLSX indisponible. Utilise l\'export CSV.', 'err');
+    return;
+  }
+  const source = viewRows;
+  if (!source.length) {
+    showMsg('msg-registre', registryCache.length ? 'Aucun client ne correspond a cette recherche.' : 'Aucun client a exporter.', 'err');
+    return;
+  }
+  try {
+    const matrix = registryMatrix(source);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(matrix);
+    ws['!cols'] = [
+      { wch: 16 }, { wch: 14 }, { wch: 14 }, { wch: 28 }, { wch: 7 }, { wch: 13 },
+      { wch: 12 }, { wch: 18 }, { wch: 13 }, { wch: 15 }, { wch: 9 },
+    ];
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: matrix.length - 1, c: matrix[0].length - 1 } }) };
+    XLSX.utils.book_append_sheet(wb, ws, 'Registre clients');
+    XLSX.writeFile(wb, 'registre-clients-' + exportStamp() + '.xlsx');
+    showMsg('msg-registre', source.length + ' client(s) exporte(s) en XLSX.', 'ok');
+  } catch (e) {
+    showMsg('msg-registre', e.message || 'Erreur lors de l\'export XLSX.', 'err');
+  }
+}
+
 export async function exportRegistryCSV() {
   // Flag 'registry_export' (voir plan.js) : le bouton est deja desactive cote UI pour un
   // compte Basique (refreshExportButtonState()), mais on revalide ici aussi -- au cas ou
@@ -389,20 +535,7 @@ export async function exportRegistryCSV() {
     showMsg('msg-registre', registryCache.length ? 'Aucun client ne correspond a cette recherche.' : 'Aucun client a exporter.', 'err');
     return;
   }
-  const rows = [['Pseudo', 'Prenom', 'Nom', 'Email', 'Naissance', 'Nationalite', '1ere course', 'Derniere course', 'Sessions']];
-  source.forEach((r) => {
-    rows.push([
-      r.legacy ? '(pre-v14)' : r.pseudo,
-      r.first_name || '',
-      r.last_name || '',
-      r.email || '',
-      r.birth_date ? formatDate(r.birth_date) : '',
-      natFlagLabel(r.nationality),
-      r.first_seen ? formatDate(r.first_seen) : '',
-      r.last_seen ? formatDate(r.last_seen) : '',
-      r.sessions_count || 0,
-    ]);
-  });
+  const rows = registryMatrix(source);
   const csv = '﻿' + rows.map((r) => r.map(csvCell).join(';')).join('\r\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
