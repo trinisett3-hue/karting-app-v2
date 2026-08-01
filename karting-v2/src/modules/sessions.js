@@ -9,6 +9,17 @@ import { state } from '../state.js';
 import { showMsg, randomCode4, qrSrc, avatarColor, avatarInitial, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 
+// --- Verite de publication --------------------------------------------------------
+// ATTENTION : `public_results_token` a une valeur par DEFAUT en base
+// (encode(gen_random_bytes(12),'hex')). Toute session recoit donc un jeton des sa
+// creation : sa presence ne prouve RIEN. Tester le jeton pour savoir si une session est
+// publiee affichait "Publie" sur TOUTES les sessions et distribuait un lien de resultats
+// vide avant meme le premier chrono. La seule verite, c'est le statut / la date de
+// publication ecrits par publishResults() et archPublish().
+export function isSessionPublished(s) {
+  return !!s && (s.status === 'results_published' || !!s.results_published_at);
+}
+
 // --- Liste des sessions actives ---------------------------------------------------
 
 export async function loadActiveSessions() {
@@ -50,7 +61,7 @@ export async function renderActivesGrid() {
       const { data: regs } = await db.from('session_registrations').select('id,kart_number').eq('session_id', s.id);
       const inscrits = (regs || []).length;
       const occ = (regs || []).filter((r) => r.kart_number != null).length;
-      const pub = s.public_results_token ? '<span class="sc-badge pub">Publie</span>' : '<span class="sc-badge">En cours</span>';
+      const pub = isSessionPublished(s) ? '<span class="sc-badge pub">Publie</span>' : '<span class="sc-badge">En cours</span>';
       const TYPE_LABELS = { loisir: 'Loisir', competition: 'Competition', initiation: 'Initiation', entrainement: 'Entrainement' };
       const typeBadge = s.session_type && TYPE_LABELS[s.session_type]
         ? '<span class="sc-badge" style="background:rgba(236,234,42,.15);color:var(--yel)">' + TYPE_LABELS[s.session_type] + '</span>'
@@ -230,7 +241,7 @@ export async function terminerSession({ afterEnd, loadRanking, formatTime } = {}
       const fmt = formatTime || ((t) => t.toFixed(3) + ' s');
       const first = results[0];
       const second = results[1];
-      const pubStatus = s.public_results_token ? 'Publiee' : 'Non publiee';
+      const pubStatus = isSessionPublished(s) ? 'Publiee' : 'Non publiee';
       recapHTML =
         '<div style="display:flex;flex-direction:column;gap:8px;font-size:13px">' +
         '<div><b>' + nbPilotes + '</b> pilote(s) inscrit(s)</div>' +
