@@ -352,30 +352,61 @@ function renderVenueTabs(resultsHref) {
    sans rupture. Donnees : RPC public_venue_sessions (SECURITY DEFINER, rien
    de nominatif, strictement limite au tenant porteur du jeton de circuit).
    -------------------------------------------------------------------------- */
-const VENUE_CSS = `<style id="venue-pick-css">
-.venue-wrap{max-width:34rem;margin:0 auto;padding:0 .25rem .5rem;text-align:left}
-.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:max-content;margin:.25rem auto 1.9rem;padding:.19rem;border:1px solid var(--bord);border-radius:999px;background:rgba(255,255,255,.04)}
-.venue-tabs a,.venue-tabs span{padding:.5rem 1.4rem;border-radius:999px;font-family:var(--font-body);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--mut);transition:color .15s}
-.venue-tabs a:hover{color:var(--txt)}
-.venue-tabs span{background:var(--acc);color:var(--bg)}
+/* Coque commune : bloc STRICTEMENT identique a celui de public-results.js.
+   Toute divergence ici se voit immediatement a l'ecran (la pastille d'onglets
+   saute quand on change d'onglet). Aucune couleur en dur. */
+const VENUE_CSS = `<style id="venue-shell-css">
+/* Coque commune aux deux ecrans de selection (resultats + inscription).
+   Texte STRICTEMENT identique dans public-results.js et register.js : c'est
+   ce qui garantit que la pastille d'onglets tombe au meme pixel et que la
+   colonne a la meme largeur quand on passe d'un onglet a l'autre.
+   Les tokens des deux pages different (--c-* cote resultats, --* cote
+   inscription) : on les lit en cascade avec repli, donc aucune couleur en dur
+   n'est imposee, le theme de Parametres > Apparence decide toujours. */
+html.venue-mode,html.venue-mode body{height:auto;min-height:100%}
+html.venue-mode body{display:block!important;margin:0!important;padding:0!important;align-items:stretch!important;justify-content:flex-start!important}
+#venue-root{display:block;width:100%}
+.venue-wrap{width:100%;max-width:33rem;margin:0 auto;padding:1.6rem 1.15rem 3.5rem;text-align:left;box-sizing:border-box}
+.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:19rem;max-width:100%;margin:0 auto 2rem;padding:.19rem;border:1px solid var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:999px;background:rgba(255,255,255,.04)}
+.venue-tabs a,.venue-tabs span{flex:1 1 0;text-align:center;padding:.5rem .6rem;border-radius:999px;font-family:var(--font-body,inherit);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--c-muted,var(--mut,#8a8f9a));transition:color .15s}
+.venue-tabs a:hover{color:var(--c-text,var(--txt,#fff))}
+.venue-tabs span{background:var(--c-accent,var(--acc,#ffb238));color:var(--c-bg,var(--bg,#0b0b0f))}
 .venue-hero{text-align:center;margin:0 0 1.75rem}
-.venue-logo{width:3.25rem;height:3.25rem;border-radius:.9rem;margin:0 auto .85rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:var(--acc);color:var(--bg);overflow:hidden}
-.venue-logo img{width:100%;height:100%;object-fit:cover;display:block}
-.venue-circuit{font-size:.72rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--acc);margin:0 0 .6rem}
-.venue-title{font-family:var(--font-display);font-size:clamp(1.55rem,6vw,2.1rem);font-weight:700;line-height:1.1;text-transform:uppercase;margin:0 0 .35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.venue-sub{margin:0;font-size:.85rem;line-height:1.5;color:var(--mut)}
-.venue-row{display:flex;align-items:center;gap:.8rem;padding:.95rem 1.05rem;margin:0 0 .55rem;border:1px solid var(--bord);border-radius:.9rem;background:rgba(255,255,255,.03);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
-.venue-row:hover{border-color:var(--acc);transform:translateY(-1px)}
-.venue-row.hot{border-color:color-mix(in srgb,var(--acc) 40%,transparent);background:color-mix(in srgb,var(--acc) 5%,transparent)}
-.venue-tag{flex:0 0 auto;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.38rem .55rem;border-radius:999px;background:rgba(255,255,255,.08);color:var(--mut);white-space:nowrap}
-.venue-row.hot .venue-tag{background:var(--acc);color:var(--bg)}
+.venue-logo{display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;max-width:11rem;min-height:3rem;font-size:1.6rem;line-height:1}
+.venue-logo img{max-width:100%;max-height:3.4rem;width:auto;height:auto;object-fit:contain;display:block}
+.venue-circuit{font-size:.72rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--c-accent,var(--acc,#ffb238));margin:0 0 .6rem}
+.venue-title{font-family:var(--font-display,inherit);font-size:clamp(1.45rem,5.2vw,1.9rem);font-weight:600;line-height:1.15;letter-spacing:0;text-transform:none;margin:0 0 .35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-sub{margin:0;font-size:.85rem;line-height:1.5;color:var(--c-muted,var(--mut,#8a8f9a))}
+.venue-row{display:flex;align-items:center;gap:.8rem;padding:.95rem 1.05rem;margin:0 0 .55rem;border:1px solid var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:.9rem;background:rgba(255,255,255,.03);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+.venue-row:hover{border-color:var(--c-accent,var(--acc,#ffb238));transform:translateY(-1px)}
+.venue-row.hot{border-color:color-mix(in srgb,var(--c-accent,var(--acc,#ffb238)) 40%,transparent);background:color-mix(in srgb,var(--c-accent,var(--acc,#ffb238)) 5%,transparent)}
+.venue-tag{flex:0 0 auto;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.38rem .55rem;border-radius:999px;background:rgba(255,255,255,.08);color:var(--c-muted,var(--mut,#8a8f9a));white-space:nowrap}
+.venue-row.hot .venue-tag{background:var(--c-accent,var(--acc,#ffb238));color:var(--c-bg,var(--bg,#0b0b0f))}
 .venue-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:.19rem}
 .venue-txt b{font-size:.95rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.venue-txt i{font-style:normal;font-size:.78rem;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-txt i{font-style:normal;font-size:.78rem;color:var(--c-muted,var(--mut,#8a8f9a));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .venue-chev{flex:0 0 auto;opacity:.4}
-.venue-empty{padding:1.25rem;border:1px dashed var(--bord);border-radius:.9rem;font-size:.87rem;line-height:1.6;color:var(--mut);text-align:center}
-.venue-note{margin:1.6rem 0 0;font-size:.75rem;line-height:1.6;color:var(--mut);opacity:.7;text-align:center}
+.venue-empty{padding:1.25rem;border:1px dashed var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:.9rem;font-size:.87rem;line-height:1.6;color:var(--c-muted,var(--mut,#8a8f9a));text-align:center}
+.venue-note{margin:1.6rem 0 0;font-size:.75rem;line-height:1.6;color:var(--c-muted,var(--mut,#8a8f9a));opacity:.7;text-align:center}
 </style>`;
+
+/* Voir public-results.js : la coque est montee en enfant direct de <body>,
+   hors du gabarit de la page hote (ici : body centre verticalement + carte de
+   432px), sinon la geometrie ne peut pas coincider entre les deux onglets. */
+function mountVenue(inner) {
+  document.documentElement.classList.add('venue-mode');
+  Array.prototype.slice.call(document.body.children).forEach(el => {
+    if (el.id !== 'venue-root' && el.tagName !== 'SCRIPT') el.style.display = 'none';
+  });
+  let root = document.getElementById('venue-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'venue-root';
+    document.body.appendChild(root);
+  }
+  root.innerHTML = VENUE_CSS + '<div class="venue-wrap">' + inner + '</div>';
+  return root;
+}
 
 let lastVenueName = '';
 
@@ -419,11 +450,12 @@ function venueRow(href, tag, title, meta, hot) {
 }
 
 function venueHero(logoUrl, circuit, title, sub) {
+  // Logo de Parametres affiche tel quel, sans pastille accentuee derriere.
   const logo = logoUrl
     ? '<img src="' + escapeHTML(logoUrl) + '" alt="">'
-    : '<span aria-hidden="true">\u{1F3C1}</span>';
+    : '';
   return '<div class="venue-hero">' +
-    '<div class="venue-logo">' + logo + '</div>' +
+    (logo ? '<div class="venue-logo">' + logo + '</div>' : '') +
     (circuit ? '<div class="venue-circuit">' + escapeHTML(circuit) + '</div>' : '') +
     '<h1 class="venue-title">' + escapeHTML(title) + '</h1>' +
     (sub ? '<p class="venue-sub">' + escapeHTML(sub) + '</p>' : '') +
@@ -433,11 +465,6 @@ function venueHero(logoUrl, circuit, title, sub) {
 // Prend entierement la main sur l'ecran 0 : le formulaire n'a rien a faire la
 // tant qu'aucune session n'est choisie.
 function renderVenueScreen(data, venueToken) {
-  const host = document.getElementById('screen-0');
-  if (!host) return;
-  if (!document.getElementById('venue-pick-css')) {
-    document.head.insertAdjacentHTML('beforeend', VENUE_CSS);
-  }
   const floatSwitch = document.querySelector('.page-switch');
   if (floatSwitch) floatSwitch.remove();
 
@@ -461,13 +488,11 @@ function renderVenueScreen(data, venueToken) {
       )).join('')
     : '<div class="venue-empty">Aucune session ouverte à l’inscription pour le moment.<br>Rescanne le QR du circuit un peu plus tard.</div>';
 
-  host.innerHTML = VENUE_CSS + '<div class="venue-wrap">' + tabs +
+  mountVenue(tabs +
     venueHero(data && data.logo_url, lastVenueName, 'Choisis ta session',
               'Inscris-toi à la session que tu vas courir.') +
     rows +
-    '<p class="venue-note">Cette page se met à jour toute seule.<br>Garde-la en favori ou rescanne le QR du circuit.</p>' +
-    '</div>';
-  host.classList.remove('card');
+    '<p class="venue-note">Cette page se met à jour toute seule.<br>Garde-la en favori ou rescanne le QR du circuit.</p>');
 }
 
 export async function initRegisterPage() {
