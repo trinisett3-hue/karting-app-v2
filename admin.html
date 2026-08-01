@@ -115,6 +115,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
 .g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px}
+    .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
 .no-session{text-align:center;padding:36px;color:var(--mut);font-size:14px;background:var(--surf);border:1px dashed var(--bord);border-radius:var(--rad)}
 .empty{position:relative;text-align:center;padding:34px 20px;color:var(--mut);font-size:13px;font-weight:600}
 .empty::before{content:'🏁';display:block;font-size:20px;margin:0 auto 12px;width:38px;height:38px;line-height:38px;border-radius:50%;border:1.5px dashed var(--bord);background:rgba(255,59,48,.05)}
@@ -171,8 +172,8 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .sess-card .sc-badge{align-self:flex-start;font-size:10px;font-weight:800;text-transform:uppercase;padding:4px 10px;border-radius:20px;background:rgba(255,59,48,.15);color:var(--acc2)}
 .sess-card .sc-badge.pub{background:rgba(51,209,122,.15);color:var(--grn)}
 .sess-card .sc-occ{margin-top:auto;font-size:13px;font-weight:700}
-@media(max-width:850px){.g2,.g3,.g4{grid-template-columns:1fr}}
-@media(max-width:1100px) and (min-width:851px){.g4{grid-template-columns:1fr 1fr}}
+@media(max-width:850px){.g2,.g3,.g4,.g5{grid-template-columns:1fr}}
+@media(max-width:1100px) and (min-width:851px){.g4,.g5{grid-template-columns:1fr 1fr}}
 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spinAnim .7s linear infinite;margin-right:6px}
 @keyframes spinAnim{to{transform:rotate(360deg)}}
@@ -657,7 +658,7 @@ updateThemeToggleUI();
 
 <!-- 3) FIDELISATION PILOTES (Premium) -->
 <div class="subtab-panel" id="stats-subtab-fid">
-<div class="g4" id="stats-fid-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
+<div class="g5" id="stats-fid-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
 <div class="g2">
 <div class="card">
 <div class="ctitle">Segmentation (nouveaux / reguliers / fans)</div>
