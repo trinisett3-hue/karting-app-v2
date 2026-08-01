@@ -30,6 +30,22 @@ body.light .btn-ghost:hover{background:#e4e7f2;border-color:#c9cee0}
 body.light .arch-item:hover{background:#eef0f7}
 body.light input,body.light select,body.light textarea{background:var(--surf2)}
 body.light .sb-logo::before{filter:invert(0) opacity(.5)}
+/* --- Mode clair : pop-up et fenetres de dialogue (01/08, demande client) -------------
+   Les boites de dialogue (.qr-zoom-box sert a QR, historique, recap de cloture, login,
+   ajout manuel ; .pres-box au mode presentation ; .cm-box a confirmModal) etaient
+   degradees vers #0c0e17 en dur : blanc en haut, quasi noir en bas, texte illisible.
+   On repasse ici sur des surfaces claires, un voile de fond plus doux et des ombres
+   colorees en bleu-gris plutot qu'en noir opaque. */
+body.light .overlay{background:rgba(23,25,35,.34);backdrop-filter:blur(5px)}
+body.light #pres-overlay{background:rgba(23,25,35,.46)}
+body.light .qr-zoom-box,body.light .cm-box{background:linear-gradient(180deg,#ffffff 0%,var(--surf2) 100%);border:1px solid var(--bord);box-shadow:0 22px 60px -18px rgba(20,20,40,.32),0 2px 6px rgba(20,20,40,.06)}
+body.light .pres-box{background:linear-gradient(180deg,#ffffff 0%,var(--surf2) 100%);box-shadow:0 0 0 1px rgba(255,59,48,.18),0 26px 64px -18px rgba(20,20,40,.34)}
+body.light .cm-overlay{background:rgba(23,25,35,.34)}
+body.light .cm-box .cm-cancel:hover{background:#e4e7f2}
+body.light .qr-wrap{border-color:var(--bord)}
+/* Ces deux survols etaient en blanc translucide : invisibles sur fond clair. */
+body.light .tbl tr:hover td{background:#f2f3fa}
+body.light .sb-tab:hover{background:#eef0f7}
 *{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-font-smoothing:antialiased}
 body{
@@ -242,6 +258,13 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .reg-count-n{font-size:30px;font-weight:800;line-height:1;letter-spacing:-.5px}
 .reg-count-lbl{font-size:12.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.6px;font-weight:700}
 .reg-count-filter{font-size:11.5px;font-weight:700;color:var(--acc);background:rgba(255,59,48,.1);border:1px solid rgba(255,59,48,.25);border-radius:99px;padding:2px 9px}
+/* Consentement offres promo : donne par le pilote lui-meme a l'inscription.
+   L'admin ne peut que le retirer, jamais l'accorder (voir withdraw_promo_consent). */
+.promo-badge{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:99px;padding:3px 10px;white-space:nowrap;cursor:help}
+.promo-badge::before{content:'';width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+.promo-yes{color:var(--grn);background:rgba(51,209,122,.12);border:1px solid rgba(51,209,122,.28)}
+.promo-no{color:var(--mut);background:var(--bg);border:1px solid var(--bord)}
+#btn-registry-promo-filter.on{color:var(--grn);background:rgba(51,209,122,.14);border-color:rgba(51,209,122,.4)}
 /* Pagination : 20 lignes par page */
 .reg-pager{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-top:14px}
 .reg-pager:empty{display:none}
@@ -459,18 +482,8 @@ updateThemeToggleUI();
 <div class="msg" id="msg-chrono"></div>
 </div>
 
-<div class="card">
-<div class="flex" style="justify-content:space-between;margin-bottom:6px">
-<div class="ctitle" style="margin:0">Saisie manuelle des chronos (1 tour par kart)</div>
-<button class="btn btn-ghost btn-sm" onclick="renderManualChronoTable()">Actualiser la grille</button>
-</div>
-<div style="font-size:11px;color:var(--mut);margin-bottom:10px">Une ligne par kart de 1 a max_karts. Le nom affiche est celui du pilote inscrit sur ce kart (lecture seule). Laisse un temps vide pour ne rien importer pour ce kart.</div>
-<div id="manual-chrono-table"><div class="empty">Ouvre une session pour saisir les chronos.</div></div>
-<div class="flex" style="margin-top:10px">
-<button class="btn btn-primary" onclick="validateManualChrono()" id="btn-manual-chrono">Valider</button>
-</div>
-<div class="msg" id="msg-manual-chrono"></div>
-</div>
+<!-- Retire le 01/08 (demande client) : la saisie manuelle "1 tour par kart" faisait
+     doublon avec l'import texte/fichier ci-dessus, qui couvre deja ce cas. -->
 
 <div class="card" id="stats-session-card" style="display:none">
 <div class="ctitle">Statistiques de la session</div>
@@ -489,6 +502,15 @@ updateThemeToggleUI();
 <button class="btn btn-ghost btn-sm" id="btn-pdf-active" onclick="exportActivePDF(this)">Exporter PDF</button>
 </div>
 <div class="msg" id="msg-res"></div>
+</div>
+
+<!-- Point 2.1 (voie 1) : le bandeau de verification. Le .msg au-dessus disparait au bout
+     de 5 s ; cette carte, elle, reste et relit l'etat reel en base a la demande. Masquee
+     tant que la session n'a jamais ete publiee. -->
+<div class="card" id="publish-verify" style="display:none">
+<div class="ctitle">Verification de la publication</div>
+<div style="font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:8px">Etat reel relu en base : ce qui a ete genere, ce qui est parti, ce qui reste a rattraper.</div>
+<div id="pv-body"></div>
 </div>
 </div>
 <div class="card" style="margin-top:8px">
@@ -705,8 +727,12 @@ updateThemeToggleUI();
 <div class="card">
 <div class="reg-count" id="registry-total"></div>
 <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px">
-<input type="text" class="reg-search" id="reg-search" placeholder="Rechercher un pseudo, un nom ou un email..." style="max-width:360px;margin-bottom:0" oninput="filterRegistry()">
+<input type="text" class="reg-search" id="reg-search" placeholder="Rechercher un pseudo, un nom ou un email..." style="max-width:300px;margin-bottom:0" oninput="filterRegistry()">
+<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+<button class="btn btn-ghost btn-sm" id="btn-registry-promo-filter" aria-pressed="false" onclick="togglePromoFilter()" title="N'afficher que les clients ayant accepte de recevoir les offres du circuit">Opt-in promo</button>
 <button class="btn btn-ghost btn-sm" id="btn-registry-export" onclick="exportRegistryCSV()">Exporter en CSV</button>
+<button class="btn btn-ghost btn-sm" id="btn-registry-export-xlsx" onclick="exportRegistryXLSX()">Exporter en XLSX</button>
+</div>
 </div>
 <div id="registry-table"><div class="empty">Chargement...</div></div>
 <div class="reg-pager" id="registry-pager"></div>
