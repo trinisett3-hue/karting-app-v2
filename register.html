@@ -14,7 +14,11 @@
   --surf:#12141e;--surf2:#181b28;
   --bord:#262a3c;--bord-soft:rgba(255,255,255,.09);
   --txt:#f5f6fb;--mut:#8d92ac;--mut-dim:#5f6480;
-  --acc:#ff3b30;--acc2:#ff6a4d;--acc-deep:#c81e18;--acc-glow:rgba(255,59,48,.38);
+  --acc:#ff3b30;--acc2:#ff6a4d;--acc-deep:#c81e18;
+  --acc-glow:color-mix(in srgb,var(--acc) 38%,transparent);
+  --acc-soft:color-mix(in srgb,var(--acc) 15%,transparent);
+  --acc-tint:color-mix(in srgb,var(--acc) 10%,transparent);
+  --acc-wash:color-mix(in srgb,var(--acc) 12%,var(--surf));
   --gold:#d8b571;--gold-soft:rgba(216,181,113,.5);--gold-glow:rgba(216,181,113,.22);
   --grn:#33d17a;--red:#ff4d4d;--yel:#ffcc33;
   --font-display:'Teko','Arial Narrow',sans-serif;
@@ -26,7 +30,7 @@
 html{-webkit-text-size-adjust:none}
 body{
   background:
-    radial-gradient(ellipse 65% 42% at 12% -12%, rgba(255,59,48,.12) 0%, transparent 62%),
+    radial-gradient(ellipse 65% 42% at 12% -12%, color-mix(in srgb,var(--acc) 12%,transparent) 0%, transparent 62%),
     radial-gradient(ellipse 55% 38% at 105% 105%, rgba(216,181,113,.07) 0%, transparent 62%),
     radial-gradient(ellipse 40% 30% at 50% 40%, rgba(255,255,255,.02) 0%, transparent 70%),
     linear-gradient(180deg, var(--bg) 0%, #05060a 100%);
@@ -69,9 +73,9 @@ body::after{
     0 1px 0 rgba(255,255,255,.05) inset,
     0 0 0 1px rgba(0,0,0,.5),
     0 30px 70px -24px rgba(0,0,0,.75),
-    0 10px 28px -16px rgba(255,59,48,.08);
+    0 10px 28px -16px color-mix(in srgb,var(--acc) 8%,transparent);
 }
-.logo{text-align:center;font-family:var(--font-display);font-size:36px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px;line-height:1}
+.logo{text-align:center;font-family:var(--font-display);font-size:clamp(25px,7.2vw,36px);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .logo span{color:var(--acc);text-shadow:0 0 24px var(--acc-glow)}
 .subtitle{text-align:center;font-size:13.5px;color:var(--mut);font-weight:500;margin-bottom:24px;letter-spacing:.2px}
 .session-title{
@@ -96,7 +100,7 @@ input,select{
 }
 input::placeholder{color:#565b74}
 input:hover,select:hover{border-color:#33384e}
-input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255,59,48,.15),0 1px 0 rgba(255,255,255,.02) inset}
+input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--acc-soft),0 1px 0 rgba(255,255,255,.02) inset}
 .btn{
   width:100%;padding:15.5px;border-radius:13px;font-size:16px;font-weight:800;border:none;cursor:pointer;margin-top:10px;
   letter-spacing:.25px;font-family:var(--font-body);
@@ -132,14 +136,14 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
   display:flex;align-items:center;gap:14px;
   box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
 }
-.choice-btn:hover{border-color:var(--acc);background:linear-gradient(180deg,#221219,var(--surf2));transform:translateY(-2px);box-shadow:0 14px 30px -14px var(--acc-glow),0 1px 0 rgba(255,255,255,.05) inset}
+.choice-btn:hover{border-color:var(--acc);background:linear-gradient(180deg,var(--acc-wash),var(--surf2));transform:translateY(-2px);box-shadow:0 14px 30px -14px var(--acc-glow),0 1px 0 rgba(255,255,255,.05) inset}
 .choice-sub{font-size:12.5px;color:var(--mut);font-weight:500;margin-top:4px;line-height:1.4}
 .choice-icon{font-size:24px;flex-shrink:0;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
 
 /* Écran 1b — confirmation pilote trouvé */
 .pilot-found-card{
-  background:linear-gradient(165deg,rgba(255,59,48,.12),rgba(216,181,113,.04) 60%,rgba(255,59,48,.02));
-  border:1px solid rgba(255,59,48,.42);border-radius:15px;padding:22px;text-align:center;margin-bottom:16px;
+  background:linear-gradient(165deg,color-mix(in srgb,var(--acc) 12%,transparent),rgba(216,181,113,.04) 60%,color-mix(in srgb,var(--acc) 2%,transparent));
+  border:1px solid color-mix(in srgb,var(--acc) 42%,transparent);border-radius:15px;padding:22px;text-align:center;margin-bottom:16px;
   box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
 }
 .pilot-found-pseudo{font-family:var(--font-display);font-size:27px;font-weight:700;color:var(--acc2);margin-bottom:4px;letter-spacing:.3px}
@@ -162,7 +166,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
   padding:10px 11px;border-radius:8px;font-size:14.5px;font-weight:600;color:var(--txt);
   cursor:pointer;display:flex;align-items:center;gap:9px;
 }
-.nat-option:hover,.nat-option.hi{background:rgba(255,59,48,.14)}
+.nat-option:hover,.nat-option.hi{background:color-mix(in srgb,var(--acc) 14%,transparent)}
 .nat-option.sel{color:var(--acc2)}
 .nat-empty{padding:12px;text-align:center;font-size:13px;color:var(--mut-dim)}
 
@@ -175,11 +179,11 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
   user-select:none;transition:.18s var(--ease);
   box-shadow:0 1px 0 rgba(255,255,255,.04) inset;
 }
-.avatar-arrow:hover{border-color:var(--acc);color:var(--acc2);background:linear-gradient(180deg,#221219,var(--surf2));transform:translateY(-1px)}
+.avatar-arrow:hover{border-color:var(--acc);color:var(--acc2);background:linear-gradient(180deg,var(--acc-wash),var(--surf2));transform:translateY(-1px)}
 .avatar-arrow:disabled{opacity:.3;cursor:not-allowed;transform:none}
 .avatar-stage{
   flex:0 0 auto;width:150px;height:150px;border-radius:20px;
-  background:radial-gradient(circle at 50% 28%,rgba(255,59,48,.1),transparent 68%),linear-gradient(180deg,var(--surf) 0%,var(--bg) 100%);
+  background:radial-gradient(circle at 50% 28%,var(--acc-tint),transparent 68%),linear-gradient(180deg,var(--surf) 0%,var(--bg) 100%);
   border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;
   box-shadow:0 16px 36px -16px rgba(0,0,0,.7),0 1px 0 rgba(255,255,255,.04) inset;
 }
@@ -188,7 +192,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
 .avatar-status{text-align:center;font-size:12px;color:var(--mut);margin-top:10px;font-weight:500;letter-spacing:.15px}
 
 .success-screen{display:none;text-align:center;padding:30px 6px}
-.success-icon{font-size:60px;margin-bottom:16px;filter:drop-shadow(0 10px 24px rgba(255,59,48,.4))}
+.success-icon{font-size:60px;margin-bottom:16px;filter:drop-shadow(0 10px 24px color-mix(in srgb,var(--acc) 40%,transparent))}
 .success-title{font-family:var(--font-display);font-size:27px;font-weight:700;margin-bottom:11px;text-transform:uppercase;letter-spacing:.4px}
 .success-sub{font-size:14.5px;color:var(--mut)}
 
@@ -235,7 +239,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
 <!-- ÉCRAN 0 — Choix d'identité -->
 <div class="card reg-screen active" id="screen-0">
   <div id="circuit-logo-wrap"></div>
-  <div class="logo">🏎️ Karting <span class="js-circuit-name"></span></div>
+  <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle">Inscris-toi pour la course !</div>
   <div class="session-title" id="session-name">Chargement…</div>
 
@@ -254,7 +258,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
 
 <!-- ÉCRAN 1a — Première fois : création du profil pilote -->
 <div class="card reg-screen" id="screen-1a">
-  <div class="logo">🏎️ Karting <span class="js-circuit-name"></span></div>
+  <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle">Crée ton profil pilote</div>
 
   <div class="field">
@@ -299,7 +303,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
 
 <!-- ÉCRAN 1b — Déjà pilote : recherche -->
 <div class="card reg-screen" id="screen-1b">
-  <div class="logo">🏎️ Karting <span class="js-circuit-name"></span></div>
+  <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle">Retrouve ton profil</div>
 
   <div class="field">
@@ -322,7 +326,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px rgba(255
 
 <!-- ÉCRAN 2 — Session : avatar -->
 <div class="card reg-screen" id="screen-2">
-  <div class="logo">🏎️ Karting <span class="js-circuit-name"></span></div>
+  <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle" id="screen2-sub">Dernière étape !</div>
 
   <div class="field">
