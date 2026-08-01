@@ -7,7 +7,7 @@
 // RPC SECURITY DEFINER qui fait elle-même l'agrégation par tenant_users côté serveur (voir
 // la migration) — le front ne fait que consommer ce qu'elle renvoie.
 import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
-import { formatDate, showMsg, confirmModal } from './ui.js';
+import { formatDate, formatDateNumeric, showMsg, confirmModal } from './ui.js';
 import { NATS } from './countries.js';
 import { hasFeature } from './plan.js';
 
@@ -151,9 +151,13 @@ function promoBadgeHTML(r) {
   if (!r.promo_opt_in) {
     return '<span class="promo-badge promo-no" title="Ce client n\'a pas accepte de recevoir les offres du circuit">Non</span>';
   }
-  const since = r.promo_opt_in_at ? formatDate(r.promo_opt_in_at) : null;
+  // Date absolue et non relative : « Consentement donné le Hier » se lisait mal,
+  // et une preuve de consentement RGPD doit porter une date exploitable telle
+  // quelle. formatDateNumeric() suit le réglage Paramètres > Sessions (jj/mm/aaaa
+  // ou mm-jj-aaaa) ; le slice(0,10) absorbe les valeurs horodatées.
+  const since = r.promo_opt_in_at ? formatDateNumeric(String(r.promo_opt_in_at).slice(0, 10)) : null;
   return (
-    '<span class="promo-badge promo-yes" title="Consentement donne par le client' +
+    '<span class="promo-badge promo-yes" title="Consentement donné par le client' +
     (since ? ' le ' + since : '') +
     '">Oui</span>'
   );
