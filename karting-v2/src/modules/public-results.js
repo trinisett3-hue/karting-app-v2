@@ -455,49 +455,80 @@ function venueTabs(active, otherHref) {
 }
 
 function venueHero(logoUrl, circuit, title, sub) {
+  // Le logo de Parametres est affiche tel quel : plus de fond accentue
+  // derriere lui. Sans logo, on n'affiche rien du tout plutot qu'un pave.
   const logo = logoUrl
     ? '<img src="' + escapeHTML(logoUrl) + '" alt="">'
-    : '<span aria-hidden="true">\u{1F3C1}</span>';
+    : '';
   return '<div class="venue-hero">' +
-    '<div class="venue-logo">' + logo + '</div>' +
+    (logo ? '<div class="venue-logo">' + logo + '</div>' : '') +
     (circuit ? '<div class="venue-circuit">' + escapeHTML(circuit) + '</div>' : '') +
     '<h1 class="venue-title">' + escapeHTML(title) + '</h1>' +
     (sub ? '<p class="venue-sub">' + escapeHTML(sub) + '</p>' : '') +
     '</div>';
 }
 
-/* Toutes les couleurs sortent des variables du theme (--c-accent, --c-border,
-   --c-muted, --c-bg) : rien en dur, l'ecran suit Parametres > Apparence. */
-function venueShell(inner) {
-  return `<style>
-.venue-wrap{max-width:34rem;margin:0 auto;padding:0 .25rem 3rem;text-align:left}
-.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:max-content;margin:.5rem auto 1.9rem;padding:.19rem;border:1px solid var(--c-border);border-radius:999px;background:rgba(255,255,255,.04)}
-.venue-tabs a,.venue-tabs span{padding:.5rem 1.4rem;border-radius:999px;font-family:var(--font-body,inherit);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--c-muted);transition:color .15s}
-.venue-tabs a:hover{color:var(--c-text)}
-.venue-tabs span{background:var(--c-accent);color:var(--c-bg)}
+/* Coque commune : voir le meme bloc dans register.js. Aucune couleur en dur,
+   tout descend des variables de theme. */
+const VENUE_CSS = `<style id="venue-shell-css">
+/* Coque commune aux deux ecrans de selection (resultats + inscription).
+   Texte STRICTEMENT identique dans public-results.js et register.js : c'est
+   ce qui garantit que la pastille d'onglets tombe au meme pixel et que la
+   colonne a la meme largeur quand on passe d'un onglet a l'autre.
+   Les tokens des deux pages different (--c-* cote resultats, --* cote
+   inscription) : on les lit en cascade avec repli, donc aucune couleur en dur
+   n'est imposee, le theme de Parametres > Apparence decide toujours. */
+html.venue-mode,html.venue-mode body{height:auto;min-height:100%}
+html.venue-mode body{display:block!important;margin:0!important;padding:0!important;align-items:stretch!important;justify-content:flex-start!important}
+#venue-root{display:block;width:100%}
+.venue-wrap{width:100%;max-width:33rem;margin:0 auto;padding:1.6rem 1.15rem 3.5rem;text-align:left;box-sizing:border-box}
+.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:19rem;max-width:100%;margin:0 auto 2rem;padding:.19rem;border:1px solid var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:999px;background:rgba(255,255,255,.04)}
+.venue-tabs a,.venue-tabs span{flex:1 1 0;text-align:center;padding:.5rem .6rem;border-radius:999px;font-family:var(--font-body,inherit);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--c-muted,var(--mut,#8a8f9a));transition:color .15s}
+.venue-tabs a:hover{color:var(--c-text,var(--txt,#fff))}
+.venue-tabs span{background:var(--c-accent,var(--acc,#ffb238));color:var(--c-bg,var(--bg,#0b0b0f))}
 .venue-hero{text-align:center;margin:0 0 1.75rem}
-.venue-logo{width:3.25rem;height:3.25rem;border-radius:.9rem;margin:0 auto .85rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:var(--c-accent);color:var(--c-bg);overflow:hidden}
-.venue-logo img{width:100%;height:100%;object-fit:cover;display:block}
-.venue-circuit{font-size:.72rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--c-accent);margin:0 0 .6rem}
-.venue-title{font-family:var(--font-display,inherit);font-size:clamp(1.4rem,5vw,1.85rem);font-weight:600;line-height:1.15;margin:0 0 .35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.venue-sub{margin:0;font-size:.85rem;line-height:1.5;color:var(--c-muted)}
-.venue-row{display:flex;align-items:center;gap:.8rem;padding:.95rem 1.05rem;margin:0 0 .55rem;border:1px solid var(--c-border);border-radius:.9rem;background:rgba(255,255,255,.03);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
-.venue-row:hover{border-color:var(--c-accent);transform:translateY(-1px)}
-.venue-row.hot{border-color:color-mix(in srgb,var(--c-accent) 40%,transparent);background:color-mix(in srgb,var(--c-accent) 5%,transparent)}
-.venue-tag{flex:0 0 auto;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.38rem .55rem;border-radius:999px;background:rgba(255,255,255,.08);color:var(--c-muted);white-space:nowrap}
-.venue-row.hot .venue-tag{background:var(--c-accent);color:var(--c-bg)}
+.venue-logo{display:flex;align-items:center;justify-content:center;margin:0 auto 1rem;max-width:11rem;min-height:3rem;font-size:1.6rem;line-height:1}
+.venue-logo img{max-width:100%;max-height:3.4rem;width:auto;height:auto;object-fit:contain;display:block}
+.venue-circuit{font-size:.72rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--c-accent,var(--acc,#ffb238));margin:0 0 .6rem}
+.venue-title{font-family:var(--font-display,inherit);font-size:clamp(1.45rem,5.2vw,1.9rem);font-weight:600;line-height:1.15;letter-spacing:0;text-transform:none;margin:0 0 .35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-sub{margin:0;font-size:.85rem;line-height:1.5;color:var(--c-muted,var(--mut,#8a8f9a))}
+.venue-row{display:flex;align-items:center;gap:.8rem;padding:.95rem 1.05rem;margin:0 0 .55rem;border:1px solid var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:.9rem;background:rgba(255,255,255,.03);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+.venue-row:hover{border-color:var(--c-accent,var(--acc,#ffb238));transform:translateY(-1px)}
+.venue-row.hot{border-color:color-mix(in srgb,var(--c-accent,var(--acc,#ffb238)) 40%,transparent);background:color-mix(in srgb,var(--c-accent,var(--acc,#ffb238)) 5%,transparent)}
+.venue-tag{flex:0 0 auto;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.38rem .55rem;border-radius:999px;background:rgba(255,255,255,.08);color:var(--c-muted,var(--mut,#8a8f9a));white-space:nowrap}
+.venue-row.hot .venue-tag{background:var(--c-accent,var(--acc,#ffb238));color:var(--c-bg,var(--bg,#0b0b0f))}
 .venue-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:.19rem}
 .venue-txt b{font-size:.95rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.venue-txt i{font-style:normal;font-size:.78rem;color:var(--c-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-txt i{font-style:normal;font-size:.78rem;color:var(--c-muted,var(--mut,#8a8f9a));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .venue-chev{flex:0 0 auto;opacity:.4}
-.venue-empty{padding:1.25rem;border:1px dashed var(--c-border);border-radius:.9rem;font-size:.87rem;line-height:1.6;color:var(--c-muted);text-align:center}
-.venue-note{margin:1.6rem 0 0;font-size:.75rem;line-height:1.6;color:var(--c-muted);opacity:.7;text-align:center}
-</style><div class="venue-wrap">${inner}</div>`;
+.venue-empty{padding:1.25rem;border:1px dashed var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:.9rem;font-size:.87rem;line-height:1.6;color:var(--c-muted,var(--mut,#8a8f9a));text-align:center}
+.venue-note{margin:1.6rem 0 0;font-size:.75rem;line-height:1.6;color:var(--c-muted,var(--mut,#8a8f9a));opacity:.7;text-align:center}
+</style>`;
+
+/* 01/08 : la coque de selection ne vit plus DANS le gabarit de la page hote.
+   Les deux pages ont des enveloppes tres differentes (colonne 900px + podium
+   cote resultats, body centre verticalement + carte 432px cote inscription) :
+   tant que la coque etait posee dedans, la pastille d'onglets sautait de
+   ~130px et la colonne changeait de largeur en passant d'un onglet a l'autre.
+   On monte desormais la coque en enfant direct de <body>, on masque le reste
+   et on neutralise le body via html.venue-mode. Geometrie identique des deux
+   cotes, par construction. */
+function mountVenue(inner) {
+  document.documentElement.classList.add('venue-mode');
+  Array.prototype.slice.call(document.body.children).forEach(el => {
+    if (el.id !== 'venue-root' && el.tagName !== 'SCRIPT') el.style.display = 'none';
+  });
+  let root = document.getElementById('venue-root');
+  if (!root) {
+    root = document.createElement('div');
+    root.id = 'venue-root';
+    document.body.appendChild(root);
+  }
+  root.innerHTML = VENUE_CSS + '<div class="venue-wrap">' + inner + '</div>';
+  return root;
 }
 
 export async function renderVenuePicker(venueToken) {
-  const host = document.getElementById('podium-wrap');
-  if (!host) return false;
 
   // 01/08 : l'ecran de selection n'emprunte plus RIEN a la page resultats.
   // L'entete circuit (gros bloc centre avec halo, date et libelle de session)
@@ -517,12 +548,11 @@ export async function renderVenuePicker(venueToken) {
   const floatSwitch = document.querySelector('.page-switch');
   if (floatSwitch) floatSwitch.remove();
 
-  host.className = '';
-  host.innerHTML = venueShell('<div class="venue-empty">Chargement…</div>');
+  mountVenue('<div class="venue-empty">Chargement…</div>');
 
   const { data, error } = await db.rpc('public_venue_sessions', { _venue_token: venueToken });
   if (error || !data) {
-    host.innerHTML = venueShell('<div class="venue-empty">Lien invalide ou circuit introuvable.</div>');
+    mountVenue('<div class="venue-empty">Lien invalide ou circuit introuvable.</div>');
     return false;
   }
 
@@ -554,7 +584,7 @@ export async function renderVenuePicker(venueToken) {
       )).join('')
     : '<div class="venue-empty">Aucun résultat publié pour l’instant.<br>Reviens juste après ta session.</div>';
 
-  host.innerHTML = venueShell(
+  mountVenue(
     venueTabs('results', 'register.html?v=' + encodeURIComponent(venueToken)) +
     venueHero(data.logo_url, venueName, 'Choisis ta session',
               'Sélectionne la session que tu viens de courir pour voir le classement.') +
