@@ -1,5 +1,5 @@
 // Point d'entrée de l'admin Karting V2 — orchestrateur.
-//   
+//    
 // Rôle : (1) initialiser l'ap p au chargement de la page (identique au
 // window.addEventListener('DOMContentLoaded', ...) de l'original), (2) attacher toutes
 // les fonctions utilisées en onclick="..." dans le HTML sur `window`, puisque les modules
