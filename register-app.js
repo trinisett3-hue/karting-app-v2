@@ -6,6 +6,10 @@ import * as register from './modules/register.js';
 
 window.addEventListener('DOMContentLoaded', async () => {
   register.renderNats();
+  // Échap ferme le panneau CGV/CGU/RGPD, au même titre qu'un clic à côté.
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') register.closeLegal();
+  });
   await register.initRegisterPage();
 });
 
@@ -23,4 +27,8 @@ Object.assign(window, {
   confirmPilotFound: register.confirmPilotFound,
   avatarPrev: register.avatarPrev,
   avatarNext: register.avatarNext,
+  openLegal: register.openLegal,
+  closeLegal: register.closeLegal,
+  closeLegalFromBackdrop: register.closeLegalFromBackdrop,
+  onConsentChange: register.onConsentChange,
 });
