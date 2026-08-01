@@ -222,15 +222,29 @@ async function loadRegistrationConfig(token) {
 // Meme table de couleurs que resultats (public-results.js / initTheme MAP)
 // tant que public_registration_config() ne relaie pas encore le theme —
 // best effort : si cfg.results_theme est absent, rien ne change (repli rouge).
-const THEME_ACCENT = {
-  classic: '#ff2a2a', neon: '#00d4ff', carbon: '#c9a84c', checkered: '#ece8dd',
-  endurance: '#ffb238', pitlane: '#f0c419', champagne: '#d9b978', arctic: '#1a6fbd',
+const THEME_TOKENS = {
+  classic:   { acc: '#ff2a2a', acc2: '#ff6a4d', deep: '#c81e18' },
+  neon:      { acc: '#00d4ff', acc2: '#5ce1ff', deep: '#0088aa' },
+  carbon:    { acc: '#c9a84c', acc2: '#e0c476', deep: '#8f7529' },
+  checkered: { acc: '#ece8dd', acc2: '#ffffff', deep: '#a9a396' },
+  endurance: { acc: '#ffb238', acc2: '#ffcb73', deep: '#c47c12' },
+  pitlane:   { acc: '#f0c419', acc2: '#ffdc5c', deep: '#b08c00' },
+  champagne: { acc: '#d9b978', acc2: '#f0d7a4', deep: '#a1854a' },
+  arctic:    { acc: '#1a6fbd', acc2: '#4f9fe0', deep: '#0d4a83' },
 };
+
+// 01/08 : toutes les teintes rouges ecrites en dur dans register.html ont ete
+// remplacees par des derivations de --acc (color-mix). Il suffit donc de
+// poser --acc / --acc2 / --acc-deep pour que TOUTE la page suive le theme
+// choisi dans Parametres > Apparence. Aucune couleur n'est decidee par le
+// code : elle vient de app_settings.global.results_theme.
 function applyThemeAccent(themeKey) {
-  const hex = THEME_ACCENT[String(themeKey || '').trim()];
-  if (!hex) return;
-  document.documentElement.style.setProperty('--acc', hex);
-  document.documentElement.style.setProperty('--acc-deep', hex);
+  const t = THEME_TOKENS[String(themeKey || '').trim()];
+  if (!t) return;
+  const r = document.documentElement.style;
+  r.setProperty('--acc', t.acc);
+  r.setProperty('--acc2', t.acc2);
+  r.setProperty('--acc-deep', t.deep);
 }
 
 function applyCircuitBranding(cfg) {
@@ -327,79 +341,133 @@ function renderVenueTabs(resultsHref) {
    - ?v=TOKEN             -> liste deroulante des sessions ouvertes.
    - les deux             -> session pre-selectionnee + possibilite d'en changer.
    -------------------------------------------------------------------------- */
-const SESSION_PICKER_CSS = `<style id="sess-pick-css">
-.sess-pick{margin:14px 0 18px;text-align:left}
-.sess-pick label{display:block;font-size:12px;letter-spacing:.1em;text-transform:uppercase;opacity:.6;margin:0 0 7px}
-.sess-pick select{width:100%;padding:14px 16px;font:inherit;font-size:16px;border-radius:12px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);color:inherit;-webkit-appearance:none;appearance:none;background-image:url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;background-size:20px;padding-right:44px}
-.sess-pick select:focus{outline:none;border-color:var(--acc,#ffb238)}
-.sess-pick .hint{margin:7px 0 0;font-size:12.5px;opacity:.5}
+/* ---------------------------------------------------------------------------
+   ECRAN DE SELECTION DE SESSION (refonte 01/08)
+   Le staff peut ouvrir plusieurs sessions en meme temps et il n'y a plus qu'un
+   seul QR permanent par circuit (?v=<public_venue_token>) : le pilote doit
+   donc CHOISIR sa session. Cet ecran est desormais AUTONOME — il ne reutilise
+   plus l'entete du formulaire d'inscription — et partage exactement la meme
+   grammaire visuelle que le selecteur de la page resultats (memes onglets,
+   meme hero, memes lignes), pour que le passage d'un onglet a l'autre soit
+   sans rupture. Donnees : RPC public_venue_sessions (SECURITY DEFINER, rien
+   de nominatif, strictement limite au tenant porteur du jeton de circuit).
+   -------------------------------------------------------------------------- */
+const VENUE_CSS = `<style id="venue-pick-css">
+.venue-wrap{max-width:34rem;margin:0 auto;padding:0 .25rem .5rem;text-align:left}
+.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:max-content;margin:.25rem auto 1.9rem;padding:.19rem;border:1px solid var(--bord);border-radius:999px;background:rgba(255,255,255,.04)}
+.venue-tabs a,.venue-tabs span{padding:.5rem 1.4rem;border-radius:999px;font-family:var(--font-body);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--mut);transition:color .15s}
+.venue-tabs a:hover{color:var(--txt)}
+.venue-tabs span{background:var(--acc);color:var(--bg)}
+.venue-hero{text-align:center;margin:0 0 1.75rem}
+.venue-logo{width:3.25rem;height:3.25rem;border-radius:.9rem;margin:0 auto .85rem;display:flex;align-items:center;justify-content:center;font-size:1.5rem;background:var(--acc);color:var(--bg);overflow:hidden}
+.venue-logo img{width:100%;height:100%;object-fit:cover;display:block}
+.venue-circuit{font-size:.72rem;font-weight:700;letter-spacing:.22em;text-transform:uppercase;color:var(--acc);margin:0 0 .6rem}
+.venue-title{font-family:var(--font-display);font-size:clamp(1.55rem,6vw,2.1rem);font-weight:700;line-height:1.1;text-transform:uppercase;margin:0 0 .35rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-sub{margin:0;font-size:.85rem;line-height:1.5;color:var(--mut)}
+.venue-row{display:flex;align-items:center;gap:.8rem;padding:.95rem 1.05rem;margin:0 0 .55rem;border:1px solid var(--bord);border-radius:.9rem;background:rgba(255,255,255,.03);text-decoration:none;color:inherit;transition:border-color .15s,transform .15s}
+.venue-row:hover{border-color:var(--acc);transform:translateY(-1px)}
+.venue-row.hot{border-color:color-mix(in srgb,var(--acc) 40%,transparent);background:color-mix(in srgb,var(--acc) 5%,transparent)}
+.venue-tag{flex:0 0 auto;font-size:.63rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.38rem .55rem;border-radius:999px;background:rgba(255,255,255,.08);color:var(--mut);white-space:nowrap}
+.venue-row.hot .venue-tag{background:var(--acc);color:var(--bg)}
+.venue-txt{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:.19rem}
+.venue-txt b{font-size:.95rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-txt i{font-style:normal;font-size:.78rem;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.venue-chev{flex:0 0 auto;opacity:.4}
+.venue-empty{padding:1.25rem;border:1px dashed var(--bord);border-radius:.9rem;font-size:.87rem;line-height:1.6;color:var(--mut);text-align:center}
+.venue-note{margin:1.6rem 0 0;font-size:.75rem;line-height:1.6;color:var(--mut);opacity:.7;text-align:center}
 </style>`;
 
-// 31/07 : on memorise aussi le nom du circuit renvoye par le RPC — sur
-// l'ecran "Choisis ta session" aucune session n'est encore selectionnee, donc
-// public_registration_config() n'a pas ete appele et l'entete affichait
-// "KARTING" tout court au lieu du nom du circuit.
 let lastVenueName = '';
-async function loadOpenSessions(venueToken) {
+
+async function loadVenue(venueToken) {
   try {
     const { data, error } = await db.rpc('public_venue_sessions', { _venue_token: venueToken });
-    if (error || !data) return [];
+    if (error || !data) return null;
     lastVenueName = String(data.venue_name || '').trim();
     if (lastVenueName) {
       document.querySelectorAll('.js-circuit-name').forEach(el => { el.textContent = lastVenueName; });
       document.title = 'Inscription — ' + lastVenueName;
     }
-    return Array.isArray(data.open_sessions) ? data.open_sessions : [];
-  } catch (e) { return []; }
+    // Le theme suit Parametres > Apparence des l'ecran de selection, alors
+    // qu'avant il ne s'appliquait qu'une fois une session choisie (la page
+    // restait donc rouge, quelle que soit la configuration du circuit).
+    if (data.results_theme) applyThemeAccent(data.results_theme);
+    return data;
+  } catch (e) { return null; }
 }
 
-function sessionPickerTime(iso) {
+function venueTime(iso) {
   if (!iso) return '';
   try { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); }
   catch (e) { return ''; }
 }
 
-function renderSessionPicker(list, currentToken, venueToken) {
-  const host = document.getElementById('screen-0');
-  const anchorEl = document.getElementById('session-name');
-  if (!host || !anchorEl) return;
-  let box = document.getElementById('sess-pick');
-  if (!box) {
-    if (!document.getElementById('sess-pick-css')) {
-      document.head.insertAdjacentHTML('beforeend', SESSION_PICKER_CSS);
-    }
-    box = document.createElement('div');
-    box.className = 'sess-pick';
-    box.id = 'sess-pick';
-    anchorEl.insertAdjacentElement('afterend', box);
-  }
-  const opts = list.map(s => {
-    const t = String(s.registration_token || '');
-    const lbl = [sessionPickerTime(s.starts_at), s.title || 'Session'].filter(Boolean).join(' — ');
-    return `<option value="${t}"${t === currentToken ? ' selected' : ''}>${lbl}</option>`;
-  }).join('');
-  box.innerHTML = `<label for="sess-pick-sel">Choisis ta session</label>
-<select id="sess-pick-sel">${currentToken ? '' : '<option value="">— Sélectionne —</option>'}${opts}</select>
-<p class="hint">${list.length} session${list.length > 1 ? 's' : ''} ouverte${list.length > 1 ? 's' : ''} aujourd’hui.</p>`;
-  const sel = document.getElementById('sess-pick-sel');
-  sel.addEventListener('change', () => {
-    const v = sel.value;
-    if (!v) return;
-    const q = '?session=' + encodeURIComponent(v) + (venueToken ? '&v=' + encodeURIComponent(venueToken) : '');
-    window.location.href = 'register.html' + q;
-  });
+// 01/08 : plus de libelle "aujourd'hui / hier" — on affiche le nombre de
+// participants deja inscrits, information utile au pilote qui choisit.
+function venuePeople(n) {
+  const v = Number(n || 0);
+  if (!v) return 'Sois le premier inscrit';
+  return v + (v > 1 ? ' inscrits' : ' inscrit');
 }
 
-// 31/07 (correctif) : on ne masque plus les boutons "Premiere fois" /
-// "Deja pilote" quand plusieurs sessions sont ouvertes — le pilote doit voir
-// le choix ET la liste deroulante de session sur le meme ecran. Les boutons
-// sont juste desactives tant qu'aucune session n'est choisie.
-function disableChoiceButtons(disable) {
-  document.querySelectorAll('#screen-0 .choice-btn').forEach(b => {
-    b.disabled = disable;
-    b.style.opacity = disable ? '.4' : '';
-    b.style.pointerEvents = disable ? 'none' : '';
-  });
+function venueRow(href, tag, title, meta, hot) {
+  return `<a class="venue-row${hot ? ' hot' : ''}" href="${href}">
+<span class="venue-tag">${escapeHTML(tag)}</span>
+<span class="venue-txt"><b>${escapeHTML(title)}</b><i>${escapeHTML(meta)}</i></span>
+<svg class="venue-chev" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+</a>`;
+}
+
+function venueHero(logoUrl, circuit, title, sub) {
+  const logo = logoUrl
+    ? '<img src="' + escapeHTML(logoUrl) + '" alt="">'
+    : '<span aria-hidden="true">\u{1F3C1}</span>';
+  return '<div class="venue-hero">' +
+    '<div class="venue-logo">' + logo + '</div>' +
+    (circuit ? '<div class="venue-circuit">' + escapeHTML(circuit) + '</div>' : '') +
+    '<h1 class="venue-title">' + escapeHTML(title) + '</h1>' +
+    (sub ? '<p class="venue-sub">' + escapeHTML(sub) + '</p>' : '') +
+    '</div>';
+}
+
+// Prend entierement la main sur l'ecran 0 : le formulaire n'a rien a faire la
+// tant qu'aucune session n'est choisie.
+function renderVenueScreen(data, venueToken) {
+  const host = document.getElementById('screen-0');
+  if (!host) return;
+  if (!document.getElementById('venue-pick-css')) {
+    document.head.insertAdjacentHTML('beforeend', VENUE_CSS);
+  }
+  const floatSwitch = document.querySelector('.page-switch');
+  if (floatSwitch) floatSwitch.remove();
+
+  const resultsHref = 'results.html?v=' + encodeURIComponent(venueToken);
+  const tabs = '<nav class="venue-tabs" aria-label="Navigation"><span>Inscription</span>' +
+    '<a href="' + resultsHref + '" id="nav-results-link">Résultats</a></nav>';
+
+  const open = (data && Array.isArray(data.open_sessions) ? data.open_sessions.slice() : []);
+  // Ordre chronologique : la session qui part le plus tot en premier.
+  open.sort((a, b) => String(a.starts_at || '').localeCompare(String(b.starts_at || '')));
+
+  const rows = open.length
+    ? open.map((s, i) => venueRow(
+        'register.html?session=' + encodeURIComponent(s.registration_token) +
+          '&v=' + encodeURIComponent(venueToken),
+        i === 0 ? 'Prochaine' : 'Ouverte',
+        s.title || 'Session',
+        [venueTime(s.starts_at) ? 'départ ' + venueTime(s.starts_at) : '', venuePeople(s.participants)]
+          .filter(Boolean).join(' · '),
+        i === 0
+      )).join('')
+    : '<div class="venue-empty">Aucune session ouverte à l’inscription pour le moment.<br>Rescanne le QR du circuit un peu plus tard.</div>';
+
+  host.innerHTML = VENUE_CSS + '<div class="venue-wrap">' + tabs +
+    venueHero(data && data.logo_url, lastVenueName, 'Choisis ta session',
+              'Inscris-toi à la session que tu vas courir.') +
+    rows +
+    '<p class="venue-note">Cette page se met à jour toute seule.<br>Garde-la en favori ou rescanne le QR du circuit.</p>' +
+    '</div>';
+  host.classList.remove('card');
 }
 
 export async function initRegisterPage() {
@@ -409,31 +477,25 @@ export async function initRegisterPage() {
   applyResultsNavLink(null);
 
   if (!token) {
-    // Sans lien direct : on n'affiche plus "Lien invalide" si on connait le
-    // circuit — on propose la liste des sessions ouvertes, sur le meme ecran
-    // que le choix Premiere fois / Deja pilote (boutons desactives en attendant).
+    // Sans lien direct mais avec un jeton de circuit : ecran de selection
+    // autonome. L'URL reste ?v=<circuit> (un seul lien permanent, contenu qui
+    // evolue tout seul) et le formulaire d'inscription n'apparait pas encore.
     if (venueToken) {
-      // 31/07 : plus de redirection automatique quand une seule session est
-      // ouverte — l'ecran "Choisis ta session" doit TOUJOURS s'afficher et
-      // l'URL doit rester ?v=<circuit> (un seul lien, contenu evolutif).
-      const list = await loadOpenSessions(venueToken);
-      disableChoiceButtons(true);
-      if (list.length) {
-        document.getElementById('session-name').textContent = 'Choisis ta session';
-        renderSessionPicker(list, '', venueToken);
-      } else {
-        document.getElementById('session-name').textContent = 'Aucune session ouverte pour le moment';
+      const data = await loadVenue(venueToken);
+      if (!data) {
+        document.getElementById('session-name').textContent = 'Lien invalide';
+        return;
       }
+      renderVenueScreen(data, venueToken);
       return;
     }
     document.getElementById('session-name').textContent = 'Lien invalide';
     return;
   }
-  if (venueToken) {
-    loadOpenSessions(venueToken).then(list => {
-      if (list.length > 1) renderSessionPicker(list, token, venueToken);
-    });
-  }
+  // Session pre-selectionnee : on charge quand meme le circuit pour appliquer
+  // son theme et son nom des le premier rendu (sans attendre la config de
+  // session), sans jamais reafficher le selecteur par-dessus le formulaire.
+  if (venueToken) { loadVenue(venueToken); }
   regState.registrationToken = token;
   // Plus de lecture directe de public.sessions avec la cle anon : id et titre
   // viennent desormais du bundle RPC token-gated public_registration_config.
