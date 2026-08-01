@@ -11,7 +11,7 @@ import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { state } from '../state.js';
 import { showMsg, qrSrc, formatTime, formatDate, randomCode4, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
-import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid } from './sessions.js';
+import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid, isSessionPublished } from './sessions.js';
 import { uploadSessionAsset, triggerResultEmails } from './publish-exports.js';
 import { generateSessionPDFs } from './publish-pdfs.js';
 import { hasFeature, renderPremiumLock } from './plan.js';
@@ -629,14 +629,19 @@ function pvRow(label, pill, hint) {
   );
 }
 
-// Rafraichit le bandeau pour la session actuellement ouverte. Sans argument : reprend
-// state.activeDetailSession. Silencieux si la carte n'est pas dans le DOM (page publique,
-// autre onglet) — le module est charge partout.
-export async function refreshPublishVerify() {
-  const card = document.getElementById('publish-verify');
-  const body = document.getElementById('pv-body');
+// Rafraichit le bandeau de verification. scope === 'arch' : fiche archive
+// (state.archiveSession) ; sinon session active (state.activeDetailSession). Le bandeau
+// existe dans les DEUX vues : publier bascule la session en 'results_published', elle
+// quitte donc aussitot la liste des sessions actives et le seul endroit ou l'admin peut
+// revenir verifier son envoi plus tard, c'est l'archive.
+// Silencieux si la carte n'est pas dans le DOM (page publique, autre onglet) — le module
+// est charge partout.
+export async function refreshPublishVerify(scope) {
+  const arch = scope === 'arch';
+  const card = document.getElementById(arch ? 'arch-publish-verify' : 'publish-verify');
+  const body = document.getElementById(arch ? 'arch-pv-body' : 'pv-body');
   if (!card || !body) return;
-  const sess = state.activeDetailSession;
+  const sess = arch ? state.archiveSession : state.activeDetailSession;
   if (!sess) {
     card.style.display = 'none';
     return;
@@ -719,29 +724,30 @@ export async function refreshPublishVerify() {
         : total ? null : 'Aucun destinataire, ou file non encore creee.');
 
   // Le lien public : la verification ultime, c'est de l'ouvrir soi-meme.
+  const sc = arch ? ",'arch'" : '';
   if (published && row.public_results_token) {
     const url = APP_CONFIG.baseUrl + '/results.html?result=' + row.public_results_token;
     html +=
       '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px">' +
       '<a class="btn btn-ghost btn-sm" href="' + url + '" target="_blank" rel="noopener">Ouvrir la page publique</a>' +
-      '<button class="btn btn-ghost btn-sm" onclick="verifyPublication(this)">Reverifier</button>' +
+      '<button class="btn btn-ghost btn-sm" onclick="verifyPublication(this' + sc + ')">Reverifier</button>' +
       '</div>';
   } else {
     html +=
-      '<div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="verifyPublication(this)">Reverifier</button></div>';
+      '<div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="verifyPublication(this' + sc + ')">Reverifier</button></div>';
   }
   body.innerHTML = html;
 }
 
 // Bouton "Reverifier" : meme lecture, avec un retour visuel pendant l'aller-retour.
-export async function verifyPublication(btn) {
+export async function verifyPublication(btn, scope) {
   const original = btn ? btn.innerHTML : null;
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = 'Verification...';
   }
   try {
-    await refreshPublishVerify();
+    await refreshPublishVerify(scope);
   } finally {
     if (btn) {
       btn.disabled = false;
@@ -753,7 +759,7 @@ export async function verifyPublication(btn) {
 export function updateQRRes() {
   const wrap = document.getElementById('qr-res-wrap');
   if (!wrap) return;
-  if (!state.activeDetailSession || !state.activeDetailSession.public_results_token) {
+  if (!isSessionPublished(state.activeDetailSession) || !state.activeDetailSession.public_results_token) {
     wrap.innerHTML = '<div style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:12px;text-align:center">Publie d\'abord</div>';
     return;
   }
@@ -764,7 +770,7 @@ export function updateQRRes() {
 export function copyLink(type) {
   let url;
   if (type === 'reg' && state.activeDetailSession) url = APP_CONFIG.baseUrl + '/register.html?session=' + state.activeDetailSession.public_registration_token;
-  if (type === 'res' && state.activeDetailSession && state.activeDetailSession.public_results_token)
+  if (type === 'res' && isSessionPublished(state.activeDetailSession) && state.activeDetailSession.public_results_token)
     url = APP_CONFIG.baseUrl + '/results.html?result=' + state.activeDetailSession.public_results_token + '&v=' + Date.now();
   if (!url) {
     showMsg('msg-res', 'Lien indisponible.', 'err');
@@ -780,7 +786,7 @@ export function zoomQR(type) {
     url = APP_CONFIG.baseUrl + '/register.html?session=' + state.activeDetailSession.public_registration_token;
     title = 'QR Inscription';
   }
-  if (type === 'res' && state.activeDetailSession && state.activeDetailSession.public_results_token) {
+  if (type === 'res' && isSessionPublished(state.activeDetailSession) && state.activeDetailSession.public_results_token) {
     url = APP_CONFIG.baseUrl + '/results.html?result=' + state.activeDetailSession.public_results_token + '&v=' + Date.now();
     title = 'QR Resultats';
   }
@@ -801,7 +807,7 @@ export function togglePres(sess) {
     return;
   }
   const s = sess || state.activeDetailSession;
-  if (!s || !s.public_results_token) return;
+  if (!isSessionPublished(s) || !s.public_results_token) return;
   const url = APP_CONFIG.baseUrl + '/results.html?result=' + s.public_results_token + '&v=' + Date.now();
   document.getElementById('pres-img').src = qrSrc(url, 280);
   document.getElementById('pres-sub').textContent = s.title;
@@ -870,13 +876,16 @@ export async function openArchiveDetail(id) {
     renderPremiumLock('arch-inscrits');
     renderPremiumLock('arch-chrono-imports');
   }
-  if (s.public_results_token) {
+  if (isSessionPublished(s) && s.public_results_token) {
     const url = APP_CONFIG.baseUrl + '/results.html?result=' + s.public_results_token + '&v=' + Date.now();
     document.getElementById('arch-qr-wrap').innerHTML = '<div class="qr-wrap"><img src="' + qrSrc(url, 180) + '"/></div>';
   } else {
     document.getElementById('arch-qr-wrap').innerHTML = '<div class="empty">Non publie</div>';
   }
   await refreshArchiveExportButtons();
+  // Bandeau de verification (point 2.1) : c'est ici que l'admin revient des heures plus
+  // tard, la session ayant quitte la liste des actives au moment de la publication.
+  refreshPublishVerify('arch').catch(() => {});
 }
 
 // Boutons "Exporter CSV" / "Exporter PDF" de la fiche archive individuelle -- flag
@@ -987,6 +996,7 @@ export async function archPublish() {
     // Republier ne doit pas reecrire la date de premiere publication.
     results_published_at: state.archiveSession.results_published_at || new Date().toISOString(),
   }).eq('id', state.archiveSession.id);
+  state.archiveSession.status = 'results_published';
   showMsg('msg-arch', 'QR republie !', 'ok');
   const url = APP_CONFIG.baseUrl + '/results.html?result=' + token + '&v=' + Date.now();
   document.getElementById('arch-qr-wrap').innerHTML = '<div class="qr-wrap"><img src="' + qrSrc(url, 180) + '"/></div>';
@@ -997,10 +1007,11 @@ export async function archPublish() {
     state.archiveSession.results_published_at = new Date().toISOString();
     await afterPublish(state.archiveSession, 'msg-arch');
   }
+  await refreshPublishVerify('arch');
 }
 
 export function archCopyLink() {
-  if (!state.archiveSession || !state.archiveSession.public_results_token) {
+  if (!isSessionPublished(state.archiveSession) || !state.archiveSession.public_results_token) {
     showMsg('msg-arch', "Publie d'abord.", 'err');
     return;
   }
