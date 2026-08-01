@@ -78,15 +78,34 @@ body::after{
 .logo{text-align:center;font-family:var(--font-display);font-size:clamp(25px,7.2vw,36px);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:3px;line-height:1.05;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .logo span{color:var(--acc);text-shadow:0 0 24px var(--acc-glow)}
 .subtitle{text-align:center;font-size:13.5px;color:var(--mut);font-weight:500;margin-bottom:24px;letter-spacing:.2px}
+/* 01/08 : l'ancien bandeau vert (couleur en dur, hors thème) est remplacé par
+   un en-tête de session sobre qui suit l'accent du circuit — libellé discret
+   au-dessus, nom de session en display. data-state="error" repasse en rouge
+   d'alerte quand le lien est invalide ou la session introuvable. */
 .session-title{
   position:relative;
   text-align:center;
-  background:linear-gradient(90deg,rgba(51,209,122,.16),rgba(51,209,122,.04));
-  border:1px solid rgba(51,209,122,.32);
-  border-radius:11px;padding:12px;font-size:14px;font-weight:700;margin-bottom:24px;color:var(--grn);
-  letter-spacing:.25px;
+  background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 9%,transparent),color-mix(in srgb,var(--acc) 2%,transparent));
+  border:1px solid color-mix(in srgb,var(--acc) 24%,transparent);
+  border-radius:13px;padding:11px 14px 13px;margin-bottom:24px;
+  font-family:var(--font-display);font-size:21px;font-weight:600;line-height:1.12;
+  letter-spacing:.4px;text-transform:uppercase;color:var(--txt);
+  box-shadow:0 1px 0 rgba(255,255,255,.05) inset,0 12px 28px -20px var(--acc-glow);
+}
+.session-title::before{
+  content:attr(data-label);display:block;
+  font-family:var(--font-body);font-size:10px;font-weight:800;
+  letter-spacing:1.2px;text-transform:uppercase;color:var(--mut);margin-bottom:3px;
+}
+.session-title[data-state="error"]{
+  background:rgba(255,77,77,.09);border-color:rgba(255,77,77,.3);color:var(--red);
   box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
 }
+
+/* Fil d'avancement (2 étapes : profil → avatar) */
+.steps{display:flex;align-items:center;justify-content:center;gap:7px;margin:-8px 0 20px}
+.step-dot{width:7px;height:7px;border-radius:50%;background:var(--bord);transition:.24s var(--ease)}
+.step-dot.on{width:24px;border-radius:99px;background:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
 .circuit-logo{display:block;max-height:46px;max-width:170px;object-fit:contain;margin:0 auto 16px}
 .field{margin-bottom:17px}
 label{display:block;font-size:11px;color:var(--mut);font-weight:700;text-transform:uppercase;letter-spacing:.7px;margin-bottom:8px}
@@ -139,6 +158,82 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
 .choice-btn:hover{border-color:var(--acc);background:linear-gradient(180deg,var(--acc-wash),var(--surf2));transform:translateY(-2px);box-shadow:0 14px 30px -14px var(--acc-glow),0 1px 0 rgba(255,255,255,.05) inset}
 .choice-sub{font-size:12.5px;color:var(--mut);font-weight:500;margin-top:4px;line-height:1.4}
 .choice-icon{font-size:24px;flex-shrink:0;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
+.choice-btn::after{content:'\203A';margin-left:auto;font-size:26px;font-weight:400;line-height:1;color:var(--mut-dim);transition:.2s var(--ease)}
+.choice-btn:hover::after{color:var(--acc2);transform:translateX(3px)}
+
+/* -----------------------------------------------------------------------
+   Consentements (CGV/CGU + confidentialité) et opt-in promotionnel.
+   La case CGV/CGU est BLOQUANTE : #btn-submit reste désactivé tant qu'elle
+   n'est pas cochée (onConsentChange dans register.js).
+   -------------------------------------------------------------------- */
+.consent{display:flex;flex-direction:column;gap:10px;margin:6px 0 2px}
+.consent-row{
+  display:flex;gap:11px;align-items:flex-start;cursor:pointer;
+  background:linear-gradient(180deg,rgba(255,255,255,.022),transparent);
+  border:1px solid var(--bord);border-radius:12px;padding:12px 13px;
+  transition:border-color .16s var(--ease),background .16s var(--ease);
+}
+.consent-row:hover{border-color:#33384e}
+.consent-row:has(.consent-box:checked){
+  border-color:color-mix(in srgb,var(--acc) 45%,transparent);
+  background:linear-gradient(180deg,var(--acc-tint),transparent);
+}
+.consent-box{
+  appearance:none;-webkit-appearance:none;
+  flex:0 0 auto;width:21px;height:21px;margin:1px 0 0;padding:0;
+  border:1.5px solid var(--bord);border-radius:7px;background:var(--bg);
+  cursor:pointer;position:relative;transition:.16s var(--ease);
+}
+.consent-box:hover{border-color:var(--acc)}
+.consent-box:checked{background:linear-gradient(180deg,var(--acc2),var(--acc));border-color:var(--acc)}
+.consent-box:checked::after{
+  content:'';position:absolute;left:7px;top:3px;width:5px;height:10px;
+  border:solid #fff;border-width:0 2.4px 2.4px 0;transform:rotate(43deg);
+}
+.consent-box:focus-visible{outline:none;box-shadow:0 0 0 3.5px var(--acc-soft)}
+.consent-txt{font-size:13px;line-height:1.5;color:var(--txt);font-weight:500}
+.consent-link{
+  background:none;border:none;padding:0;font:inherit;cursor:pointer;
+  color:var(--acc2);font-weight:800;text-decoration:underline;text-underline-offset:2.5px;
+}
+.consent-link:hover{filter:brightness(1.16)}
+.consent-req,.consent-opt{display:block;font-size:10.5px;font-weight:800;margin-top:3px;letter-spacing:.5px;text-transform:uppercase}
+.consent-req{color:var(--acc2)}
+.consent-opt{color:var(--mut-dim)}
+
+/* Panneau CGV/CGU/RGPD ouvert PAR-DESSUS la page, fond assombri.
+   Un clic à côté du panneau (sur le fond) le referme. */
+.legal-overlay{
+  display:none;position:fixed;inset:0;z-index:60;
+  background:rgba(3,4,8,.78);backdrop-filter:blur(5px);
+  padding:24px 16px;overflow-y:auto;
+}
+.legal-overlay.open{display:flex;align-items:center;justify-content:center;animation:legalIn .2s var(--ease)}
+@keyframes legalIn{from{opacity:0}to{opacity:1}}
+.legal-panel{
+  width:100%;max-width:520px;max-height:min(78vh,720px);
+  display:flex;flex-direction:column;overflow:hidden;
+  background:linear-gradient(180deg,var(--surf) 0%,var(--bg2) 100%);
+  border:1px solid var(--bord);border-radius:18px;
+  box-shadow:0 40px 90px -30px rgba(0,0,0,.85),0 1px 0 rgba(255,255,255,.06) inset;
+  animation:legalPop .26s var(--ease);
+}
+@keyframes legalPop{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.legal-head{display:flex;align-items:center;gap:12px;padding:18px 20px 14px;border-bottom:1px solid var(--bord-soft)}
+.legal-title{flex:1;font-family:var(--font-display);font-size:23px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin:0}
+.legal-close{
+  flex:0 0 auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--bord);
+  background:var(--surf2);color:var(--mut);font-size:21px;line-height:1;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:.15s var(--ease);
+}
+.legal-close:hover{color:var(--txt);border-color:var(--acc)}
+.legal-body{padding:16px 20px;overflow-y:auto;font-size:13.5px;line-height:1.62;color:var(--mut)}
+.legal-body h3{font-family:var(--font-body);font-size:11.5px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--txt);margin:16px 0 6px}
+.legal-body h3:first-child{margin-top:0}
+.legal-body p{margin-bottom:9px}
+.legal-note{margin-top:14px;padding:11px 12px;border-radius:10px;border:1px dashed var(--bord);color:var(--mut-dim);font-size:12px;line-height:1.5}
+.legal-foot{padding:14px 20px 18px;border-top:1px solid var(--bord-soft)}
+.legal-foot .btn{margin-top:0}
 
 /* Écran 1b — confirmation pilote trouvé */
 .pilot-found-card{
@@ -241,7 +336,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
   <div id="circuit-logo-wrap"></div>
   <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle">Inscris-toi pour la course !</div>
-  <div class="session-title" id="session-name">Chargement…</div>
+  <div class="session-title" id="session-name" data-label="Session">Chargement…</div>
 
   <button type="button" class="choice-btn" onclick="goFirstTime()">
     <span class="choice-icon">🆕</span>
@@ -260,6 +355,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
 <div class="card reg-screen" id="screen-1a">
   <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle">Crée ton profil pilote</div>
+  <div class="steps" aria-hidden="true"><span class="step-dot on"></span><span class="step-dot"></span></div>
 
   <div class="field">
     <label>🏁 Ton pseudo (affiché sur le kart et les résultats)</label>
@@ -305,6 +401,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
 <div class="card reg-screen" id="screen-1b">
   <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle">Retrouve ton profil</div>
+  <div class="steps" aria-hidden="true"><span class="step-dot on"></span><span class="step-dot"></span></div>
 
   <div class="field">
     <label>🔎 Email ou pseudo</label>
@@ -328,6 +425,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
 <div class="card reg-screen" id="screen-2">
   <div class="logo"><span class="js-circuit-name">Karting</span></div>
   <div class="subtitle" id="screen2-sub">Dernière étape !</div>
+  <div class="steps" aria-hidden="true"><span class="step-dot"></span><span class="step-dot on"></span></div>
 
   <div class="field">
     <label>🎨 Ton avatar</label>
@@ -339,9 +437,43 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
     <div class="avatar-status" id="avatar-status"></div>
   </div>
 
-  <button class="btn btn-primary" id="btn-submit" onclick="submitForm()">S'inscrire à la course 🏁</button>
+  <!-- Consentements : la première case est obligatoire, elle débloque #btn-submit -->
+  <div class="consent">
+    <label class="consent-row" for="chk-consent">
+      <input type="checkbox" id="chk-consent" class="consent-box" onchange="onConsentChange()"/>
+      <span class="consent-txt">
+        J'ai lu et j'accepte les
+        <button type="button" class="consent-link" onclick="openLegal('cgv',event)">CGV / CGU</button>
+        ainsi que la
+        <button type="button" class="consent-link" onclick="openLegal('rgpd',event)">politique de confidentialité</button>.
+        <span class="consent-req">Obligatoire pour s'inscrire</span>
+      </span>
+    </label>
+    <label class="consent-row" for="chk-promo">
+      <input type="checkbox" id="chk-promo" class="consent-box"/>
+      <span class="consent-txt">
+        Je veux recevoir les offres et nouveautés du circuit par e-mail.
+        <span class="consent-opt">Facultatif — désinscription en 1 clic</span>
+      </span>
+    </label>
+  </div>
+
+  <button class="btn btn-primary" id="btn-submit" onclick="submitForm()" disabled>S'inscrire à la course 🏁</button>
   <button type="button" class="btn btn-link" onclick="backToScreen0()">&larr; Retour</button>
   <div class="msg" id="msg-2"></div>
+</div>
+
+<!-- Panneau CGV/CGU/RGPD : s'ouvre par-dessus la page, fond assombri,
+     un clic à côté du panneau (ou Échap) le referme. -->
+<div class="legal-overlay" id="legal-overlay" onclick="closeLegalFromBackdrop(event)" role="dialog" aria-modal="true" aria-labelledby="legal-title">
+  <div class="legal-panel">
+    <div class="legal-head">
+      <h2 class="legal-title" id="legal-title">Conditions</h2>
+      <button type="button" class="legal-close" onclick="closeLegal()" aria-label="Fermer">&times;</button>
+    </div>
+    <div class="legal-body" id="legal-body"></div>
+    <div class="legal-foot"><button type="button" class="btn btn-secondary" onclick="closeLegal()">J'ai lu</button></div>
+  </div>
 </div>
 
 <div class="card success-screen" id="success-card">
