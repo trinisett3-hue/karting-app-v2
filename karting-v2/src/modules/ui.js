@@ -99,16 +99,23 @@ export function confirmModal(opts) {
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
+    // 01/08 (client) : en mode clair la boite etait illisible (fond #181818 en dur sur
+    // une page blanche). On passe par les memes tokens de theme que le reste de l'app
+    // (--surf / --txt / --bord / --mut), avec les anciennes valeurs sombres en fallback
+    // pour les pages qui ne definiraient pas ces variables. Les classes cm-* permettent
+    // en plus a admin.html d'affiner le rendu sans toucher a ce module.
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    overlay.className = 'cm-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,8,14,.62);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
     const box = document.createElement('div');
-    box.style.cssText = 'background:#181818;border:1px solid #333;border-radius:12px;padding:24px;max-width:420px;width:100%;color:#eee;font-family:inherit;';
+    box.className = 'cm-box';
+    box.style.cssText = 'background:var(--surf,#181818);border:1px solid var(--bord,#333);border-radius:16px;padding:24px;max-width:420px;width:100%;color:var(--txt,#eee);font-family:inherit;box-shadow:0 26px 70px -18px rgba(0,0,0,.55);';
     box.innerHTML =
-      '<div style="font-weight:700;font-size:16px;margin-bottom:10px">' + esc(title) + '</div>' +
-      '<div style="font-size:14px;color:#ccc;margin-bottom:20px;white-space:pre-line">' + esc(message) + '</div>' +
+      '<div style="font-weight:800;font-size:16px;margin-bottom:10px;color:var(--txt,#eee)">' + esc(title) + '</div>' +
+      '<div style="font-size:14px;color:var(--mut,#ccc);margin-bottom:20px;white-space:pre-line;line-height:1.5">' + esc(message) + '</div>' +
       '<div style="display:flex;gap:10px;justify-content:flex-end">' +
-      '<button type="button" data-act="cancel" style="padding:8px 16px;border-radius:8px;border:1px solid #444;background:transparent;color:#eee;cursor:pointer">Annuler</button>' +
-      '<button type="button" data-act="ok" style="padding:8px 16px;border-radius:8px;border:none;background:' + (danger ? '#dc2626' : '#2563eb') + ';color:#fff;cursor:pointer;font-weight:600">' + esc(confirmLabel) + '</button>' +
+      '<button type="button" class="cm-cancel" data-act="cancel" style="padding:9px 16px;border-radius:9px;border:1px solid var(--bord,#444);background:var(--surf2,transparent);color:var(--txt,#eee);cursor:pointer;font-weight:600">Annuler</button>' +
+      '<button type="button" class="cm-ok" data-act="ok" style="padding:9px 16px;border-radius:9px;border:none;background:' + (danger ? '#dc2626' : '#2563eb') + ';color:#fff;cursor:pointer;font-weight:700">' + esc(confirmLabel) + '</button>' +
       '</div>';
     overlay.appendChild(box);
     document.body.appendChild(overlay);
