@@ -177,7 +177,9 @@ async function openActiveDetailAndShowResults(id) {
 await sessions.openActiveDetail(id, {
 onOpened: async () => {
 await results.renderResultatsSection();
-results.renderManualChronoTable();
+// Point 2.1 : rejouer la verification a l'ouverture, pas seulement juste apres
+// avoir clique sur Publier — l'admin revient souvent sur la session plus tard.
+results.refreshPublishVerify().catch(() => {});
 },
 });
 }
@@ -380,8 +382,7 @@ togglePres: results.togglePres,
 toggleSectorsField: results.toggleSectorsField,
 updateChronoFormat: results.updateChronoFormat,
 exportSessionPDF: results.exportSessionPDF,
-renderManualChronoTable: results.renderManualChronoTable,
-validateManualChrono: results.validateManualChrono,
+verifyPublication: results.verifyPublication,
 downloadChronoImport: results.downloadChronoImport,
 // Paramètres
 markPrefsDirty: () => (state.prefsDirty = true),
