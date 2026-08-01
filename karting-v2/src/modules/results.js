@@ -330,10 +330,8 @@ async function saveChronoImportHistory(sessionId, rawText, linesCount, importedC
   }
 }
 
-// Exportée (en plus d'être utilisée par importChrono()) pour la saisie manuelle
-// (validateManualChrono ci-dessous) : le tableau "1 ligne par kart" ne saisit
-// jamais de secteurs, donc il doit toujours utiliser ce format-ci, même quand
-// state.prefs.sectors_enabled est activé pour l'import texte/fichier.
+// Import "sans secteurs" : format Nom;Kart;Tour;Temps. Reste exportée car
+// importChrono() y délègue quand state.prefs.sectors_enabled est désactivé.
 export async function importChronoSimple() {
   if (!state.activeDetailSession) {
     showMsg('msg-chrono', 'Aucune session active.', 'err');
@@ -584,6 +582,171 @@ async function afterPublish(sess, msgId) {
     }
   } catch (e) {
     showMsg(msgId, 'Publie, mais envoi des e-mails a reprendre : ' + (e.message || e), 'err');
+  } finally {
+    // Quoi qu'il arrive, on montre l'etat reel : c'est justement quand la chaine
+    // casse au milieu que l'admin a besoin de voir ce qui est parti (point 2.1).
+    refreshPublishVerify().catch(() => {});
+  }
+}
+
+// --- Point 2.1 (voie 1) : bandeau de verification post-publication ----------------------
+// Publier declenche une chaine longue et partiellement asynchrone : rendu des PDF dans CE
+// navigateur, depot dans session-exports, mise en file (card_deliveries), puis envoi par
+// l'Edge Function. Jusqu'ici le seul retour etait un .msg qui disparait au bout de 5 s :
+// une fois efface, plus aucun moyen de savoir si la publication etait vraiment complete.
+// Ce bandeau persiste sous le classement, relit l'etat REEL en base (jamais un compteur
+// garde en memoire) et se rafraichit a la demande via le bouton "Reverifier".
+
+const PV_KINDS = [
+  { kind: 'full_pdf', label: 'Classement complet' },
+  { kind: 'pilot_pdf', label: 'Fiches pilote' },
+  { kind: 'position_card', label: 'Cartes position' },
+  { kind: 'record_card', label: 'Cartes record' },
+];
+
+const PV_TONES = {
+  ok: { c: 'var(--grn)', bg: 'rgba(51,209,122,.12)', b: 'rgba(51,209,122,.3)' },
+  warn: { c: 'var(--yel)', bg: 'rgba(255,204,51,.13)', b: 'rgba(255,204,51,.32)' },
+  err: { c: 'var(--red)', bg: 'rgba(255,77,77,.12)', b: 'rgba(255,77,77,.3)' },
+  mut: { c: 'var(--mut)', bg: 'var(--surf2)', b: 'var(--bord)' },
+};
+
+function pvPill(tone, text) {
+  const t = PV_TONES[tone] || PV_TONES.mut;
+  return (
+    '<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;' +
+    'border-radius:99px;padding:3px 10px;white-space:nowrap;color:' + t.c + ';background:' + t.bg +
+    ';border:1px solid ' + t.b + '">' + text + '</span>'
+  );
+}
+
+function pvRow(label, pill, hint) {
+  return (
+    '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--bord-soft)">' +
+    '<div><div style="font-size:13px;font-weight:600">' + label + '</div>' +
+    (hint ? '<div style="font-size:11px;color:var(--mut);margin-top:2px">' + hint + '</div>' : '') +
+    '</div>' + pill + '</div>'
+  );
+}
+
+// Rafraichit le bandeau pour la session actuellement ouverte. Sans argument : reprend
+// state.activeDetailSession. Silencieux si la carte n'est pas dans le DOM (page publique,
+// autre onglet) — le module est charge partout.
+export async function refreshPublishVerify() {
+  const card = document.getElementById('publish-verify');
+  const body = document.getElementById('pv-body');
+  if (!card || !body) return;
+  const sess = state.activeDetailSession;
+  if (!sess) {
+    card.style.display = 'none';
+    return;
+  }
+
+  const [assetsRes, delivRes, regsRes, sessRes] = await Promise.all([
+    db.from('session_assets').select('kind').eq('session_id', sess.id),
+    db.from('card_deliveries').select('status').eq('session_id', sess.id),
+    db.from('session_registrations').select('email').eq('session_id', sess.id),
+    db.from('sessions').select('status,results_published_at,public_results_token').eq('id', sess.id).maybeSingle(),
+  ]);
+
+  const row = (sessRes && sessRes.data) || {};
+  const published = row.status === 'results_published';
+  if (!published && !(assetsRes.data || []).length) {
+    card.style.display = 'none';
+    return;
+  }
+  card.style.display = '';
+
+  // Etat de la session elle-meme : c'est la seule chose qui rend les resultats visibles.
+  const when = row.results_published_at ? new Date(row.results_published_at) : null;
+  const hhmm = when
+    ? String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0')
+    : null;
+  let html = pvRow(
+    'Resultats en ligne',
+    published ? pvPill('ok', hhmm ? 'Publie a ' + hhmm : 'Publie') : pvPill('err', 'Non publie'),
+    published ? 'Visible par tout pilote ayant le lien ou le QR.' : 'Les pilotes ne voient encore rien.'
+  );
+
+  // Pieces jointes reellement deposees, par type.
+  const byKind = {};
+  (assetsRes.data || []).forEach((a) => {
+    byKind[a.kind] = (byKind[a.kind] || 0) + 1;
+  });
+  // Destinataires attendus : un e-mail renseigne = une fiche pilote attendue.
+  const recipients = (regsRes.data || []).filter((r) => r.email && r.email.trim()).length;
+
+  PV_KINDS.forEach((k) => {
+    const n = byKind[k.kind] || 0;
+    if (k.kind === 'full_pdf') {
+      html += pvRow(k.label, n ? pvPill('ok', 'Genere') : pvPill('warn', 'Absent'),
+        n ? null : 'Republie pour le regenerer.');
+    } else if (k.kind === 'pilot_pdf') {
+      const tone = !recipients ? 'mut' : n >= recipients ? 'ok' : n ? 'warn' : 'err';
+      html += pvRow(k.label, pvPill(tone, n + ' / ' + recipients),
+        recipients ? 'Une fiche par pilote ayant laisse un e-mail.' : 'Aucun e-mail collecte sur cette session.');
+    } else {
+      html += pvRow(k.label, n ? pvPill('ok', String(n)) : pvPill('mut', 'Aucune'), null);
+    }
+  });
+
+  // File d'envoi : c'est elle qui dit si les e-mails sont vraiment partis.
+  const st = {};
+  (delivRes.data || []).forEach((d) => {
+    st[d.status] = (st[d.status] || 0) + 1;
+  });
+  const sent = st.sent || 0;
+  const failed = st.failed || st.error || 0;
+  const pending = (st.pending || 0) + (st.queued || 0) + (st.claimed || 0);
+  const total = sent + failed + pending;
+  let mailTone = 'mut';
+  let mailTxt = 'Rien en file';
+  if (total) {
+    if (failed) {
+      mailTone = 'err';
+      mailTxt = sent + ' envoye(s), ' + failed + ' en echec';
+    } else if (pending) {
+      mailTone = 'warn';
+      mailTxt = sent + ' / ' + total + ' envoye(s)';
+    } else {
+      mailTone = 'ok';
+      mailTxt = sent + ' envoye(s)';
+    }
+  }
+  html += pvRow('E-mails aux pilotes', pvPill(mailTone, mailTxt),
+    pending ? 'Le rattrapage automatique repasse toutes les 5 minutes.'
+      : failed ? 'Republie la session pour relancer les envois en echec.'
+        : total ? null : 'Aucun destinataire, ou file non encore creee.');
+
+  // Le lien public : la verification ultime, c'est de l'ouvrir soi-meme.
+  if (published && row.public_results_token) {
+    const url = APP_CONFIG.baseUrl + '/results.html?result=' + row.public_results_token;
+    html +=
+      '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px">' +
+      '<a class="btn btn-ghost btn-sm" href="' + url + '" target="_blank" rel="noopener">Ouvrir la page publique</a>' +
+      '<button class="btn btn-ghost btn-sm" onclick="verifyPublication(this)">Reverifier</button>' +
+      '</div>';
+  } else {
+    html +=
+      '<div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="verifyPublication(this)">Reverifier</button></div>';
+  }
+  body.innerHTML = html;
+}
+
+// Bouton "Reverifier" : meme lecture, avec un retour visuel pendant l'aller-retour.
+export async function verifyPublication(btn) {
+  const original = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Verification...';
+  }
+  try {
+    await refreshPublishVerify();
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
   }
 }
 
@@ -863,74 +1026,8 @@ export function toggleSectorsField() {
   updateChronoFormat();
 }
 
-// --- Point 3 : saisie manuelle des chronos (1 ligne par kart) ----------------------------
-// Tableau 1 à max_karts, colonnes N° kart / temps / nom (lecture seule, depuis
-// session_registrations.kart_number / display_name). Le bouton "Valider" réutilise
-// EXACTEMENT le même parsing/import que importChronoSimple()/importChronoWithSectors()
-// (on construit le texte "Nom;Kart;1;Temps" attendu par ces fonctions et on délègue,
-// au lieu de dupliquer la logique de matching/insertion des tours).
-
-export function renderManualChronoTable() {
-  const el = document.getElementById('manual-chrono-table');
-  if (!el) return;
-  if (!state.activeDetailSession) {
-    el.innerHTML = '<div class="empty">Ouvre une session pour saisir les chronos.</div>';
-    return;
-  }
-  const max = state.activeDetailSession.max_karts || 0;
-  const byKart = new Map();
-  (state.inscritsData || []).forEach((r) => {
-    if (r.kart_number != null) byKart.set(Number(r.kart_number), r);
-  });
-  let html = '<table class="tbl"><thead><tr><th>Kart</th><th>Pilote</th><th>Temps (s ou m:ss.mmm)</th></tr></thead><tbody>';
-  for (let k = 1; k <= max; k++) {
-    const reg = byKart.get(k);
-    html +=
-      '<tr>' +
-      '<td><span class="kart-badge assigned">' + k + '</span></td>' +
-      '<td>' + (reg ? reg.display_name : '<span style="color:var(--mut)">Kart libre</span>') + '</td>' +
-      '<td><input class="input-inline kart-inp" style="width:110px" type="text" data-kart="' + k + '" placeholder="--" ' + (reg ? '' : 'disabled') + '/></td>' +
-      '</tr>';
-  }
-  html += '</tbody></table>';
-  el.innerHTML = html;
-}
-
-export async function validateManualChrono() {
-  if (!state.activeDetailSession) {
-    showMsg('msg-manual-chrono', 'Aucune session active.', 'err');
-    return;
-  }
-  const el = document.getElementById('manual-chrono-table');
-  if (!el) return;
-  const inputs = el.querySelectorAll('input[data-kart]');
-  const byKart = new Map();
-  (state.inscritsData || []).forEach((r) => {
-    if (r.kart_number != null) byKart.set(Number(r.kart_number), r);
-  });
-  const lines = [];
-  inputs.forEach((inp) => {
-    const val = inp.value.trim();
-    if (!val) return;
-    const kart = Number(inp.dataset.kart);
-    const reg = byKart.get(kart);
-    if (!reg) return;
-    lines.push(reg.display_name + ';' + kart + ';1;' + val);
-  });
-  if (!lines.length) {
-    showMsg('msg-manual-chrono', 'Aucun temps saisi.', 'err');
-    return;
-  }
-  const raw = document.getElementById('chrono-raw');
-  const previous = raw.value;
-  raw.value = lines.join('\n');
-  // Toujours le format simple (jamais de secteurs en saisie manuelle) — voir
-  // commentaire sur importChronoSimple().
-  await importChronoSimple();
-  raw.value = previous;
-  showMsg('msg-manual-chrono', lines.length + ' temps valides et importes.', 'ok');
-  renderManualChronoTable();
-}
+// Retire le 01/08 (demande client) : la saisie manuelle "1 tour par kart" faisait
+// doublon avec l'import texte/fichier ci-dessus, qui couvre deja ce cas.
 
 // --- Point 6 : export PDF du classement, côté admin (session active + archive) -----------
 // Réutilise le même pattern jsPDF/html2canvas que public-results.js (déjà chargés dans
