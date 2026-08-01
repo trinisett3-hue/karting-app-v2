@@ -368,12 +368,16 @@ ensureInfoTipListener();
 const infoHtml = info
 ? ' <span class="info-ico" tabindex="0" onclick="event.stopPropagation();this.classList.toggle(\'open\')" aria-label="Explication">i<span class="info-tip">' + info + '</span></span>'
 : '';
+// 01/08 : plus aucun style inline ici. Les tuiles portent des classes
+// (.kpi-card/.kpi-ico/.kpi-lbl/.kpi-val/.kpi-sub) definies dans admin.html, ce
+// qui permet aux media queries de compacter la typo et le padding au lieu de
+// casser la ligne — cf. « toutes les stats sur la meme ligne ».
 return (
-'<div class="card" style="text-align:center;padding:16px">' +
-(icon ? '<div style="font-size:20px;margin-bottom:4px" aria-hidden="true">' + icon + '</div>' : '') +
-'<div style="font-size:11px;color:var(--mut);text-transform:uppercase;font-weight:700;margin-bottom:6px">' + lbl + infoHtml + '</div>' +
-'<div style="font-size:22px;font-weight:900">' + val + '</div>' +
-(sub ? '<div style="font-size:11px;color:var(--mut);margin-top:4px">' + sub + '</div>' : '') +
+'<div class="card kpi-card">' +
+(icon ? '<div class="kpi-ico" aria-hidden="true">' + icon + '</div>' : '') +
+'<div class="kpi-lbl">' + lbl + infoHtml + '</div>' +
+'<div class="kpi-val">' + val + '</div>' +
+(sub ? '<div class="kpi-sub">' + sub + '</div>' : '') +
 '</div>'
 );
 }
@@ -1196,8 +1200,8 @@ export function exportStatsXLSX() {
   const fidSheet = XLSX.utils.aoa_to_sheet([
     ['Fidelisation pilotes — ' + periodeTxt],
     [],
-    ['Indicateur', 'Valeur'],
-    ['Taux de retour', pct(f.tauxRetour), f.fidCounts ? f.fidCounts.habitues + ' habitue(s) sur ' + f.fidCounts.total + ' pilote(s) (>= 2 sessions au total)' : ''],
+    ['Indicateur', 'Valeur', 'Detail du calcul'],
+    ['Taux de retour', pct(f.tauxRetour), f.fidCounts ? f.fidCounts.habitues + ' habitue(s) sur ' + f.fidCounts.total + ' pilote(s) venu(s) sur la periode comptent >= 2 sessions dans tout l\'historique' : ''],
     ['Nouveaux pilotes', pct(f.tauxNouveaux), f.tauxNouveaux == null ? 'Non applicable sur Depuis le debut' : (f.fidCounts.nouveaux + ' premiere(s) venue(s) sur ' + f.fidCounts.total)],
     ['Visites / pilote (30j)', f.visites30 != null ? f.visites30.toFixed(1) : '--'],
     ['Visites / pilote (90j)', f.visites90 != null ? f.visites90.toFixed(1) : '--'],
