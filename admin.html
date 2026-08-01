@@ -129,9 +129,9 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .icon-btn{padding:6px 8px;display:inline-flex;align-items:center;justify-content:center}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
-.g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:16px}
-    .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:16px}
+.g3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.g4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px}
+.g5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:16px}
 .no-session{text-align:center;padding:36px;color:var(--mut);font-size:14px;background:var(--surf);border:1px dashed var(--bord);border-radius:var(--rad)}
 .empty{position:relative;text-align:center;padding:34px 20px;color:var(--mut);font-size:13px;font-weight:600}
 .empty::before{content:'🏁';display:block;font-size:20px;margin:0 auto 12px;width:38px;height:38px;line-height:38px;border-radius:50%;border:1.5px dashed var(--bord);background:rgba(255,59,48,.05)}
@@ -188,8 +188,24 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .sess-card .sc-badge{align-self:flex-start;font-size:10px;font-weight:800;text-transform:uppercase;padding:4px 10px;border-radius:20px;background:rgba(255,59,48,.15);color:var(--acc2)}
 .sess-card .sc-badge.pub{background:rgba(51,209,122,.15);color:var(--grn)}
 .sess-card .sc-occ{margin-top:auto;font-size:13px;font-weight:700}
-@media(max-width:850px){.g2,.g3,.g4,.g5{grid-template-columns:1fr}}
-@media(max-width:1100px) and (min-width:851px){.g4,.g5{grid-template-columns:1fr 1fr}}
+@media(max-width:850px){.g2:not(.kpi-row),.g3:not(.kpi-row),.g4:not(.kpi-row),.g5:not(.kpi-row){grid-template-columns:1fr}}
+@media(max-width:1100px) and (min-width:851px){.g4:not(.kpi-row),.g5:not(.kpi-row){grid-template-columns:1fr 1fr}}
+
+/* 01/08 — demande explicite : « il faut toujours que toutes les stats soient sur
+   la meme ligne ». Les grilles de tuiles KPI (.kpi-row, et elles seules : les
+   grilles de cartes classiques gardent leur repli habituel juste au-dessus)
+   conservent donc leur nombre de colonnes quelle que soit la largeur. On
+   compacte le gap, le padding et la typo plutot que de casser la ligne, et on
+   ne replie qu'en dessous de 720px (vrai mobile), ou 5 tuiles cote a cote
+   deviendraient illisibles. */
+.kpi-card{text-align:center;padding:16px;min-width:0}
+.kpi-ico{font-size:20px;margin-bottom:4px;line-height:1}
+.kpi-lbl{font-size:11px;color:var(--mut);text-transform:uppercase;font-weight:700;margin-bottom:6px}
+.kpi-val{font-size:22px;font-weight:900;line-height:1.15;overflow-wrap:anywhere}
+.kpi-sub{font-size:11px;color:var(--mut);margin-top:4px;line-height:1.35}
+@media(max-width:1240px){.kpi-row{gap:10px}.kpi-card{padding:14px 8px}.kpi-val{font-size:19px}.kpi-lbl{font-size:10px}.kpi-sub{font-size:10px}}
+@media(max-width:1000px){.kpi-row{gap:8px}.kpi-card{padding:12px 6px}.kpi-val{font-size:17px}.kpi-lbl{font-size:9px;margin-bottom:4px}.kpi-sub{font-size:9px}.kpi-ico{font-size:17px}}
+@media(max-width:720px){.kpi-row{grid-template-columns:1fr 1fr!important;gap:10px}.kpi-card{padding:14px 10px}.kpi-val{font-size:20px}.kpi-lbl{font-size:10px}.kpi-sub{font-size:10px}.kpi-ico{font-size:20px}}
 
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spinAnim .7s linear infinite;margin-right:6px}
 @keyframes spinAnim{to{transform:rotate(360deg)}}
@@ -646,10 +662,10 @@ updateThemeToggleUI();
 <!-- 1) VUE D'ENSEMBLE — KPIs globaux, exploitation piste, frequentation (Basique) -->
 <div class="subtab-panel active" id="stats-subtab-overview">
 <div class="ctitle" style="margin-bottom:10px">KPIs globaux</div>
-<div class="g3" id="stats-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
+<div class="g3 kpi-row" id="stats-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
 
 <div class="ctitle" style="margin-bottom:10px">Exploitation piste</div>
-<div class="g4" id="stats-exploitation-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
+<div class="g4 kpi-row" id="stats-exploitation-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
 <div style="font-size:11px;color:var(--mut);margin-bottom:20px">Taux d'utilisation piste : estimation simple basee sur une duree moyenne de session et des horaires d'ouverture par defaut (reglage fin a venir).</div>
 
 <div class="card" id="stats-freq-card">
@@ -680,7 +696,7 @@ updateThemeToggleUI();
 
 <!-- 3) FIDELISATION PILOTES (Premium) -->
 <div class="subtab-panel" id="stats-subtab-fid">
-<div class="g5" id="stats-fid-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
+<div class="g5 kpi-row" id="stats-fid-kpi-grid" style="margin-bottom:16px"><div class="empty">Chargement...</div></div>
 <div class="g2">
 <div class="card">
 <div class="ctitle">Segmentation (nouveaux / reguliers / fans)</div>
@@ -696,7 +712,7 @@ updateThemeToggleUI();
 <!-- 4) PERFORMANCE SPORTIVE (Premium) -->
 <div class="subtab-panel" id="stats-subtab-perf">
 <div class="g2" style="margin-bottom:16px">
-<div id="stats-perf-kpi-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div class="empty">Chargement...</div></div>
+<div class="kpi-row" id="stats-perf-kpi-grid" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px"><div class="empty">Chargement...</div></div>
 <div class="card">
 <div class="ctitle">Repartition par niveau</div>
 <div id="stats-perf-niveaux"><div class="empty">Chargement...</div></div>
@@ -713,7 +729,7 @@ updateThemeToggleUI();
      conditions reelles (voir Nettoyage-audit-restant-2026-07-29.md). -->
 <div class="subtab-panel" id="stats-subtab-qualite">
 <div class="ctitle" style="margin-bottom:10px">Utilisation avancee & saisonnalite</div>
-<div class="g4" id="stats-usage-kpi-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
+<div class="g4 kpi-row" id="stats-usage-kpi-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
 <div class="card" style="margin-top:8px">
 <div class="ctitle">Frequentation par mois (12 derniers mois glissants)</div>
 <div id="stats-usage-saison"><div class="empty">Chargement...</div></div>
