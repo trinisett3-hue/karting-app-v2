@@ -197,6 +197,85 @@ function showScreen(id) {
 }
 
 /**
+ * En-tete de session (ancien bandeau vert). `label` est le petit libelle
+ * au-dessus, `state` vaut 'error' pour repasser le bloc en rouge d'alerte.
+ * Silencieux si le noeud n'existe pas (ecran de selection de circuit).
+ */
+function setSessionTitle(text, state, label) {
+  const el = document.getElementById('session-name');
+  if (!el) return;
+  el.textContent = text;
+  el.setAttribute('data-label', label || (state === 'error' ? 'Inscription' : 'Session'));
+  if (state) el.setAttribute('data-state', state);
+  else el.removeAttribute('data-state');
+}
+
+/* -----------------------------------------------------------------------------
+   Consentements — CGV/CGU, confidentialite (RGPD) et opt-in promotionnel
+   -----------------------------------------------------------------------------
+   01/08 : les textes ci-dessous sont des GABARITS. Ils decrivent la structure
+   attendue mais ne constituent pas des conditions juridiques : chaque circuit
+   doit y coller ses propres CGV/CGU et sa politique de confidentialite (une
+   entree Parametres > Mentions legales est prevue pour cela). Le mecanisme
+   d'acceptation, lui, est bien reel : sans la case cochee, pas d'inscription,
+   et l'horodatage part en base (session_registrations.consent_accepted_at).
+   -------------------------------------------------------------------------- */
+const LEGAL_DOCS = {
+  cgv: {
+    title: 'Conditions générales',
+    html:
+      '<h3>1. Objet</h3><p>Les présentes conditions encadrent l\'inscription à une session de karting organisée par le circuit et l\'utilisation du service de résultats en ligne.</p>' +
+      '<h3>2. Inscription</h3><p>L\'inscription vaut engagement à respecter le règlement intérieur de la piste, les consignes du staff et les conditions d\'accès (âge, taille, équipement).</p>' +
+      '<h3>3. Sécurité</h3><p>Le port des équipements fournis est obligatoire. Le circuit peut refuser ou interrompre la participation d\'un pilote dont le comportement met en danger les autres usagers.</p>' +
+      '<h3>4. Résultats</h3><p>Les temps mesurés et le classement sont publiés sur la page de résultats de la session. Ils sont fournis à titre indicatif et peuvent être corrigés par le staff.</p>' +
+      '<h3>5. Annulation</h3><p>Les conditions d\'annulation et de remboursement sont celles affichées à l\'accueil du circuit.</p>' +
+      '<div class="legal-note">Texte de démonstration — le circuit renseignera ici ses propres conditions générales avant l\'ouverture au public.</div>',
+  },
+  rgpd: {
+    title: 'Confidentialité',
+    html:
+      '<h3>Données collectées</h3><p>Pseudo, prénom, nom, adresse e-mail, date de naissance, nationalité choisie, avatar, ainsi que les temps réalisés lors de vos sessions.</p>' +
+      '<h3>Pourquoi</h3><p>Pour vous inscrire à la session, afficher le classement, et vous envoyer par e-mail vos résultats et votre carte de performance à l\'issue de la course.</p>' +
+      '<h3>Communication commerciale</h3><p>Les offres et nouveautés du circuit ne vous sont envoyées que si vous cochez la case dédiée. Ce choix est indépendant de l\'inscription et se retire à tout moment.</p>' +
+      '<h3>Durée</h3><p>Votre profil pilote est conservé tant que vous roulez sur le circuit, afin de retrouver votre historique d\'une session à l\'autre.</p>' +
+      '<h3>Vos droits</h3><p>Accès, rectification, suppression et opposition : il suffit d\'en faire la demande à l\'accueil du circuit ou à l\'adresse de contact affichée sur cette page.</p>' +
+      '<div class="legal-note">Texte de démonstration — le circuit renseignera ici sa politique de confidentialité définitive et son contact délégué avant l\'ouverture au public.</div>',
+  },
+};
+
+export function openLegal(key, ev) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  const doc = LEGAL_DOCS[key] || LEGAL_DOCS.cgv;
+  const overlay = document.getElementById('legal-overlay');
+  if (!overlay) return;
+  const t = document.getElementById('legal-title');
+  const b = document.getElementById('legal-body');
+  if (t) t.textContent = doc.title;
+  if (b) { b.innerHTML = doc.html; b.scrollTop = 0; }
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+export function closeLegal() {
+  const overlay = document.getElementById('legal-overlay');
+  if (!overlay) return;
+  overlay.classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+/** Ferme uniquement si le clic a eu lieu SUR le fond, pas dans le panneau. */
+export function closeLegalFromBackdrop(ev) {
+  if (ev && ev.target && ev.target.id === 'legal-overlay') closeLegal();
+}
+
+/** La case CGV/CGU pilote l'activation du bouton d'inscription. */
+export function onConsentChange() {
+  const box = document.getElementById('chk-consent');
+  const btn = document.getElementById('btn-submit');
+  if (btn) btn.disabled = !(box && box.checked);
+}
+
+/**
  * Configuration publique (thème/logo/pack d'avatars) du circuit de cette
  * session. Jamais d'exception qui remonte : la page doit rester utilisable
  * (avatars classiques, sans logo) même si la RPC n'existe pas encore côté
@@ -508,13 +587,13 @@ export async function initRegisterPage() {
     if (venueToken) {
       const data = await loadVenue(venueToken);
       if (!data) {
-        document.getElementById('session-name').textContent = 'Lien invalide';
+        setSessionTitle('Lien invalide', 'error');
         return;
       }
       renderVenueScreen(data, venueToken);
       return;
     }
-    document.getElementById('session-name').textContent = 'Lien invalide';
+    setSessionTitle('Lien invalide', 'error');
     return;
   }
   // Session pre-selectionnee : on charge quand meme le circuit pour appliquer
@@ -526,11 +605,11 @@ export async function initRegisterPage() {
   // viennent desormais du bundle RPC token-gated public_registration_config.
   const cfg = await loadRegistrationConfig(token);
   if (!cfg || !cfg.session_id) {
-    document.getElementById('session-name').textContent = 'Session introuvable';
+    setSessionTitle('Session introuvable', 'error');
     return;
   }
   regState.sessionId = cfg.session_id;
-  document.getElementById('session-name').textContent = cfg.session_title || '--';
+  setSessionTitle(cfg.session_title || '--');
 
   applyCircuitBranding(cfg);
 }
@@ -697,6 +776,15 @@ async function enterScreen2() {
   clearMsg('msg-2');
   const sub = document.getElementById('screen2-sub');
   if (sub && regState.pilot) sub.textContent = 'Dernière étape, ' + regState.pilot.pseudo + ' !';
+  // Les consentements repartent decoches a chaque passage sur l'ecran 2 (un
+  // retour arriere puis un autre pilote ne doit jamais heriter du oui du
+  // precedent), et le bouton d'inscription reste bloque tant que les CGV/CGU
+  // ne sont pas acceptees.
+  const cons = document.getElementById('chk-consent');
+  const promo = document.getElementById('chk-promo');
+  if (cons) cons.checked = false;
+  if (promo) promo.checked = false;
+  onConsentChange();
   showScreen('screen-2');
   await initAvatarCarousel();
 }
@@ -768,6 +856,15 @@ export async function submitForm() {
   if (!regState.sessionId) { showMsg('msg-2', 'Session invalide.', 'err'); return; }
   if (!regState.pilot) { showMsg('msg-2', 'Profil pilote manquant — retourne en arrière.', 'err'); return; }
 
+  // Garde-fou serveur-independant : meme si quelqu'un reactive le bouton via
+  // la console, l'inscription ne part pas sans acceptation des CGV/CGU.
+  const consentBox = document.getElementById('chk-consent');
+  if (!consentBox || !consentBox.checked) {
+    showMsg('msg-2', 'Tu dois accepter les CGV/CGU et la politique de confidentialité pour t\'inscrire.', 'err');
+    return;
+  }
+  const promoBox = document.getElementById('chk-promo');
+
   const btn = document.getElementById('btn-submit');
   btn.disabled = true; btn.textContent = 'Inscription en cours…';
   const chosenScheme = regState.avatarPool.length ? regState.avatarPool[regState.avatarIndex] : null;
@@ -785,6 +882,12 @@ export async function submitForm() {
       avatar_scheme: chosenScheme,
       driver_id: null,
       is_unknown: false,
+      // Consentement : horodatage de l'acceptation des CGV/CGU + politique de
+      // confidentialite, et opt-in commercial (independant, facultatif).
+      // Ces deux colonnes remontent dans le registre admin et les exports
+      // CSV/XLSX pour que le circuit puisse trier ses contacts opt-in.
+      consent_accepted_at: new Date().toISOString(),
+      promo_opt_in: !!(promoBox && promoBox.checked),
     });
     if (error) throw error;
     document.getElementById('screen-2').classList.remove('active');
