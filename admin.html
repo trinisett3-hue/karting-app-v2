@@ -83,6 +83,18 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .btn-red{background:rgba(255,77,77,.13);color:var(--red);border:1px solid rgba(255,77,77,.3)}
 .stats-range-btn{background:var(--bg);border:1px solid var(--bord);border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;text-align:center;transition:.15s;color:var(--txt);font-weight:600}
 .stats-range-btn.selected{border-color:var(--acc);background:rgba(255,59,48,.14);color:var(--acc2);font-weight:700}
+/* 01/08 : selecteurs mois/annee au clic (remplacent les anciens champs de saisie). */
+.stats-pick{width:100%;background:var(--surf2);border:1px solid var(--bord);border-radius:10px;padding:10px 12px}
+.stats-pick-nav{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px}
+.stats-pick-year{font-size:14px;font-weight:800;color:var(--txt);min-width:56px;text-align:center}
+.stats-pick-arrow{background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;width:30px;height:30px;line-height:1;font-size:16px;font-weight:800;cursor:pointer;transition:.15s;padding:0}
+.stats-pick-arrow:hover:not(:disabled){border-color:var(--acc);color:var(--acc2)}
+.stats-pick-arrow:disabled{opacity:.3;cursor:not-allowed}
+.stats-pick-grid{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}
+.stats-pick-chip{background:var(--bg);border:1px solid var(--bord);color:var(--txt);border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;min-width:58px}
+.stats-pick-chip:hover:not(:disabled){border-color:var(--acc)}
+.stats-pick-chip.selected{border-color:var(--acc);background:rgba(255,59,48,.14);color:var(--acc2);font-weight:800}
+.stats-pick-chip:disabled{opacity:.32;cursor:not-allowed}
 /* Sous-onglets (Statistiques / Parametres) — meme rendu que .stats-range-btn (deja
    connu de l'admin) mais classe dediee pour ne pas se marcher dessus lors du
    toggle ".selected" (les filtres de plage ET les sous-onglets coexistent dans
@@ -587,8 +599,8 @@ updateThemeToggleUI();
 <button class="btn btn-ghost btn-sm" onclick="exportStatsXLSX()">Exporter en Excel (XLSX)</button>
 </div>
 <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px">
-<input type="month" id="stats-month-input" style="display:none;width:auto" onchange="onStatsMonthPick(this.value)"/>
-<input type="number" id="stats-year-input" placeholder="Annee" style="display:none;width:100px" onchange="onStatsYearPick(this.value)"/>
+<div id="stats-month-picker" class="stats-pick" style="display:none"></div>
+<div id="stats-year-picker" class="stats-pick" style="display:none"></div>
 <input type="date" id="stats-custom-from" style="display:none;width:auto" onchange="onStatsCustomChange()"/>
 <span id="stats-custom-sep" style="display:none;color:var(--mut);font-size:13px">au</span>
 <input type="date" id="stats-custom-to" style="display:none;width:auto" onchange="onStatsCustomChange()"/>
