@@ -1,6 +1,6 @@
 // Module Statistiques — Point 7 (onglet "Statistiques" : KPIs globaux, fréquentation,
 // top 10 meilleurs temps absolus, top 5 pilotes par nb de sessions) et Point 9
-// (Hall of Fame : meilleur temps par kart + classement permanent zxtop 10 pilotes).
+// (Hall of Fame : meilleur temps par kart + classement permanent top 10 pilotes).
 //
 // Toutes les requêtes sont volontairement dépourvues de filtre explicite sur
 // tenant_id : une fois l'authentification admin branchée (Point 1, fait le 24/07),
@@ -199,25 +199,99 @@ export function switchStatsSubtab(tab) {
   });
 }
 
-// Changement du mois choisi (input type="month", value "YYYY-MM").
-export function onStatsMonthPick(value) {
-  if (!value) return;
-  const [y, m] = value.split('-').map(Number);
-  rangeExtra.year = y;
-  rangeExtra.month = m - 1;
+// 01/08 : le choix du mois et de l'annee se fait desormais au CLIC (demande explicite :
+// « pour le choix des mois et de l'annee il faut que ca se fasse en clic pas en ecriture »).
+// Les anciens <input type="month"> / <input type="number"> sont remplaces par deux petits
+// selecteurs rendus ici :
+//   - Mois  : une navigation d'annee ( < 2026 > ) + une grille de 12 pastilles de mois
+//   - Annee : une rangee de pastilles (les 6 dernieres annees + l'annee en cours)
+// La periode personnalisee garde ses deux <input type="date"> : le calendrier natif est
+// deja un choix au clic, rien a changer de ce cote.
+const MOIS_COURTS = ['Janv', 'Fevr', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Aout', 'Sept', 'Oct', 'Nov', 'Dec'];
+
+// Annee « de travail » du selecteur de mois : peut differer de rangeExtra.year tant que
+// l'utilisateur navigue d'une annee a l'autre sans avoir encore clique sur un mois.
+let pickerYear = new Date().getFullYear();
+
+function renderMonthPicker() {
+  const el = document.getElementById('stats-month-picker');
+  if (!el) return;
+  const now = new Date();
+  const maxYear = now.getFullYear();
+  let html =
+    '<div class="stats-pick-nav">' +
+    '<button type="button" class="stats-pick-arrow" onclick="statsShiftYear(-1)" aria-label="Annee precedente">\u2039</button>' +
+    '<span class="stats-pick-year">' + pickerYear + '</span>' +
+    '<button type="button" class="stats-pick-arrow"' + (pickerYear >= maxYear ? ' disabled' : '') + ' onclick="statsShiftYear(1)" aria-label="Annee suivante">\u203a</button>' +
+    '</div><div class="stats-pick-grid">';
+  for (let m = 0; m < 12; m++) {
+    const future = pickerYear > maxYear || (pickerYear === maxYear && m > now.getMonth());
+    const sel = rangeExtra.year === pickerYear && rangeExtra.month === m;
+    html +=
+      '<button type="button" class="stats-pick-chip' + (sel ? ' selected' : '') + '"' +
+      (future ? ' disabled' : '') + ' onclick="statsPickMonth(' + m + ')">' + MOIS_COURTS[m] + '</button>';
+  }
+  el.innerHTML = html + '</div>';
+}
+
+function renderYearPicker() {
+  const el = document.getElementById('stats-year-picker');
+  if (!el) return;
+  const maxYear = new Date().getFullYear();
+  let html = '<div class="stats-pick-grid">';
+  for (let y = maxYear - 5; y <= maxYear; y++) {
+    html +=
+      '<button type="button" class="stats-pick-chip' + (rangeExtra.year === y ? ' selected' : '') + '"' +
+      ' onclick="statsPickYear(' + y + ')">' + y + '</button>';
+  }
+  el.innerHTML = html + '</div>';
+}
+
+// Navigation d'annee dans le selecteur de mois — ne relance AUCUN calcul tant qu'aucun
+// mois n'a ete clique (on ne fait que changer la grille affichee).
+export function statsShiftYear(delta) {
+  pickerYear += delta;
+  renderMonthPicker();
+}
+
+// Clic sur un mois : borne la periode sur ce mois et recharge.
+export function statsPickMonth(m) {
+  rangeExtra.year = pickerYear;
+  rangeExtra.month = m;
   currentRange = computeRangeBounds('mois', rangeExtra);
+  renderMonthPicker();
   updateRangeDisplay();
   loadStatsTab(currentRange);
 }
 
-// Changement de l'année choisie (input type="number").
-export function onStatsYearPick(value) {
-  const y = Number(value);
-  if (!y || y < 1900) return;
+// Clic sur une annee : borne la periode sur cette annee et recharge.
+export function statsPickYear(y) {
   rangeExtra.year = y;
   currentRange = computeRangeBounds('annee', rangeExtra);
+  renderYearPicker();
   updateRangeDisplay();
   loadStatsTab(currentRange);
+}
+
+// Historique COMPLET du circuit (toutes periodes confondues) : pour chaque pilote, les
+// sessions auxquelles il a participe et la date de sa toute premiere venue. Sert aux deux
+// indicateurs de fidelisation, qui doivent garder le meme sens quelle que soit la periode
+// filtree en haut de page. Deux requetes seulement, sans filtre de date.
+async function computePilotHistory() {
+  const { data: sessions } = await fetchAll(() => db.from('sessions').select('id,session_date'));
+  const dateById = new Map((sessions || []).map((s) => [s.id, s.session_date]));
+  const { data: regs } = await fetchAll(() => db.from('session_registrations').select('session_id,display_name'));
+  const hist = new Map();
+  (regs || []).forEach((r) => {
+    const key = pilotKey(r);
+    if (!key) return;
+    if (!hist.has(key)) hist.set(key, { sessions: new Set(), first: null });
+    const h = hist.get(key);
+    h.sessions.add(r.session_id);
+    const d = dateById.get(r.session_id);
+    if (d && (!h.first || d < h.first)) h.first = d;
+  });
+  return hist;
 }
 
 // Changement d'une des deux dates de la période personnalisée.
@@ -242,21 +316,22 @@ export function onStatsCustomChange() {
 // personnalisée) selon le filtre actif, et les pré-remplit avec la valeur en
 // cours — évite de perdre la sélection quand on revient sur "Mois" par ex.
 function syncRangeControls() {
-  const monthInput = document.getElementById('stats-month-input');
-  const yearInput = document.getElementById('stats-year-input');
+  const monthPicker = document.getElementById('stats-month-picker');
+  const yearPicker = document.getElementById('stats-year-picker');
   const fromInput = document.getElementById('stats-custom-from');
   const toInput = document.getElementById('stats-custom-to');
   const sep = document.getElementById('stats-custom-sep');
-  [monthInput, yearInput, fromInput, toInput, sep].forEach((el) => {
+  [monthPicker, yearPicker, fromInput, toInput, sep].forEach((el) => {
     if (el) el.style.display = 'none';
   });
-  if (currentRange.key === 'mois' && monthInput) {
-    monthInput.style.display = 'inline-block';
-    monthInput.value = rangeExtra.year + '-' + String(rangeExtra.month + 1).padStart(2, '0');
+  if (currentRange.key === 'mois' && monthPicker) {
+    pickerYear = rangeExtra.year || new Date().getFullYear();
+    monthPicker.style.display = 'block';
+    renderMonthPicker();
   }
-  if (currentRange.key === 'annee' && yearInput) {
-    yearInput.style.display = 'inline-block';
-    yearInput.value = rangeExtra.year;
+  if (currentRange.key === 'annee' && yearPicker) {
+    yearPicker.style.display = 'block';
+    renderYearPicker();
   }
   if (currentRange.key === 'personnalise') {
     if (fromInput) { fromInput.style.display = 'inline-block'; fromInput.value = rangeExtra.from || ''; }
@@ -747,33 +822,48 @@ async function loadPremiumStatsBlocks(allSessions, allRegs, allLaps, timeRows, r
     .sort((a, b) => b.sessions - a.sessions)
     .slice(0, 10);
 
-  // Taux de retour : % de pilotes de la periode deja vus AVANT le debut de la periode.
-  // N'a de sens que sur une plage bornee (sinon "avant la periode" n'existe pas, d'où
-  // le '--' sur "Depuis le debut") — requete additionnelle legere, non bloquante.
+  // 01/08 — REFONTE. L'ancienne definition (« pilotes deja vus AVANT le debut de la
+  // periode ») n'etait pas calculable sur « Depuis le debut » et changeait de sens a chaque
+  // filtre : sur « Jour », presque tout le monde etait « de retour » ; sur « Annee », presque
+  // personne. Nouvelle logique, valable a l'identique sur TOUTES les periodes :
+  //   - Taux de retour   = part des pilotes venus sur la periode qui comptent AU MOINS
+  //                        2 sessions dans tout l'historique du circuit (periode incluse).
+  //                        Traduction : « parmi les gens venus sur cette periode, combien
+  //                        sont des habitues ? »
+  //   - Nouveaux pilotes = part des pilotes de la periode dont la TOUTE PREMIERE session du
+  //                        circuit tombe dans cette periode (les premieres venues).
+  // Les deux se lisent ensemble : fort taux de retour + peu de nouveaux = base fidele qui ne
+  // se renouvelle pas ; l'inverse = acquisition forte mais retention a travailler.
+  // L'identite pilote reste celle de pilotKey() (pseudo normalise), comme partout ailleurs.
   let tauxRetour = null;
-  if (range && range.from) {
-    try {
-      const { data: priorSessions } = await fetchAll(() => db.from('sessions').select('id').lt('session_date', range.from));
-      const priorIds = (priorSessions || []).map((s) => s.id);
-      if (priorIds.length) {
-        const { data: priorRegs } = await fetchAllIn(() => db.from('session_registrations').select('display_name'), 'session_id', priorIds);
-        const priorKeys = new Set((priorRegs || []).map((r) => (r.display_name || '').trim().toLowerCase()).filter(Boolean));
-        const pilotsInRange = Array.from(byPilot.keys());
-        const returning = pilotsInRange.filter((k) => priorKeys.has(k)).length;
-        tauxRetour = pilotsInRange.length ? returning / pilotsInRange.length : null;
-      } else {
-        tauxRetour = 0; // aucune session avant la periode : personne ne peut etre "de retour"
-      }
-    } catch (e) {
-      tauxRetour = null;
-    }
+  let tauxNouveaux = null;
+  let fidCounts = { total: byPilot.size, habitues: 0, nouveaux: 0 };
+  try {
+    const hist = await computePilotHistory();
+    let habitues = 0;
+    let nouveaux = 0;
+    byPilot.forEach((p, key) => {
+      const h = hist.get(key);
+      const nbTotal = h ? h.sessions.size : p.sessions.size;
+      if (nbTotal >= 2) habitues++;
+      const first = h ? h.first : null;
+      if (first && range && range.from && first >= range.from && (!range.to || first <= range.to)) nouveaux++;
+    });
+    fidCounts = { total: byPilot.size, habitues, nouveaux };
+    tauxRetour = byPilot.size ? habitues / byPilot.size : null;
+    // Sur « Depuis le debut » la periode couvre tout l'historique : tout le monde y est
+    // « nouveau » par construction, l'indicateur n'aurait aucun sens → on affiche '--'.
+    tauxNouveaux = range && range.from && byPilot.size ? nouveaux / byPilot.size : null;
+  } catch (e) {
+    tauxRetour = null;
+    tauxNouveaux = null;
   }
 
   // Visites moyennes/pilote sur des presets fixes (30/90/365j), independants du filtre
   // en cours — demande explicitement telle quelle ("basé sur ... des presets").
   const visites = await computeVisitesPresets();
 
-  lastFidelisation = { tauxRetour, visites30: visites.j30, visites90: visites.j90, visites365: visites.j365, segmentation, top10: top10Engagement };
+  lastFidelisation = { tauxRetour, tauxNouveaux, fidCounts, visites30: visites.j30, visites90: visites.j90, visites365: visites.j365, segmentation, top10: top10Engagement };
   renderFidelisationBlock(lastFidelisation);
 await refreshLevelThresholds();
 
@@ -948,7 +1038,8 @@ function renderFidelisationBlock(f) {
   const kpiGrid = document.getElementById('stats-fid-kpi-grid');
   if (kpiGrid) {
     kpiGrid.innerHTML =
-      kpiBox('Taux de retour', pct(f.tauxRetour), f.tauxRetour == null ? 'Non calculable sur "Depuis le debut"' : null, '🔁', 'Part des pilotes de la periode deja vus AVANT le debut de cette periode. Non calculable sur "Depuis le debut" car il n\'y a pas de "avant" a comparer.') +
+      kpiBox('Taux de retour', pct(f.tauxRetour), f.fidCounts ? f.fidCounts.habitues + ' habitue(s) sur ' + f.fidCounts.total + ' pilote(s)' : null, '🔁', 'Parmi les pilotes venus sur la periode affichee, la part de ceux qui comptent au moins 2 sessions dans tout l\'historique du circuit (periode incluse) — autrement dit : combien de vos visiteurs de la periode sont des habitues. Calcul : pilotes de la periode ayant &ge; 2 sessions au total &divide; nombre de pilotes de la periode. Cet indicateur garde exactement le meme sens sur Jour, Semaine, Mois, Annee, Personnalise et Depuis le debut. L\'identite du pilote est basee sur le pseudo.') +
+      kpiBox('Nouveaux pilotes', pct(f.tauxNouveaux), f.tauxNouveaux == null ? 'Choisis une periode bornee' : (f.fidCounts.nouveaux + ' premiere(s) venue(s) sur ' + f.fidCounts.total), '✨', 'Part des pilotes de la periode dont la toute premiere session sur le circuit tombe DANS cette periode. Calcul : nombre de premieres venues sur la periode &divide; nombre de pilotes de la periode. Sur "Depuis le debut" la periode couvre tout l\'historique, tout le monde y est nouveau par construction : l\'indicateur affiche donc "--". A lire avec le taux de retour : beaucoup de nouveaux et peu d\'habitues = acquisition forte mais retention a travailler ; l\'inverse = base fidele qui ne se renouvelle pas.') +
       kpiBox('Visites / pilote (30j)', f.visites30 != null ? f.visites30.toFixed(1) : '--', null, '📆', 'Nombre moyen de sessions par pilote unique sur les 30 derniers jours glissants (aujourd\'hui inclus) -- independant du filtre de periode choisi en haut de page.') +
       kpiBox('Visites / pilote (90j)', f.visites90 != null ? f.visites90.toFixed(1) : '--', null, '📆', 'Nombre moyen de sessions par pilote unique sur les 90 derniers jours glissants -- independant du filtre de periode choisi en haut de page.') +
       kpiBox('Visites / pilote (1 an)', f.visites365 != null ? f.visites365.toFixed(1) : '--', null, '📆', 'Nombre moyen de sessions par pilote unique sur les 365 derniers jours glissants -- independant du filtre de periode choisi en haut de page.');
@@ -1106,7 +1197,8 @@ export function exportStatsXLSX() {
     ['Fidelisation pilotes — ' + periodeTxt],
     [],
     ['Indicateur', 'Valeur'],
-    ['Taux de retour', pct(f.tauxRetour)],
+    ['Taux de retour', pct(f.tauxRetour), f.fidCounts ? f.fidCounts.habitues + ' habitue(s) sur ' + f.fidCounts.total + ' pilote(s) (>= 2 sessions au total)' : ''],
+    ['Nouveaux pilotes', pct(f.tauxNouveaux), f.tauxNouveaux == null ? 'Non applicable sur Depuis le debut' : (f.fidCounts.nouveaux + ' premiere(s) venue(s) sur ' + f.fidCounts.total)],
     ['Visites / pilote (30j)', f.visites30 != null ? f.visites30.toFixed(1) : '--'],
     ['Visites / pilote (90j)', f.visites90 != null ? f.visites90.toFixed(1) : '--'],
     ['Visites / pilote (1 an)', f.visites365 != null ? f.visites365.toFixed(1) : '--'],
