@@ -1,6 +1,6 @@
 // Module Statistiques — Point 7 (onglet "Statistiques" : KPIs globaux, fréquentation,
 // top 10 meilleurs temps absolus, top 5 pilotes par nb de sessions) et Point 9
-// (Hall of Fame : meilleur temps par kart + classement permanent xtop 10 pilotes).
+// (Hall of Fame : meilleur temps par kart + classement permanent zxtop 10 pilotes).
 //
 // Toutes les requêtes sont volontairement dépourvues de filtre explicite sur
 // tenant_id : une fois l'authentification admin branchée (Point 1, fait le 24/07),
