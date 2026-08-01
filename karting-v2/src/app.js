@@ -411,8 +411,9 @@ requestPasswordReset: settings.requestPasswordReset,
 // Statistiques
 selectStatsRange: stats.selectStatsRange,
 switchStatsSubtab: stats.switchStatsSubtab,
-onStatsMonthPick: stats.onStatsMonthPick,
-onStatsYearPick: stats.onStatsYearPick,
+statsShiftYear: stats.statsShiftYear,
+statsPickMonth: stats.statsPickMonth,
+statsPickYear: stats.statsPickYear,
 onStatsCustomChange: stats.onStatsCustomChange,
 exportStatsXLSX: stats.exportStatsXLSX,
 // Registre
