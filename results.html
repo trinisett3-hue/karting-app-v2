@@ -6,7 +6,7 @@
      un rendu complet se faisait donc en classic (rouge) avant de basculer. Ce script
      synchrone, place avant toute feuille de style, restitue le dernier theme connu
      AVANT le premier pixel. La valeur reste ecrite par initTheme() (source de verite). -->
-<script>(function(){try{var t=localStorage.getItem('kt_theme');var M={classic:1,dark:'classic',neon:1,carbon:1,checkered:1,endurance:1,pitlane:1,champagne:1,arctic:1};if(t&&M[t])document.documentElement.setAttribute('data-theme',M[t]===1?t:M[t]);}catch(e){}})();</script>
+<script>(function(){var ok=false;try{var t=localStorage.getItem('kt_theme');var M={classic:1,dark:'classic',neon:1,carbon:1,checkered:1,endurance:1,pitlane:1,champagne:1,arctic:1};if(t&&M[t]){document.documentElement.setAttribute('data-theme',M[t]===1?t:M[t]);ok=true;}}catch(e){}try{var d=document.documentElement;window.__ktReveal=function(){try{d.classList.remove('kt-pending');}catch(e){}};if(!ok){d.classList.add('kt-pending');d.insertAdjacentHTML('afterbegin','<style id="kt-pending-css">html.kt-pending body{visibility:hidden!important}</style>');setTimeout(window.__ktReveal,1500);}}catch(e){}})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Résultats Karting</title>
