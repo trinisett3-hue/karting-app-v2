@@ -176,23 +176,9 @@ header.appendChild(img);
 }
 }
 
-// Plan du circuit (optionnel) — affiché juste avant le podium, uniquement si configuré.
-// À gater sur le plan Premium une fois la facturation en place (Phase 3 roadmap).
-const trackMapUrl = data.value && data.value.track_map_url;
-if (trackMapUrl) {
-const podiumWrap = document.getElementById('podium-wrap');
-if (podiumWrap && podiumWrap.parentElement && !document.getElementById('circuit-track-map')) {
-const section = document.createElement('div');
-section.id = 'circuit-track-map';
-section.style.cssText = 'margin-bottom:16px;text-align:center';
-const img = document.createElement('img');
-img.src = trackMapUrl;
-img.alt = 'Plan du circuit';
-img.style.cssText = 'max-width:100%;max-height:280px;object-fit:contain;border-radius:10px';
-section.appendChild(img);
-podiumWrap.parentElement.insertBefore(section, podiumWrap);
-}
-}
+// 02/08 (client) : "enleve l'option plan du circuit pour le moment partout".
+// L'option est retiree de l'UI, des preferences et de la page publique. La colonne
+// app_settings.value.track_map_url est nettoyee cote base ; rien d'autre n'en depend.
 }).catch(() => {});
 }
 
