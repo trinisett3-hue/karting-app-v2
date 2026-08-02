@@ -28,6 +28,18 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const BUCKET = 'session-exports';
 const SIGNED_URL_TTL = 60 * 60 * 24 * 30; // 30 jours : le pilote ouvre parfois son e-mail bien plus tard.
 
+// 01/08 : sans en-tetes CORS, l'appel immediat depuis le navigateur de l'admin
+// (db.functions.invoke au clic sur « Publier ») etait rejete par le
+// pre-vol du navigateur. L'admin voyait « envoi en cours » et les e-mails ne
+// partaient qu'au tour de cron suivant, jusqu'a 5 minutes plus tard — au point
+// que la publication semblait n'avoir rien envoye du tout.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+const JSON_HEADERS = { ...CORS, 'Content-Type': 'application/json' };
+
 type Delivery = {
   delivery_id: string;
   session_id: string;
@@ -130,46 +142,80 @@ function filenameFor(kind: string, mime: string) {
   return (base[kind] || 'document') + '.' + ext;
 }
 
+// 01/08 : le corps de l'e-mail ne porte plus AUCUN theme ni couleur de marque.
+// Demande explicite : « pas de theme dans le corps du mail, juste du texte ».
+// On garde une enveloppe HTML minimale (les clients mail rendent mal le
+// text/plain brut envoye en `html`), mais sans fond, sans carte, sans bouton
+// colore : police systeme, texte noir sur blanc, un seul lien souligne.
+// Piste notee pour plus tard : des modeles d'e-mail choisis dans l'app par le
+// centre, reserves aux offres superieures.
+
+// Date ISO (2026-08-01) -> « samedi 1er aout 2026 ».
+const JOURS = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
+const MOIS = ['janvier', 'fevrier', 'mars', 'avril', 'mai', 'juin', 'juillet', 'aout', 'septembre', 'octobre', 'novembre', 'decembre'];
+
+function dateLisible(iso: string | null) {
+  if (!iso) return '';
+  const m = String(iso).slice(0, 10).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return String(iso);
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (isNaN(d.getTime())) return String(iso);
+  const jour = +m[3];
+  return JOURS[d.getUTCDay()] + ' ' + (jour === 1 ? '1er' : jour) + ' ' + MOIS[+m[2] - 1] + ' ' + m[1];
+}
+
 function buildHtml(g: Delivery[], attachments: Array<{ filename: string; url: string }>, kinds: string[]) {
   const head = g[0];
   // Le pseudo, jamais le nom civil — contrainte metier constante du projet.
   const who = head.display_name || head.first_name || 'Pilote';
-  const venue = head.venue_name || 'Karting';
+  const venue = head.venue_name || '';
+  // 01/08 : `/results` et non `/results.html` — Cloudflare Pages repond 308 sur
+  // la forme avec extension, et certains clients mail suivent mal la redirection.
   const link = env('PUBLIC_APP_URL') && head.results_token
-    ? env('PUBLIC_APP_URL').replace(/\/+$/, '') + '/results.html?result=' + encodeURIComponent(head.results_token)
+    ? env('PUBLIC_APP_URL').replace(/\/+$/, '') + '/results?result=' + encodeURIComponent(head.results_token)
     : '';
   const hasRecord = g.some((d) => d.kind === 'record' || d.kind === 'record_card');
   // Correctif audit 30/07 : ne PAS annoncer une piece jointe qui n'existe pas.
-  // Aucun code ne produit encore d'asset `record_card` / `position_card` (le
-  // navigateur ne televerse que `full_pdf` et `pilot_pdf`) : le message
-  // « Ta carte est en piece jointe » etait donc faux des qu'un record etait
-  // detecte. On ne le dit que si la carte est reellement signee et attachee.
   const recordCardAttached = attachments.some((a) => a.filename.indexOf('carte-record') === 0);
-  const recordLine = hasRecord
-    ? (recordCardAttached
-      ? 'Nouveau record battu sur cette session. Ta carte est en piece jointe.'
-      : 'Nouveau record battu sur cette session. Felicitations !')
-    : '';
 
-  return `<!DOCTYPE html><html lang="fr"><body style="margin:0;background:#06070b;font-family:'Segoe UI',Arial,sans-serif;color:#f5f6fb">
-<div style="max-width:560px;margin:0 auto;padding:32px 20px">
-  <div style="height:3px;background:linear-gradient(90deg,transparent,#d8b571,transparent);margin-bottom:28px"></div>
-  <h1 style="font-size:26px;margin:0 0 6px;text-transform:uppercase;letter-spacing:.02em">${esc(venue)}</h1>
-  <p style="color:#8d92ac;margin:0 0 24px;font-size:15px">${esc(head.session_title || 'Session')}${head.session_date ? ' — ' + esc(head.session_date) : ''}</p>
+  const seance = head.session_title || 'ta session';
+  const quand = dateLisible(head.session_date);
+  const ou = venue ? ' sur le circuit ' + esc(venue) : '';
 
-  <div style="background:#12141e;border:1px solid #262a3c;border-radius:16px;padding:20px;margin-bottom:16px">
-    <p style="margin:0 0 12px;font-size:17px">Bravo <strong>${esc(who)}</strong>, tes resultats sont en ligne.</p>
-    ${recordLine ? '<p style="margin:0 0 12px;padding:10px 12px;background:rgba(216,181,113,.12);border:1px solid rgba(216,181,113,.4);border-radius:10px;color:#d8b571;font-weight:600">' + esc(recordLine) + '</p>' : ''}
-    ${attachments.length ? `<p style="margin:0;color:#8d92ac;font-size:14px">${attachments.length} document${attachments.length > 1 ? 's' : ''} en piece jointe :</p>
-    <ul style="margin:8px 0 0;padding-left:20px;color:#f5f6fb;font-size:14px">
-      ${kinds.map((k) => '<li>' + esc(LABELS[k] || k) + '</li>').join('')}
-    </ul>` : ''}
-  </div>
+  const paras: string[] = [];
+  paras.push('Bonjour ' + esc(who) + ',');
+  paras.push(
+    'Tu as pilote a la seance <strong>' + esc(seance) + '</strong>' +
+    (quand ? ' du ' + esc(quand) : '') + ou + '. ' +
+    'Tes resultats viennent d\'etre publies.'
+  );
+  if (hasRecord) {
+    paras.push(
+      recordCardAttached
+        ? 'Tu as battu un record sur cette seance — bravo. Ta carte de record est jointe a cet e-mail.'
+        : 'Tu as battu un record sur cette seance — bravo !'
+    );
+  }
+  if (attachments.length) {
+    paras.push(
+      'Tu trouveras en piece jointe :<br>' +
+      kinds.map((k) => '&bull; ' + esc(LABELS[k] || k)).join('<br>')
+    );
+  }
+  if (link) {
+    paras.push('Le classement complet reste consultable en ligne : <a href="' + esc(link) + '">voir le classement</a>.');
+  }
+  paras.push(
+    'Merci d\'etre venu rouler. On espere te revoir tres vite sur la piste pour ameliorer ton chrono — ' +
+    'les prochaines seances sont ouvertes aux inscriptions.'
+  );
+  paras.push('Bonne route,<br>' + esc(venue || 'L\'equipe'));
 
-  ${link ? `<a href="${esc(link)}" style="display:block;text-align:center;background:linear-gradient(135deg,#ff3b30,#c81e18);color:#fff;text-decoration:none;font-weight:700;font-size:16px;text-transform:uppercase;letter-spacing:.05em;padding:15px;border-radius:14px">Voir le classement en ligne</a>` : ''}
-
-  <p style="color:#5f6480;font-size:12px;text-align:center;margin-top:26px;line-height:1.6">
-    Tu recois cet e-mail parce que tu t'es inscrit a cette session.${attachments.length ? '<br/>Les liens des pieces jointes expirent au bout de 30 jours.' : ''}
+  return `<!DOCTYPE html><html lang="fr"><body style="margin:0;padding:0;background:#ffffff">
+<div style="max-width:600px;margin:0 auto;padding:24px 20px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#000000">
+${paras.map((p) => '  <p style="margin:0 0 16px">' + p + '</p>').join('\n')}
+  <p style="margin:24px 0 0;font-size:12px;color:#666666">
+    Tu recois cet e-mail parce que tu t'es inscrit a cette seance.${attachments.length ? ' Les pieces jointes restent telechargeables pendant 30 jours.' : ''}
   </p>
 </div></body></html>`;
 }
@@ -182,8 +228,6 @@ async function signAssets(items: Array<{ kind: string; path: string; mime: strin
     const { data, error } = await admin.storage.from(BUCKET).createSignedUrl(a.path, SIGNED_URL_TTL);
     // Une piece jointe manquante ne doit pas empecher l'envoi : le pilote
     // recoit ce qui existe, et le lien vers le classement en ligne.
-    // On trace quand meme : un envoi a zero piece jointe est silencieux sinon,
-    // et c'est exactement le genre de panne qu'on ne voit jamais (audit 30/07).
     if (error || !data?.signedUrl) {
       console.warn('[signAssets] asset introuvable, ignore :', a.kind, a.path, error?.message || '');
       continue;
@@ -223,13 +267,17 @@ async function handleGroup(g: Delivery[]) {
 }
 
 Deno.serve(async (req) => {
+  // Pre-vol CORS : le navigateur de l'admin l'envoie avant le POST.
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS });
+  }
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'POST attendu' }), { status: 405, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: 'POST attendu' }), { status: 405, headers: JSON_HEADERS });
   }
   if (!env('EMAIL_API_KEY') || !env('EMAIL_FROM')) {
     return new Response(
       JSON.stringify({ error: 'EMAIL_API_KEY et EMAIL_FROM ne sont pas configures.' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { status: 500, headers: JSON_HEADERS }
     );
   }
 
@@ -241,24 +289,25 @@ Deno.serve(async (req) => {
 
   const { data: claimed, error } = await admin.rpc('claim_card_deliveries', { _limit: 200 });
   if (error) {
-    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ error: error.message }), { status: 500, headers: JSON_HEADERS });
   }
 
   const rows: Delivery[] = Array.isArray(claimed) ? claimed : [];
   if (!rows.length) {
-    return new Response(JSON.stringify({ sent: 0, failed: 0, requeued, note: 'file vide' }), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ sent: 0, failed: 0, requeued, note: 'file vide' }), { headers: JSON_HEADERS });
   }
 
-  // Regroupement par pilote. Un anonyme sans registration_id ne devrait pas
-  // arriver ici (pas d'e-mail), mais on retombe sur l'adresse par securite.
+  // Regroupement : UN SEUL e-mail par pilote ET PAR SESSION, portant toutes
+  // ses pieces jointes (classement, fiche pilote, carte de position, carte de
+  // record s'il y en a une).
+  // 02/08 — `session_id` ajoute a la cle. Sans lui, un pilote ayant roule sur
+  // deux seances publiees dans la meme fenetre de prise de file voyait ses
+  // deux seances fusionnees dans un seul e-mail : mauvais titre, mauvaise
+  // date, pieces jointes melangees. Un envoi = une seance.
+  // Un anonyme sans registration_id ne devrait pas arriver ici (pas d'e-mail),
+  // mais on retombe sur l'adresse par securite.
   const groups = new Map<string, Delivery[]>();
   for (const r of rows) {
-    // 02/08 — `session_id` ajoute a la cle : UN SEUL e-mail par pilote ET PAR
-    // SESSION, portant toutes ses pieces jointes (classement, fiche pilote,
-    // carte de position, carte de record s'il y en a une). Sans lui, un pilote
-    // ayant roule sur deux seances publiees dans la meme fenetre de prise de
-    // file voyait ses deux seances fusionnees dans un seul e-mail : mauvais
-    // titre, mauvaise date, pieces jointes melangees. Un envoi = une seance.
     const key = r.session_id + '|' + (r.registration_id || '') + '|' + r.email.toLowerCase();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
@@ -282,6 +331,6 @@ Deno.serve(async (req) => {
   }
 
   return new Response(JSON.stringify({ sent, failed, requeued, groups: groups.size, errors }), {
-    headers: { 'Content-Type': 'application/json' },
+    headers: JSON_HEADERS,
   });
 });
