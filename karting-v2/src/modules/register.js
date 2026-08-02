@@ -409,22 +409,37 @@ function applyResultsNavLink(cfg) {
 function renderVenueTabs(resultsHref) {
   const floatSwitch = document.querySelector('.page-switch');
   if (floatSwitch) floatSwitch.remove();
-  const screen = document.getElementById('screen-0');
-  if (!screen) return;
-  // 02/08 — La barre du formulaire avait SA PROPRE feuille de style, sous le
-  // meme nom de classe `.venue-tabs` que celle des ecrans de selection : pleine
-  // largeur, collee sous le sous-titre, avec un filet horizontal. D'un ecran a
-  // l'autre la pastille sautait et la colonne changeait de largeur. On reprend
-  // ici, a l'identique, les regles de VENUE_CSS (aucune couleur en dur, les
-  // jetons de theme decident) et on pose la pastille TOUT EN HAUT de l'ecran,
-  // comme sur les deux selecteurs.
+  if (!document.body) return;
+  // 02/08 — Client : « la barre ne reste pas au meme endroit quand tu changes de
+  // page ». Mesure faite en production : sur les deux ecrans de SELECTION la
+  // pastille tombe a top=26 / left=576 / largeur=304, alors que sur l'ecran de
+  // FORMULAIRE elle tombait a top=140 — un saut de 114 px — parce qu'elle etait
+  // inseree DANS la carte (#screen-0), elle-meme centree verticalement par le
+  // flex du body. Trois consequences corrigees ici :
+  //   1. la pastille sort de la carte et vient dans un bandeau en tete de body,
+  //      avec exactement la geometrie de .venue-wrap (33rem, padding 1.6rem) ;
+  //   2. le body cesse de centrer verticalement, sinon aucun top fixe n'est
+  //      possible ;
+  //   3. elle etait greffee sur #screen-0 seul, donc elle disparaissait des
+  //      ecrans 1a/1b/2 : dans le bandeau, elle reste visible tout du long.
+  // Les regles .venue-tabs sont copiees a l'identique de VENUE_CSS (marge basse
+  // 2rem comprise). Aucune couleur en dur : les jetons de theme decident.
   if (!document.getElementById('venue-tabs-css')) {
     document.head.insertAdjacentHTML('beforeend', `<style id="venue-tabs-css">
-.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:19rem;max-width:100%;margin:0 auto 1.6rem;padding:.19rem;border:1px solid var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:999px;background:rgba(255,255,255,.04)}
+body.has-venue-tabs{justify-content:flex-start!important;padding-top:0!important}
+#venue-tabs-band{flex:0 0 auto;width:100%;max-width:33rem;margin:0 auto;padding:1.6rem 1.15rem 0;box-sizing:border-box}
+.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:19rem;max-width:100%;margin:0 auto 2rem;padding:.19rem;border:1px solid var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:999px;background:rgba(255,255,255,.04)}
 .venue-tabs a,.venue-tabs span{flex:1 1 0;text-align:center;padding:.5rem .6rem;border-radius:999px;font-family:var(--font-body,inherit);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--c-muted,var(--mut,#8a8f9a));transition:color .15s}
 .venue-tabs a:hover{color:var(--c-text,var(--txt,#fff))}
 .venue-tabs span{background:var(--c-accent,var(--acc,#ffb238));color:var(--c-bg,var(--bg,#0b0b0f))}
 </style>`);
+  }
+  let band = document.getElementById('venue-tabs-band');
+  if (!band) {
+    band = document.createElement('div');
+    band.id = 'venue-tabs-band';
+    document.body.insertAdjacentElement('afterbegin', band);
+    document.body.classList.add('has-venue-tabs');
   }
   let tabs = document.getElementById('venue-tabs');
   if (!tabs) {
@@ -432,7 +447,9 @@ function renderVenueTabs(resultsHref) {
     tabs.id = 'venue-tabs';
     tabs.className = 'venue-tabs';
     tabs.setAttribute('aria-label', 'Navigation');
-    screen.insertAdjacentElement('afterbegin', tabs);
+    band.appendChild(tabs);
+  } else if (tabs.parentElement !== band) {
+    band.appendChild(tabs);
   }
   tabs.innerHTML = '<span>Inscription</span><a href="' + resultsHref + '" id="nav-results-link">Résultats</a>';
 }
