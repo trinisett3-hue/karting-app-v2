@@ -372,6 +372,20 @@ function applyCircuitBranding(cfg) {
 // classement à montrer) il reste volontairement sur results.html nu plutôt
 // que d'être masqué : le visiteur peut toujours cliquer et voir un message
 // "aucun résultat" cohérent, moins déroutant qu'un lien qui disparaît.
+// 02/08 (client) : "il faut que le clic soit plus fluide". Deux causes mesurees :
+// (1) les liens pointaient vers *.html, ce qui declenche une redirection 308 de
+//     Cloudflare Pages a CHAQUE clic (un aller-retour reseau complet perdu) ;
+// (2) la page cible etait telechargee seulement au clic. On la prefetch des que
+//     le lien est connu : le basculement devient quasi instantane.
+function prefetchNav(href) {
+  try {
+    if (!href || document.querySelector('link[rel="prefetch"][data-nav]')) return;
+    const l = document.createElement('link');
+    l.rel = 'prefetch'; l.href = href; l.setAttribute('data-nav', '1');
+    document.head.appendChild(l);
+  } catch (e) {}
+}
+
 function applyResultsNavLink(cfg) {
   // 31/07 (correctif navigation) : le jeton de circuit ?v= etait perdu au
   // changement d'onglet — on atterrissait sur "results.html" nu, sans aucune
@@ -380,11 +394,12 @@ function applyResultsNavLink(cfg) {
   // terminees du circuit (meme lien, contenu qui se met a jour tout seul).
   const p = new URLSearchParams(window.location.search);
   const venueToken = p.get('v') || p.get('venue');
-  let href = 'results.html';
-  if (venueToken) href = 'results.html?v=' + encodeURIComponent(venueToken);
-  else if (cfg && cfg.results_token) href = 'results.html?result=' + encodeURIComponent(cfg.results_token);
+  let href = 'results';
+  if (venueToken) href = 'results?v=' + encodeURIComponent(venueToken);
+  else if (cfg && cfg.results_token) href = 'results?result=' + encodeURIComponent(cfg.results_token);
   const link = document.getElementById('nav-results-link');
   if (link) link.href = href;
+  prefetchNav(href);
   renderVenueTabs(href);
 }
 
@@ -559,7 +574,7 @@ function renderVenueScreen(data, venueToken) {
   const floatSwitch = document.querySelector('.page-switch');
   if (floatSwitch) floatSwitch.remove();
 
-  const resultsHref = 'results.html?v=' + encodeURIComponent(venueToken);
+  const resultsHref = 'results?v=' + encodeURIComponent(venueToken);
   const tabs = '<nav class="venue-tabs" aria-label="Navigation"><span>Inscription</span>' +
     '<a href="' + resultsHref + '" id="nav-results-link">Résultats</a></nav>';
 
@@ -569,7 +584,7 @@ function renderVenueScreen(data, venueToken) {
 
   const rows = open.length
     ? open.map((s, i) => venueRow(
-        'register.html?session=' + encodeURIComponent(s.registration_token) +
+        'register?session=' + encodeURIComponent(s.registration_token) +
           '&v=' + encodeURIComponent(venueToken),
         i === 0 ? 'Prochaine' : 'Ouverte',
         s.title || 'Session',
