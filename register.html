@@ -19,7 +19,12 @@
   --acc-soft:color-mix(in srgb,var(--acc) 15%,transparent);
   --acc-tint:color-mix(in srgb,var(--acc) 10%,transparent);
   --acc-wash:color-mix(in srgb,var(--acc) 12%,var(--surf));
-  --gold:#d8b571;--gold-soft:rgba(216,181,113,.5);--gold-glow:rgba(216,181,113,.22);
+  /* 02/08 — Ces trois jetons etaient un or fixe #d8b571, seule couleur de la page
+     a ignorer le theme de Parametres > Apparence : le filet du haut restait dore
+     meme sur un theme rouge ou cyan. Ils derivent desormais de l'accent. */
+  --gold:var(--acc);
+  --gold-soft:color-mix(in srgb,var(--acc) 50%,transparent);
+  --gold-glow:color-mix(in srgb,var(--acc) 22%,transparent);
   --grn:#33d17a;--red:#ff4d4d;--yel:#ffcc33;
   --font-display:'Teko','Arial Narrow',sans-serif;
   --font-body:'Barlow Condensed','Segoe UI',system-ui,sans-serif;
@@ -31,7 +36,7 @@ html{-webkit-text-size-adjust:none}
 body{
   background:
     radial-gradient(ellipse 65% 42% at 12% -12%, color-mix(in srgb,var(--acc) 12%,transparent) 0%, transparent 62%),
-    radial-gradient(ellipse 55% 38% at 105% 105%, rgba(216,181,113,.07) 0%, transparent 62%),
+    radial-gradient(ellipse 55% 38% at 105% 105%, color-mix(in srgb,var(--acc) 7%,transparent) 0%, transparent 62%),
     radial-gradient(ellipse 40% 30% at 50% 40%, rgba(255,255,255,.02) 0%, transparent 70%),
     linear-gradient(180deg, var(--bg) 0%, #05060a 100%);
   color:var(--txt);
@@ -43,11 +48,11 @@ body{
   position:relative;
   overflow-x:hidden;
 }
-/* Bande d'accroche premium, en haut de l'écran : filet or + damier très discret */
+/* Bande d'accroche premium, en haut de l'écran : filet a l'accent du theme + damier très discret */
 body::before{
   content:'';
   position:fixed;top:0;left:0;right:0;height:3px;
-  background:linear-gradient(90deg,transparent,var(--gold) 18%,#f3e2b8 50%,var(--gold) 82%,transparent);
+  background:linear-gradient(90deg,transparent,var(--acc) 18%,color-mix(in srgb,var(--acc) 55%,#fff) 50%,var(--acc) 82%,transparent);
   opacity:.85;
   z-index:6;
 }
@@ -237,7 +242,7 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
 
 /* Écran 1b — confirmation pilote trouvé */
 .pilot-found-card{
-  background:linear-gradient(165deg,color-mix(in srgb,var(--acc) 12%,transparent),rgba(216,181,113,.04) 60%,color-mix(in srgb,var(--acc) 2%,transparent));
+  background:linear-gradient(165deg,color-mix(in srgb,var(--acc) 12%,transparent),color-mix(in srgb,var(--acc) 4%,transparent) 60%,color-mix(in srgb,var(--acc) 2%,transparent));
   border:1px solid color-mix(in srgb,var(--acc) 42%,transparent);border-radius:15px;padding:22px;text-align:center;margin-bottom:16px;
   box-shadow:0 1px 0 rgba(255,255,255,.03) inset;
 }
