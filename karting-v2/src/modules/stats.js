@@ -700,7 +700,7 @@ function renderFrequencyChart(allSessions, range) {
 
 let lastFidelisation = { tauxRetour: null, visites30: null, visites90: null, visites365: null, segmentation: { nouveaux: 0, reguliers: 0, fans: 0 }, top10: [] };
 let lastPerformance = { pctProgression: null, progressionMoyenne: null, niveaux: { debutant: 0, intermediaire: 0, expert: 0 }, hofEnrichi: [] };
-let lastUsageAvance = { pctEnLigne: null, pctSurPlace: null, planPisteActif: false, themeActuel: null, themePremium: false, saisonnalite: { months: [], topHours: [] } };
+let lastUsageAvance = { pctEnLigne: null, pctSurPlace: null, themeActuel: null, themePremium: false, saisonnalite: { months: [], topHours: [] } };
 
 // Identite d'un pilote a travers plusieurs sessions : meme convention que l'ancien
 // regroupement par pseudo de le pack Basique — pas d'identifiant stable pour les pilotes
@@ -775,7 +775,7 @@ function formatMinutes(min) {
 }
 
 // Message de verrouillage affiche a la place d'un bloc Offre 2 quand le plan ne
-// l'autorise pas -- meme esprit visuel que #trackmap-upsell / #themes-upsell dans
+// l'autorise pas -- meme esprit visuel que #themes-upsell dans
 // admin.html (encart discret, pas de blocage brutal de la navigation : le sous-onglet
 // reste cliquable, seul son contenu est remplace). IMPORTANT : cette fonction est
 // appelee AVANT tout calcul du bloc concerne -- aucune donnee n'est donc jamais
@@ -965,11 +965,10 @@ await refreshLevelThresholds();
   const pctEnLigne = totalRegs ? enLigne / totalRegs : null;
   const pctSurPlace = totalRegs ? surPlace / totalRegs : null;
 
-  let planPisteActif = false, themeActuel = null, themePremium = false;
+  let themeActuel = null, themePremium = false;
   try {
     const { data: cfg } = await db.from('app_settings').select('value').eq('key', 'global').maybeSingle();
     if (cfg && cfg.value) {
-      planPisteActif = !!cfg.value.track_map_url;
       themeActuel = cfg.value.results_theme || 'classic';
       themePremium = PREMIUM_THEME_SLUGS.has(themeActuel);
     }
@@ -979,7 +978,7 @@ await refreshLevelThresholds();
 
   const saisonnalite = await computeSaisonnalite12Mois();
 
-  lastUsageAvance = { pctEnLigne, pctSurPlace, planPisteActif, themeActuel, themePremium, saisonnalite };
+  lastUsageAvance = { pctEnLigne, pctSurPlace, themeActuel, themePremium, saisonnalite };
   renderUsageAvanceBlock(lastUsageAvance);
 }
 
@@ -1106,7 +1105,6 @@ function renderUsageAvanceBlock(u) {
     kpiGrid.innerHTML =
       kpiBox('Inscriptions en ligne', pct(u.pctEnLigne), 'Via register.html', '💻') +
       kpiBox('Inscriptions sur place', pct(u.pctSurPlace), 'Walk-in / saisie admin', '🚶') +
-      kpiBox('Plan de piste', u.planPisteActif ? 'Actif' : 'Inactif', null, '🗺️') +
       kpiBox('Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Premium' : 'Theme gratuit', '🎨');
   }
   const saisonEl = document.getElementById('stats-usage-saison');
@@ -1243,7 +1241,6 @@ export function exportStatsXLSX() {
     ['Indicateur', 'Valeur', 'Detail'],
     ['Inscriptions en ligne (register.html)', pct(u.pctEnLigne), ''],
     ['Inscriptions sur place (walk-in/admin)', pct(u.pctSurPlace), ''],
-    ['Plan de piste', u.planPisteActif ? 'Actif' : 'Inactif', ''],
     ['Theme actuel', u.themeActuel || '--', u.themePremium ? 'Theme Premium' : 'Theme gratuit'],
     [],
     ['Saisonnalite (12 derniers mois) — Mois', 'Sessions'],
