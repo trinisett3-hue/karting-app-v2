@@ -1,5 +1,5 @@
 // Module Plan — résout le plan payé (Basique/Premium) de l'organisation courante pour
-// débloquer les fonctions Premium (ex. plan du circuit). Nouveau fichier, n'écrase rien.
+// débloquer les fonctions Premium (ex. statistiques avancées). Nouveau fichier, n'écrase rien.
 //
 // Fonctionne car les policies RLS existantes le permettent déjà :
 //   tenants.tenant_select      : id = current_tenant_id()          (l'admin voit son tenant)
@@ -31,7 +31,7 @@ import { db } from '../lib/supabase.js';
 //                          INDIVIDUELLE, depuis sa fiche (voir app.js > exportArchiveCSV()/
 //                          exportArchivePDF()). Ne concerne pas l'export GLOBAL CSV/XLSX de
 //                          la liste des archives (archives-export.js), qui reste Basique.
-const PREMIUM_FEATURES = ['track_map', 'advanced_stats', 'session_occupancy', 'archive_detail', 'registry_export', 'archive_export'];
+const PREMIUM_FEATURES = ['advanced_stats', 'session_occupancy', 'archive_detail', 'registry_export', 'archive_export'];
 
 let cachedPlanCode = null;
 
@@ -40,7 +40,7 @@ if (cachedPlanCode) return cachedPlanCode;
 // P0-2 (audit 28/07) : organizations.plan_code n'est qu'un cache d'affichage (voir
 // migration document_plan_source_of_verite du 29/07). La vraie source est
 // private.tenant_plan_code(), exposee via my_plan_code() -- meme logique que celle
-// appliquee cote serveur pour les themes et le plan du circuit.
+// appliquee cote serveur pour les themes.
 const { data, error } = await db.rpc('my_plan_code');
 if (error || !data) return 'starter';
 cachedPlanCode = data;
@@ -61,7 +61,7 @@ cachedPlanCode = null;
 }
 
 // Encart de verrouillage partage — meme rendu visuel que celui deja utilise pour
-// track_map/advanced_stats (#trackmap-upsell, stats.js > renderLockedStatsPanel()).
+// advanced_stats (stats.js > renderLockedStatsPanel()).
 // Centralise ici pour que tous les nouveaux flags (session_occupancy, archive_detail,
 // registry_export, archive_export...) affichent le meme encart, quel que soit le module
 // appelant. IMPORTANT (repris de stats.js) : cette fonction doit toujours etre appelee
