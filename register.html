@@ -7,6 +7,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;600;700&family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+<!-- 02/08 (client) : suppression du flash rouge. --acc etait fige a #ff3b30 dans :root
+     et n'etait corrige qu'apres public_registration_config() : la page s'affichait donc en
+     rouge pendant un instant, meme sur un theme cyan. Ce script synchrone restitue le
+     dernier theme connu (memorise par applyThemeAccent) avant le premier rendu. -->
+<script>(function(){try{var T={"classic":["#ff2a2a","#ff6a4d","#c81e18"],"neon":["#00d4ff","#5ce1ff","#0088aa"],"carbon":["#c9a84c","#e0c476","#8f7529"],"checkered":["#ece8dd","#ffffff","#a9a396"],"endurance":["#ffb238","#ffcb73","#c47c12"],"pitlane":["#f0c419","#ffdc5c","#b08c00"],"champagne":["#d9b978","#f0d7a4","#a1854a"],"arctic":["#1a6fbd","#4f9fe0","#0d4a83"]};var t=localStorage.getItem('kt_theme');var v=T[t];if(!v)return;var s=document.documentElement.style;s.setProperty('--acc',v[0]);s.setProperty('--acc2',v[1]);s.setProperty('--acc-deep',v[2]);}catch(e){}})();</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
