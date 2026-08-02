@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="fr" data-theme="classic">
 <head>
+<!-- 02/08 (client) : "l'instant d'une milliseconde il affiche d'abord en rouge avant de
+     passer au theme". Le theme etait pose apres l'appel reseau public_site_config :
+     un rendu complet se faisait donc en classic (rouge) avant de basculer. Ce script
+     synchrone, place avant toute feuille de style, restitue le dernier theme connu
+     AVANT le premier pixel. La valeur reste ecrite par initTheme() (source de verite). -->
+<script>(function(){try{var t=localStorage.getItem('kt_theme');var M={classic:1,dark:'classic',neon:1,carbon:1,checkered:1,endurance:1,pitlane:1,champagne:1,arctic:1};if(t&&M[t])document.documentElement.setAttribute('data-theme',M[t]===1?t:M[t]);}catch(e){}})();</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
 <title>Résultats Karting</title>
