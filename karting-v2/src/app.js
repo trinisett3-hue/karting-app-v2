@@ -18,6 +18,7 @@ import * as auth from './modules/auth.js';
 import * as stats from './modules/stats.js';
 import * as registry from './modules/registry.js';
 import * as manualAdd from './modules/manual-add.js';
+import * as sessionTypes from './state.js';
 import * as archivesExport from './modules/archives-export.js';
 import { hasFeature } from './modules/plan.js';
 // Auth branchée (24/07) : l'admin nécessite désormais une session Supabase Auth valide.
@@ -27,18 +28,9 @@ import { hasFeature } from './modules/plan.js';
 // Reprend exactement la logique originale : avertit avant de quitter Paramètres si des
 // changements ne sont pas enregistrés.
 
-// Libellés/couleurs des tags de session (Point 10) — valeurs stockées en base
-// dans sessions.session_type (snake_case, voir migration-v13-2026-07-28.sql).
-const SESSION_TYPE_LABELS = {
-  loisir: 'Loisir',
-  competition: 'Competition',
-  initiation: 'Initiation',
-  entrainement: 'Entrainement',
-};
-function sessionTypeBadge(type) {
-  if (!type || !SESSION_TYPE_LABELS[type]) return '';
-  return '<span class="sc-badge" style="background:rgba(236,234,42,.15);color:var(--yel)">' + SESSION_TYPE_LABELS[type] + '</span>';
-}
+// Pastille de type de session. 02/08 (client) : la liste n'est plus ecrite en dur ici,
+// elle vient de Parametres > Sessions (state.prefs.session_types) via state.js.
+const sessionTypeBadge = sessionTypes.sessionTypeBadgeHTML;
 
 let archivesCache = [];
 
@@ -320,6 +312,10 @@ e.returnValue = '';
 // utilisée par le HTML.
 
 Object.assign(window, {
+// Types de session configurables (Parametres > Sessions)
+addSessionTypeRow: sessionTypes.addSessionTypeRow,
+clearSessionTypeRow: sessionTypes.clearSessionTypeRow,
+onSessionTypeInput: sessionTypes.onSessionTypeInput,
 // Authentification
 doLogin,
 doLogout,
