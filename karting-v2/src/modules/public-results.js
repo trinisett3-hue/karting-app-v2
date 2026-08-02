@@ -152,6 +152,7 @@ if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'cl
 // 02/08 (client) : theme memorise pour etre applique avant le premier rendu
 // (voir le script en tete de results.html) et supprimer le flash rouge.
 try { localStorage.setItem('kt_theme', String(theme).trim()); } catch (e) {}
+  try { if (window.__ktReveal) window.__ktReveal(); } catch (e) {}
 
 const logoUrl = data.value && data.value.logo_url;
 PDF_LOGO_URL = logoUrl || null;
@@ -568,6 +569,8 @@ export async function renderVenuePicker(venueToken) {
   // app_settings.global.results_theme : c'est LUI qui decide, jamais le code.
   const theme = String(data.results_theme || '').trim();
   if (theme) document.documentElement.setAttribute('data-theme', theme);
+  try { if (data.results_theme) localStorage.setItem('kt_theme', theme); } catch (e) {}
+  try { if (window.__ktReveal) window.__ktReveal(); } catch (e) {}
 
   // Le nom affiche est celui configure dans Parametres > Identite du circuit,
   // et non le nom technique du compte (qui faisait croire aux visiteurs qu'ils
