@@ -20,6 +20,7 @@ import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature, getCurrentPlanCode } from './plan.js';
 import { requestPasswordReset as authRequestPasswordReset } from './auth.js';
 import { qrSVG } from './qr.js';
+import { renderSessionTypesEditor, refreshSessionTypeSelects, readSessionTypesFromEditor } from '../state.js';
 import {
 configureSignatureAvatars,
 signatureAvatarHTML,
@@ -137,6 +138,10 @@ state.prefs.card_record_picks = {};
 }
 
 renderLogoPreview();
+
+// 02/08 (client) : types de session configurables - editeur + tous les <select> de l'admin.
+renderSessionTypesEditor();
+refreshSessionTypeSelects();
 
 const elUrl = document.getElementById('pref-card-url');
 if (elUrl) elUrl.value = state.prefs.card_qr_url || '';
@@ -849,6 +854,7 @@ card_address: (document.getElementById('pref-card-address')?.value || '').trim()
 card_position_picks: (state.prefs.card_position_picks || []).slice(0, CARD_POSITION_MAX),
 card_record_picks: state.prefs.card_record_picks || {},
 logo_url: state.prefs.logo_url || null,
+session_types: readSessionTypesFromEditor(),
 level_expert_max_seconds: Math.max(1, parseInt(document.getElementById('pref-level-expert')?.value, 10) || 45),
 level_intermediaire_max_seconds: Math.max(1, parseInt(document.getElementById('pref-level-intermediaire')?.value, 10) || 55),
 });
@@ -868,6 +874,9 @@ throw new Error('connexion admin requise pour enregistrer (auth non branchee)');
 throw upErr;
 }
 showMsg('msg-prefs', 'Parametres enregistres !', 'ok');
+// Les <select> de type de session refletent immediatement la nouvelle liste.
+refreshSessionTypeSelects();
+renderSessionTypesEditor();
 showMsg('msg-kart-numbers', 'Numeros de karts enregistres !', 'ok');
 updateDefaultsInfo();
 state.prefsDirty = false;
