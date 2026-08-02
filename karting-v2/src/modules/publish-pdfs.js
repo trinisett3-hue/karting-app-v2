@@ -74,27 +74,16 @@ export async function generateSessionPDFs(session, onProgress) {
   if (!token) throw new Error('Session sans jeton public : rien a rendre.');
   const say = typeof onProgress === 'function' ? onProgress : () => {};
 
-    // 🆕 30/07 (point de vigilance signale par le client — "un seul PDF recu,
-    // j'en attendais plusieurs") : une session archivee entre deux publications
-    // rend public_session_results() muet, donc l'iframe ci-dessous chargeait une
-    // page "resultats indisponibles" sans qu'aucune fiche pilote ne soit
-    // generee -- silencieusement, avec un simple report.failed++ par pilote,
-    // aucune erreur remontee a l'admin. Verification fraiche AVANT d'ouvrir
-    // l'iframe (le `session` recu en argument peut etre perime) : mieux vaut un
-    // message clair et bloquant que 45s d'iframe pour rien.
-    const { data: freshSession, error: sessErr } = await db
-      .from('sessions')
-      .select('archived_at')
-      .eq('id', session.id)
-      .single();
-    if (sessErr) throw sessErr;
-    if (freshSession && freshSession.archived_at) {
-          throw new Error(
-                  'Cette session est archivee : la page publique de resultats refuse de la servir, donc aucune '
-                  + 'fiche pilote ni carte partageable ne peut etre generee (seul le classement deja televerse, le '
-                  + 'cas echeant, restera disponible). Desarchive la session avant de republier.'
-                );
-    }
+  // 02/08 — GARDE-FOU « session archivee » SUPPRIME. Il datait du 30/07, quand
+  // les RPC publiques exigeaient encore `archived_at is null`. Depuis la
+  // migration fix_public_rpcs_published_not_archived, elles servent toute
+  // session PUBLIEE, archivee ou non. Or terminer une session l'archive dans la
+  // seconde : le garde-fou se declenchait donc a CHAQUE publication normale,
+  // faisait echouer tout le rendu (fiches pilote, cartes position, cartes
+  // record) et laissait la place au classement de repli genere cote admin —
+  // c'est-a-dire au mauvais PDF que recevaient les pilotes. Verifie en direct
+  // le 02/08 : le pont d'export charge sans probleme une session archivee et
+  // rend le classement complet en ~2 s.
 
   // Qui recoit reellement un e-mail ? Inutile de rendre la fiche d'un inscrit
   // sans adresse (ajout manuel anonyme) : c'est du temps de rendu pur perdu, et
