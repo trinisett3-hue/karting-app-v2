@@ -320,6 +320,11 @@ const THEME_TOKENS = {
 function applyThemeAccent(themeKey) {
   const t = THEME_TOKENS[String(themeKey || '').trim()];
   if (!t) return;
+  // 02/08 (client) : "l'instant d'une milliseconde il affiche d'abord en rouge avant de
+  // passer au theme". Le theme n'arrivait qu'apres l'aller-retour reseau : on le
+  // memorise ici pour que le script en tete de register.html / results.html le pose
+  // AVANT le premier rendu a la visite suivante et a chaque bascule inscription <-> resultats.
+  try { localStorage.setItem('kt_theme', String(themeKey).trim()); } catch (e) {}
   const r = document.documentElement.style;
   r.setProperty('--acc', t.acc);
   r.setProperty('--acc2', t.acc2);
