@@ -389,23 +389,30 @@ function applyResultsNavLink(cfg) {
 function renderVenueTabs(resultsHref) {
   const floatSwitch = document.querySelector('.page-switch');
   if (floatSwitch) floatSwitch.remove();
-  const anchor = document.querySelector('#screen-0 .subtitle');
-  if (!anchor) return;
+  const screen = document.getElementById('screen-0');
+  if (!screen) return;
+  // 02/08 — La barre du formulaire avait SA PROPRE feuille de style, sous le
+  // meme nom de classe `.venue-tabs` que celle des ecrans de selection : pleine
+  // largeur, collee sous le sous-titre, avec un filet horizontal. D'un ecran a
+  // l'autre la pastille sautait et la colonne changeait de largeur. On reprend
+  // ici, a l'identique, les regles de VENUE_CSS (aucune couleur en dur, les
+  // jetons de theme decident) et on pose la pastille TOUT EN HAUT de l'ecran,
+  // comme sur les deux selecteurs.
   if (!document.getElementById('venue-tabs-css')) {
     document.head.insertAdjacentHTML('beforeend', `<style id="venue-tabs-css">
-.venue-tabs{display:flex;gap:8px;justify-content:center;margin:16px 0 4px;padding-top:14px;border-top:1px solid rgba(255,255,255,.12)}
-.venue-tabs a,.venue-tabs span{padding:8px 20px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;text-decoration:none}
-.venue-tabs a{background:rgba(255,255,255,.05);color:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.1)}
-.venue-tabs a:hover{color:#fff}
-.venue-tabs span{background:var(--acc,#ffb238);color:#0b0b0f}
+.venue-tabs{display:flex;justify-content:center;gap:.25rem;width:19rem;max-width:100%;margin:0 auto 1.6rem;padding:.19rem;border:1px solid var(--c-border,var(--bord,rgba(255,255,255,.14)));border-radius:999px;background:rgba(255,255,255,.04)}
+.venue-tabs a,.venue-tabs span{flex:1 1 0;text-align:center;padding:.5rem .6rem;border-radius:999px;font-family:var(--font-body,inherit);font-size:.75rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;text-decoration:none;color:var(--c-muted,var(--mut,#8a8f9a));transition:color .15s}
+.venue-tabs a:hover{color:var(--c-text,var(--txt,#fff))}
+.venue-tabs span{background:var(--c-accent,var(--acc,#ffb238));color:var(--c-bg,var(--bg,#0b0b0f))}
 </style>`);
   }
   let tabs = document.getElementById('venue-tabs');
   if (!tabs) {
-    tabs = document.createElement('div');
+    tabs = document.createElement('nav');
     tabs.id = 'venue-tabs';
     tabs.className = 'venue-tabs';
-    anchor.insertAdjacentElement('afterend', tabs);
+    tabs.setAttribute('aria-label', 'Navigation');
+    screen.insertAdjacentElement('afterbegin', tabs);
   }
   tabs.innerHTML = '<span>Inscription</span><a href="' + resultsHref + '" id="nav-results-link">Résultats</a>';
 }
