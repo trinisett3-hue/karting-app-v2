@@ -15,6 +15,7 @@ import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid, isSess
 import { uploadSessionAsset, triggerResultEmails } from './publish-exports.js';
 import { generateSessionPDFs } from './publish-pdfs.js';
 import { hasFeature, renderPremiumLock } from './plan.js';
+import { sessionTypeLabel, defaultSessionType } from '../state.js';
 
 // Echappement HTML minimal pour tout texte saisi par le public (display_name, etc.)
 // avant injection dans innerHTML — protection XSS (audit du 28/07, section 4.1).
@@ -812,7 +813,7 @@ export async function openArchiveDetail(id) {
   document.getElementById('arch-detail-view').style.display = 'block';
   document.getElementById('arch-detail-title').textContent = s.title;
   const typeEl = document.getElementById('arch-type-input');
-  if (typeEl) typeEl.value = s.session_type || 'loisir';
+  if (typeEl) typeEl.value = s.session_type || defaultSessionType();
   const notesEl = document.getElementById('arch-notes-input');
   if (notesEl) notesEl.value = s.internal_notes || '';
   // 30/07 : Classement / Inscrits / Imports chrono passent en Premium (flag
@@ -926,7 +927,7 @@ export async function downloadChronoImport(importId) {
 // "Competition" a posteriori, ou une note ajoutée après la course).
 export async function saveArchiveMeta() {
   if (!state.archiveSession) return;
-  const sessionType = document.getElementById('arch-type-input')?.value || 'loisir';
+  const sessionType = document.getElementById('arch-type-input')?.value || defaultSessionType();
   const internalNotes = document.getElementById('arch-notes-input')?.value ?? '';
   const { error } = await db.from('sessions').update({
     session_type: sessionType,
@@ -1073,7 +1074,7 @@ export async function buildSessionPDF(s) {
     page.innerHTML =
       '<div style="border-bottom:3px solid #7c74ff;padding-bottom:10px;margin-bottom:16px">' +
       '<div style="font-size:22px;font-weight:900">' + (s.title || 'Session') + '</div>' +
-      '<div style="font-size:12px;color:#666;margin-top:4px">' + (s.session_date ? formatDate(s.session_date) : '') + (s.session_type ? ' · ' + s.session_type : '') + '</div>' +
+      '<div style="font-size:12px;color:#666;margin-top:4px">' + (s.session_date ? formatDate(s.session_date) : '') + (s.session_type ? ' · ' + sessionTypeLabel(s.session_type) : '') + '</div>' +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
       '<thead><tr style="text-align:left;border-bottom:2px solid #111"><th style="padding:6px 8px">Pos.</th><th style="padding:6px 8px">Kart</th><th style="padding:6px 8px">Nom</th><th style="padding:6px 8px">Temps</th></tr></thead>' +
