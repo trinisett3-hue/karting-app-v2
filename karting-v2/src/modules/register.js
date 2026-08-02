@@ -319,7 +319,7 @@ const THEME_TOKENS = {
 // code : elle vient de app_settings.global.results_theme.
 function applyThemeAccent(themeKey) {
   const t = THEME_TOKENS[String(themeKey || '').trim()];
-  if (!t) return;
+  if (!t) { try { if (window.__ktReveal) window.__ktReveal(); } catch (e) {} return; }
   // 02/08 (client) : "l'instant d'une milliseconde il affiche d'abord en rouge avant de
   // passer au theme". Le theme n'arrivait qu'apres l'aller-retour reseau : on le
   // memorise ici pour que le script en tete de register.html / results.html le pose
@@ -329,6 +329,7 @@ function applyThemeAccent(themeKey) {
   r.setProperty('--acc', t.acc);
   r.setProperty('--acc2', t.acc2);
   r.setProperty('--acc-deep', t.deep);
+  try { if (window.__ktReveal) window.__ktReveal(); } catch (e) {}
 }
 
 function applyCircuitBranding(cfg) {
@@ -338,7 +339,7 @@ function applyCircuitBranding(cfg) {
   const circuitName = String(cfg && cfg.circuit_name || '').trim() || 'Karting';
   document.querySelectorAll('.js-circuit-name').forEach(el => { el.textContent = circuitName; });
   document.title = 'Inscription — ' + circuitName;
-  if (cfg && cfg.results_theme) applyThemeAccent(cfg.results_theme);
+  applyThemeAccent(cfg && cfg.results_theme);
   const wrap = document.getElementById('circuit-logo-wrap');
   if (wrap) {
     wrap.innerHTML = cfg.logo_url
@@ -545,7 +546,7 @@ async function loadVenue(venueToken) {
     // Le theme suit Parametres > Apparence des l'ecran de selection, alors
     // qu'avant il ne s'appliquait qu'une fois une session choisie (la page
     // restait donc rouge, quelle que soit la configuration du circuit).
-    if (data.results_theme) applyThemeAccent(data.results_theme);
+    applyThemeAccent(data.results_theme);
     return data;
   } catch (e) { return null; }
 }
