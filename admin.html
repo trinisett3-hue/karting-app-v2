@@ -30,6 +30,11 @@ body.light .btn-ghost:hover{background:#e4e7f2;border-color:#c9cee0}
 body.light .arch-item:hover{background:#eef0f7}
 body.light input,body.light select,body.light textarea{background:var(--surf2)}
 body.light .sb-logo::before{filter:invert(0) opacity(.5)}
+.stype-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.stype-num{flex:0 0 20px;text-align:center;font-size:11px;font-weight:800;color:var(--mut)}
+.stype-row input{flex:1 1 auto}
+.stype-del{flex:0 0 auto;background:transparent;border:1px solid var(--bord);color:var(--mut);border-radius:8px;width:32px;height:34px;cursor:pointer;font-size:15px;line-height:1}
+.stype-del:hover{color:#ff6b5e;border-color:#ff6b5e}
 /* --- Mode clair : pop-up et fenetres de dialogue (01/08, demande client) -------------
    Les boites de dialogue (.qr-zoom-box sert a QR, historique, recap de cloture, login,
    ajout manuel ; .pres-box au mode presentation ; .cm-box a confirmModal) etaient
@@ -376,10 +381,6 @@ updateThemeToggleUI();
 <div class="field"><label>Heure</label><select id="s-time"></select></div>
 <div class="field"><label>Type de session</label>
 <select id="s-type">
-<option value="loisir">Loisir</option>
-<option value="competition">Competition</option>
-<option value="initiation">Initiation</option>
-<option value="entrainement">Entrainement</option>
 </select>
 </div>
 <div class="field" id="s-karts-wrap" style="display:none">
@@ -423,10 +424,6 @@ updateThemeToggleUI();
 <div style="width:150px">
 <label>Type</label>
 <select id="det-type-input" oninput="markDetailDirty()" onchange="markDetailDirty()">
-<option value="loisir">Loisir</option>
-<option value="competition">Competition</option>
-<option value="initiation">Initiation</option>
-<option value="entrainement">Entrainement</option>
 </select>
 </div>
 <button class="btn btn-ghost btn-sm" onclick="copyLink('reg')" style="align-self:flex-end">Copier le lien d'inscription</button>
@@ -545,10 +542,6 @@ updateThemeToggleUI();
 <label style="margin:0;text-transform:none;font-weight:600;color:var(--mut);font-size:12px">Type</label>
 <select id="arch-type-filter" onchange="filterArchives()" style="width:auto;min-width:150px">
 <option value="">Tous les types</option>
-<option value="loisir">Loisir</option>
-<option value="competition">Competition</option>
-<option value="initiation">Initiation</option>
-<option value="entrainement">Entrainement</option>
 </select>
 <label style="margin:0;text-transform:none;font-weight:600;color:var(--mut);font-size:12px">Jour</label>
 <select id="arch-day-filter" onchange="filterArchives()" style="width:auto;min-width:150px">
@@ -579,10 +572,6 @@ updateThemeToggleUI();
 </div>
 <div class="field"><label>Type de session</label>
 <select id="arch-type-input">
-<option value="loisir">Loisir</option>
-<option value="competition">Competition</option>
-<option value="initiation">Initiation</option>
-<option value="entrainement">Entrainement</option>
 </select>
 </div>
 <div class="field"><label>Notes internes <span style="font-weight:500;text-transform:none;color:var(--mut)">(jamais affichees cote pilote)</span></label>
@@ -898,6 +887,17 @@ Choisir un fichier
 <div class="field" style="margin-bottom:0"><label>Seuil "Intermediaire" (meilleur tour, secondes)</label><input type="number" id="pref-level-intermediaire" min="1" step="0.1" oninput="markPrefsDirty()"/></div>
 </div>
 <div style="font-size:11px;color:var(--mut);margin-top:8px">Utilises dans Statistiques &gt; Performance sportive pour classer les pilotes (meilleur tour &le; seuil Expert = Expert, &le; seuil Intermediaire = Intermediaire, au-dela = Debutant). Valeurs par defaut generiques (45s / 55s) -- ajuste-les selon les temps reels de ton circuit.</div>
+</div>
+
+<!-- 02/08 (client) : "les types de session ne doivent pas etre definis par toi mais des
+     champs a remplir par l'organisation, 3 par defaut et un bouton + pour en ajouter 2".
+     Les lignes sont rendues par src/state.js. -->
+<div class="card">
+<div class="ctitle">Types de session</div>
+<div style="font-size:11px;color:var(--mut);margin:2px 0 12px">Les categories proposees quand tu crees ou modifies une session. Laisse un champ vide pour le retirer. 3 par defaut, 5 au maximum. Les sessions deja enregistrees gardent leur type meme s'il est retire de la liste.</div>
+<div id="pref-session-types-rows"></div>
+<button type="button" class="btn btn-ghost btn-sm" id="pref-stype-add" onclick="addSessionTypeRow()" style="border-style:dashed">+ Ajouter un type</button>
+<div id="pref-session-types-count" style="font-size:11px;color:var(--mut);margin-top:8px"></div>
 </div>
 
 <!-- Fusion 30/07 (client) : contenu de l'ancien sous-onglet "Flotte", regroupe ici car
