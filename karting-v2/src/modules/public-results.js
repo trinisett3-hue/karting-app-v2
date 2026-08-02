@@ -149,6 +149,9 @@ const theme = data.value && data.value.results_theme;
 PDF_SHOW_SECTORS = !!(data.value && data.value.sectors_enabled);
 PDF_AVATAR_MODE = (data.value && data.value.avatar_mode) || 'kart';
 if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
+// 02/08 (client) : theme memorise pour etre applique avant le premier rendu
+// (voir le script en tete de results.html) et supprimer le flash rouge.
+try { localStorage.setItem('kt_theme', String(theme).trim()); } catch (e) {}
 
 const logoUrl = data.value && data.value.logo_url;
 PDF_LOGO_URL = logoUrl || null;
