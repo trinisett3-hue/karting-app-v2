@@ -8,6 +8,7 @@ import { db, fetchAll } from '../lib/supabase.js';
 import { state } from '../state.js';
 import { showMsg, randomCode4, qrSrc, avatarColor, avatarInitial, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
+import { sessionTypeBadgeHTML, defaultSessionType } from '../state.js';
 
 // --- Verite de publication --------------------------------------------------------
 // ATTENTION : `public_results_token` a une valeur par DEFAUT en base
@@ -62,10 +63,8 @@ export async function renderActivesGrid() {
       const inscrits = (regs || []).length;
       const occ = (regs || []).filter((r) => r.kart_number != null).length;
       const pub = isSessionPublished(s) ? '<span class="sc-badge pub">Publie</span>' : '<span class="sc-badge">En cours</span>';
-      const TYPE_LABELS = { loisir: 'Loisir', competition: 'Competition', initiation: 'Initiation', entrainement: 'Entrainement' };
-      const typeBadge = s.session_type && TYPE_LABELS[s.session_type]
-        ? '<span class="sc-badge" style="background:rgba(236,234,42,.15);color:var(--yel)">' + TYPE_LABELS[s.session_type] + '</span>'
-        : '';
+      // 02/08 (client) : libelles configures dans Parametres > Sessions, plus en dur ici.
+      const typeBadge = sessionTypeBadgeHTML(s.session_type);
       const notesDot = s.internal_notes
         ? '<span title="Note interne presente" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--yel);margin-left:6px"></span>'
         : '';
@@ -102,7 +101,7 @@ export async function createSession({ onCreated } = {}) {
     ? state.prefs.default_karts
     : parseInt(document.getElementById('s-karts').value) || state.prefs.default_karts;
   const laps = state.prefs.laps_enabled ? state.prefs.default_laps : null;
-  const sessionType = document.getElementById('s-type')?.value || 'loisir';
+  const sessionType = document.getElementById('s-type')?.value || defaultSessionType();
   if (!title) {
     showMsg('msg-create', 'Donne un titre.', 'err');
     return;
@@ -138,7 +137,7 @@ export async function openActiveDetail(id, { onOpened } = {}) {
   document.getElementById('det-laps-input').value = s.laps_count || state.prefs.default_laps;
   document.getElementById('det-laps-wrap').style.display = state.prefs.laps_enabled ? 'block' : 'none';
   const typeEl = document.getElementById('det-type-input');
-  if (typeEl) typeEl.value = s.session_type || 'loisir';
+  if (typeEl) typeEl.value = s.session_type || defaultSessionType();
   const notesEl = document.getElementById('det-notes-input');
   if (notesEl) notesEl.value = s.internal_notes || '';
   document.getElementById('det-save-btn').style.display = 'none';
@@ -158,7 +157,7 @@ export async function saveDetailMeta() {
   const title = document.getElementById('det-title-input').value.trim();
   const karts = parseInt(document.getElementById('det-karts-input').value) || state.activeDetailSession.max_karts;
   const laps = parseInt(document.getElementById('det-laps-input').value) || state.activeDetailSession.laps_count;
-  const sessionType = document.getElementById('det-type-input')?.value || state.activeDetailSession.session_type || 'loisir';
+  const sessionType = document.getElementById('det-type-input')?.value || state.activeDetailSession.session_type || defaultSessionType();
   const internalNotes = document.getElementById('det-notes-input')?.value ?? state.activeDetailSession.internal_notes ?? '';
   if (!title) return;
     // 🆕 30/07 (bug B21, confirme par test de charge) : rien n'empechait avant
