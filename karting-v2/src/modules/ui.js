@@ -90,11 +90,67 @@ export function formatDate(d) {
 // Confirmation destructive avec rappel du contexte (audit 28/07, section 4.1) —
 // remplace les confirm() natifs qui se valident par reflexe et n'affichent aucun
 // detail. Retourne une Promise<boolean> : true si l'utilisateur a confirme.
+// 02/08 — Le bouton de confirmation non destructif etait bleu #2563eb en dur :
+// il ignorait le theme de Parametres > Apparence. Il prend desormais l'accent
+// du theme. Seule exception : quand cet accent est lui-meme un rouge, un
+// bouton plein serait confondu avec le bouton destructif — on bascule alors
+// sur une variante en contour. Le bouton destructif, lui, reste rouge quel que
+// soit le theme : c'est une couleur de sens, pas une couleur de marque.
+function themeAccent() {
+  try {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (cs.getPropertyValue('--acc') || cs.getPropertyValue('--c-accent') || '').trim();
+    return v || null;
+  } catch (e) { return null; }
+}
+
+function themeBg() {
+  try {
+    const cs = getComputedStyle(document.documentElement);
+    const v = (cs.getPropertyValue('--bg') || cs.getPropertyValue('--c-bg') || '').trim();
+    return v || '#0b0b0f';
+  } catch (e) { return '#0b0b0f'; }
+}
+
+// true si la couleur donnee est un rouge franc (teinte < 18 deg ou > 345 deg,
+// saturation suffisante) — auquel cas on evite le bouton plein.
+function isReddish(color) {
+  if (!color) return false;
+  let r, g, b;
+  const hex = color.replace('#', '');
+  if (/^[0-9a-f]{6}$/i.test(hex)) {
+    r = parseInt(hex.slice(0, 2), 16); g = parseInt(hex.slice(2, 4), 16); b = parseInt(hex.slice(4, 6), 16);
+  } else if (/^[0-9a-f]{3}$/i.test(hex)) {
+    r = parseInt(hex[0] + hex[0], 16); g = parseInt(hex[1] + hex[1], 16); b = parseInt(hex[2] + hex[2], 16);
+  } else {
+    const m = color.match(/rgba?\(\s*(\d+)[\s,]+(\d+)[\s,]+(\d+)/i);
+    if (!m) return false;
+    r = +m[1]; g = +m[2]; b = +m[3];
+  }
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d || mx < 60) return false;
+  const sat = d / mx;
+  if (sat < 0.35) return false;
+  let h;
+  if (mx === r) h = 60 * (((g - b) / d) % 6);
+  else if (mx === g) h = 60 * ((b - r) / d + 2);
+  else h = 60 * ((r - g) / d + 4);
+  if (h < 0) h += 360;
+  return h < 18 || h > 345;
+}
+
 export function confirmModal(opts) {
   const title = (opts && opts.title) || 'Confirmer';
   const message = (opts && opts.message) || '';
   const confirmLabel = (opts && opts.confirmLabel) || 'Confirmer';
   const danger = !opts || opts.danger !== false;
+  const okStyle = () => {
+    if (danger) return 'border:none;background:#dc2626;color:#fff';
+    const acc = themeAccent();
+    if (!acc) return 'border:none;background:#2563eb;color:#fff';
+    if (isReddish(acc)) return 'border:1px solid ' + acc + ';background:transparent;color:' + acc;
+    return 'border:none;background:' + acc + ';color:' + themeBg();
+  };
   return new Promise((resolve) => {
     const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -115,7 +171,7 @@ export function confirmModal(opts) {
       '<div style="font-size:14px;color:var(--mut,#ccc);margin-bottom:20px;white-space:pre-line;line-height:1.5">' + esc(message) + '</div>' +
       '<div style="display:flex;gap:10px;justify-content:flex-end">' +
       '<button type="button" class="cm-cancel" data-act="cancel" style="padding:9px 16px;border-radius:9px;border:1px solid var(--bord,#444);background:var(--surf2,transparent);color:var(--txt,#eee);cursor:pointer;font-weight:600">Annuler</button>' +
-      '<button type="button" class="cm-ok" data-act="ok" style="padding:9px 16px;border-radius:9px;border:none;background:' + (danger ? '#dc2626' : '#2563eb') + ';color:#fff;cursor:pointer;font-weight:700">' + esc(confirmLabel) + '</button>' +
+      '<button type="button" class="cm-ok" data-act="ok" style="padding:9px 16px;border-radius:9px;font-weight:700;cursor:pointer;' + okStyle() + '">' + esc(confirmLabel) + '</button>' +
       '</div>';
     overlay.appendChild(box);
     document.body.appendChild(overlay);
