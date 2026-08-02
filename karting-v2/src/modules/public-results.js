@@ -379,11 +379,27 @@ function applyRegistrationNavLink(session) {
   const p = new URLSearchParams(window.location.search);
   const venueToken = p.get('v') || p.get('venue');
   if (venueToken) {
-    link.href = 'register.html?v=' + encodeURIComponent(venueToken);
+    link.href = 'register?v=' + encodeURIComponent(venueToken);
   } else if (session && session.registration_token) {
-    link.href = 'register.html?session=' + encodeURIComponent(session.registration_token);
+    link.href = 'register?session=' + encodeURIComponent(session.registration_token);
   }
+  prefetchNav(link.href);
 }
+
+// 02/08 (client) : "il faut que le clic soit plus fluide". Deux causes mesurees :
+// (1) les liens pointaient vers *.html, ce qui declenche une redirection 308 de
+//     Cloudflare Pages a CHAQUE clic (un aller-retour reseau complet perdu) ;
+// (2) la page cible etait telechargee seulement au clic. On la prefetch des que
+//     le lien est connu : le basculement devient quasi instantane.
+function prefetchNav(href) {
+  try {
+    if (!href || document.querySelector('link[rel="prefetch"][data-nav]')) return;
+    const l = document.createElement('link');
+    l.rel = 'prefetch'; l.href = href; l.setAttribute('data-nav', '1');
+    document.head.appendChild(l);
+  } catch (e) {}
+}
+
 
 /* ------------------------------------------------------------------
 CHARGEMENT DES DONNÉES RÉELLES (Supabase)
@@ -574,7 +590,7 @@ export async function renderVenuePicker(venueToken) {
     : '<div class="venue-empty">Aucun résultat publié pour l’instant.<br>Reviens juste après ta session.</div>';
 
   mountVenue(
-    venueTabs('results', 'register.html?v=' + encodeURIComponent(venueToken)) +
+    venueTabs('results', 'register?v=' + encodeURIComponent(venueToken)) +
     venueHero(data.logo_url, venueName, 'Choisis ta session',
               'Sélectionne la session que tu viens de courir pour voir le classement.') +
     rows +
@@ -735,7 +751,7 @@ export function initNav() {
 document.getElementById('nav-prev').addEventListener('click', () => {
   if (currentPage === 1) {
     const v = new URLSearchParams(window.location.search).get('v') || new URLSearchParams(window.location.search).get('venue');
-    if (v) { window.location.href = 'results.html?v=' + encodeURIComponent(v); return; }
+    if (v) { window.location.href = 'results?v=' + encodeURIComponent(v); return; }
     return;
   }
   goToPage(currentPage - 1);
@@ -2146,7 +2162,7 @@ function cardFlagHTML(nat, w) {
 }
 
 function cardResultsURL() {
-  const u = new URL('/results.html', window.location.origin);
+  const u = new URL('/results', window.location.origin);
   if (resultsToken) u.searchParams.set('result', resultsToken);
   return u.toString();
 }
