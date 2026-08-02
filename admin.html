@@ -611,9 +611,8 @@ updateThemeToggleUI();
 <div id="arch-pv-body"></div>
 </div>
 <div class="card">
-<div class="ctitle">QR Resultats</div>
+<div class="ctitle">Publication et exports</div>
 <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
-<div id="arch-qr-wrap"><div class="empty">Non publie</div></div>
 <div class="flex">
 <button class="btn btn-yel btn-sm" onclick="archPublish()">Republier</button>
 <button class="btn btn-ghost btn-sm" onclick="archCopyLink()">Copier lien</button>
@@ -846,24 +845,6 @@ Choisir un fichier
 </label>
 <div style="font-size:11px;color:var(--mut);margin-top:6px">PNG avec fond transparent recommande.</div>
 <div class="msg" id="msg-logo"></div>
-</div>
-<div>
-<div style="font-size:12px;font-weight:700;color:var(--mut);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">Plan du circuit <span style="font-weight:500;text-transform:none;letter-spacing:0;opacity:.7">(optionnel &middot; Premium)</span></div>
-<div id="pref-trackmap-preview-wrap" style="display:none;align-items:center;gap:12px;margin-bottom:10px">
-<div style="width:96px;height:64px;border-radius:8px;background:var(--surf2);border:1px solid var(--bord);display:flex;align-items:center;justify-content:center;overflow:hidden">
-<img id="pref-trackmap-preview" src="" alt="Plan actuel" style="max-width:100%;max-height:100%;object-fit:contain"/>
-</div>
-<button id="pref-trackmap-remove-btn" class="btn btn-ghost btn-sm" style="display:none" onclick="removeTrackMap()">Retirer le plan</button>
-</div>
-<label id="trackmap-upload-label" class="btn btn-ghost btn-sm" style="display:inline-flex;cursor:pointer">
-Choisir un fichier
-<input type="file" accept="image/png,image/jpeg,image/webp" style="display:none" onchange="uploadTrackMap(this)"/>
-</label>
-<div id="trackmap-upsell" style="display:none;font-size:12px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:10px 12px">
-Le plan du circuit est reserve au plan <strong>Premium</strong>. Passe au plan superieur pour debloquer cette fonction.
-</div>
-<div style="font-size:11px;color:var(--mut);margin-top:6px">Affiche le trace du circuit juste au-dessus du podium.</div>
-<div class="msg" id="msg-trackmap"></div>
 </div>
 </div>
 <div class="card">
@@ -1202,14 +1183,6 @@ perimetre de cette refonte visuelle.
 <div class="msg" id="msg-prefs"></div>
 </div>
 
-</div>
-
-<div class="overlay" id="qr-overlay" onclick="if(event.target===this)closeZoom()">
-<div class="qr-zoom-box">
-<div style="font-size:15px;font-weight:800" id="qr-zoom-title"></div>
-<div class="qr-wrap" id="qr-zoom-imgwrap"><img id="qr-zoom-img" src="" alt="QR"/></div>
-<button class="btn btn-ghost btn-sm" onclick="closeZoom()">Fermer</button>
-</div>
 </div>
 
 <div class="overlay" id="hist-overlay" onclick="if(event.target===this)closeHistory()">
