@@ -539,6 +539,7 @@ async function afterPublish(sess, msgId) {
     //    corrige en republiant.
     showMsg(msgId, 'Resultats publies — generation des PDF...', 'ok');
     let pdfReport = null;
+    let pdfError = null;
     try {
       pdfReport = await generateSessionPDFs(sess, (done, total, label) => {
         showMsg(msgId, 'Generation des PDF ' + done + '/' + total + ' (' + label + ')...', 'ok');
@@ -547,18 +548,15 @@ async function afterPublish(sess, msgId) {
       // Rendu impossible (iframe bloquee, page publique en erreur) : on
       // continue quand meme. Le pilote recevra le lien vers le classement en
       // ligne, ce qui est l'essentiel. Repli sur le rendu admin du classement.
+      // 02/08 — PLUS DE CLASSEMENT DE REPLI. buildSessionPDF() est le rendu
+      // interne de l'admin : mise en page differente, sans le theme ni les
+      // avatars du circuit. Le televerser sous kind:'full_pdf' ecrasait le vrai
+      // classement et c'est CE document que recevaient les pilotes — signale par
+      // le client le 02/08 ("ce n'est pas du tout le bon PDF"). Mieux vaut aucun
+      // classement qu'un mauvais : l'echec est desormais visible dans le bandeau
+      // de verification, ou l'admin peut relancer.
       console.warn('[publication] generation des PDF publics :', e.message || e);
-      try {
-        const pdf = await buildSessionPDF(sess);
-        await uploadSessionAsset({
-          session: sess,
-          kind: 'full_pdf',
-          blob: pdf.output('blob'),
-          filename: 'classement.pdf',
-        });
-      } catch (e2) {
-        console.warn('[publication] classement PDF de repli non televerse :', e2.message || e2);
-      }
+      pdfError = e.message || String(e);
     }
 
     // 2. La file d'envoi, une fois les pieces jointes deposees.
@@ -574,7 +572,7 @@ async function afterPublish(sess, msgId) {
         (pdfReport.failed || pdfReport.cardsFailed
           ? ', ' + (pdfReport.failed + pdfReport.cardsFailed) + ' en echec'
           : '') + ')'
-      : '';
+      : (pdfError ? ' (rendu des PDF en echec : ' + pdfError + ')' : '');
     if (res && typeof res.sent === 'number') {
       showMsg(msgId, 'Resultats publies — ' + res.sent + ' e-mail(s) envoye(s)' + suffix + '.', 'ok');
     } else {
