@@ -57,7 +57,6 @@ export async function renderResultatsSection() {
   const results = await loadRanking(state.activeDetailSession);
   renderRankTable('ranking-preview', results);
   renderSessionStats(results, 'stats-session-card', 'stats-session-grid');
-  updateQRRes();
 }
 
 export async function loadRanking(sess) {
@@ -517,7 +516,6 @@ export async function publishResults() {
   }).eq('id', state.activeDetailSession.id);
   state.activeDetailSession.status = 'results_published';
   showMsg('msg-res', 'Resultats publies !', 'ok');
-  updateQRRes();
   await renderActivesGrid();
   await afterPublish(state.activeDetailSession, 'msg-res');
 }
@@ -754,16 +752,10 @@ export async function verifyPublication(btn, scope) {
   }
 }
 
-export function updateQRRes() {
-  const wrap = document.getElementById('qr-res-wrap');
-  if (!wrap) return;
-  if (!isSessionPublished(state.activeDetailSession) || !state.activeDetailSession.public_results_token) {
-    wrap.innerHTML = '<div style="width:160px;height:160px;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:12px;text-align:center">Publie d\'abord</div>';
-    return;
-  }
-  const url = APP_CONFIG.baseUrl + '/results.html?result=' + state.activeDetailSession.public_results_token + '&v=' + Date.now();
-  wrap.innerHTML = '<img src="' + qrSrc(url, 160) + '" alt="QR"/>';
-}
+// 02/08 (client) : "Enleve aussi les QR code Resultats". updateQRRes() ecrivait dans
+// #qr-res-wrap, disparu de admin.html le 31/07 avec le passage au QR permanent du
+// circuit : le code etait deja mort. Supprime, ainsi que zoomQR()/closeZoom() et le
+// QR de la fiche archive. Le lien resultats reste accessible via "Copier lien".
 
 export function copyLink(type) {
   let url;
@@ -778,25 +770,6 @@ export function copyLink(type) {
   showMsg(type === 'reg' ? 'msg-ins' : 'msg-res', 'Lien copie !', 'ok');
 }
 
-export function zoomQR(type) {
-  let url, title;
-  if (type === 'reg' && state.activeDetailSession) {
-    url = APP_CONFIG.baseUrl + '/register.html?session=' + state.activeDetailSession.public_registration_token;
-    title = 'QR Inscription';
-  }
-  if (type === 'res' && isSessionPublished(state.activeDetailSession) && state.activeDetailSession.public_results_token) {
-    url = APP_CONFIG.baseUrl + '/results.html?result=' + state.activeDetailSession.public_results_token + '&v=' + Date.now();
-    title = 'QR Resultats';
-  }
-  if (!url) return;
-  document.getElementById('qr-zoom-title').textContent = title;
-  document.getElementById('qr-zoom-img').src = qrSrc(url, 280);
-  document.getElementById('qr-overlay').classList.add('show');
-}
-
-export function closeZoom() {
-  document.getElementById('qr-overlay').classList.remove('show');
-}
 
 export function togglePres(sess) {
   const overlay = document.getElementById('pres-overlay');
@@ -873,12 +846,6 @@ export async function openArchiveDetail(id) {
     renderPremiumLock('arch-ranking');
     renderPremiumLock('arch-inscrits');
     renderPremiumLock('arch-chrono-imports');
-  }
-  if (isSessionPublished(s) && s.public_results_token) {
-    const url = APP_CONFIG.baseUrl + '/results.html?result=' + s.public_results_token + '&v=' + Date.now();
-    document.getElementById('arch-qr-wrap').innerHTML = '<div class="qr-wrap"><img src="' + qrSrc(url, 180) + '"/></div>';
-  } else {
-    document.getElementById('arch-qr-wrap').innerHTML = '<div class="empty">Non publie</div>';
   }
   await refreshArchiveExportButtons();
   // Bandeau de verification (point 2.1) : c'est ici que l'admin revient des heures plus
@@ -995,9 +962,7 @@ export async function archPublish() {
     results_published_at: state.archiveSession.results_published_at || new Date().toISOString(),
   }).eq('id', state.archiveSession.id);
   state.archiveSession.status = 'results_published';
-  showMsg('msg-arch', 'QR republie !', 'ok');
-  const url = APP_CONFIG.baseUrl + '/results.html?result=' + token + '&v=' + Date.now();
-  document.getElementById('arch-qr-wrap').innerHTML = '<div class="qr-wrap"><img src="' + qrSrc(url, 180) + '"/></div>';
+  showMsg('msg-arch', 'Resultats republies !', 'ok');
   if (!already) {
     // Une premiere publication depuis l'archive doit envoyer les e-mails comme
     // une publication normale. Une REpublication, non : les lignes de file sont
