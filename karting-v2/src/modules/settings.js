@@ -137,8 +137,6 @@ state.prefs.card_record_picks = {};
 }
 
 renderLogoPreview();
-renderTrackMapPreview();
-await updateTrackMapGating();
 
 const elUrl = document.getElementById('pref-card-url');
 if (elUrl) elUrl.value = state.prefs.card_qr_url || '';
@@ -340,10 +338,10 @@ async function cleanupOrphanStorage() {
   try {
     const tenantId = await currentTenantId();
     if (!tenantId) return;
-    const keep = [state.prefs.logo_url, state.prefs.track_map_url]
+    const keep = [state.prefs.logo_url]
       .map((u) => storagePathFromPublicUrl(u, 'org-logos'))
       .filter(Boolean);
-    for (const folder of ['logos', 'tracks']) {
+    for (const folder of ['logos']) {
       const prefix = folder + '/' + tenantId;
       const { data, error } = await db.storage.from('org-logos').list(prefix, { limit: 100 });
       if (error || !data) continue;
@@ -397,87 +395,9 @@ markPrefsDirty();
 showMsg('msg-logo', 'Logo retiré. Clique Enregistrer pour confirmer.', 'ok');
 }
 
-// --- Plan du circuit (Premium) ----------------------------------------------------------------
-// Fonctionnalité gatée sur le plan Premium/Business via plan.js > hasFeature('track_map').
-// Stocké dans app_settings.value.track_map_url, bucket Storage "org-logos" (dossier
-// "tracks/"). L'upload est bloqué à la fois côté UI (bouton masqué, message d'upsell) et
-// côté fonction (garde-fou si l'UI est contournée), pour ne pas dépendre uniquement de
-// l'affichage.
-export function renderTrackMapPreview() {
-const wrap = document.getElementById('pref-trackmap-preview-wrap');
-const img = document.getElementById('pref-trackmap-preview');
-const removeBtn = document.getElementById('pref-trackmap-remove-btn');
-if (!wrap || !img) return;
-if (state.prefs.track_map_url) {
-img.src = state.prefs.track_map_url;
-wrap.style.display = 'flex';
-if (removeBtn) removeBtn.style.display = 'inline-flex';
-} else {
-wrap.style.display = 'none';
-if (removeBtn) removeBtn.style.display = 'none';
-}
-}
-
-// Affiche/masque le bouton d'upload et le message d'upsell selon le plan de l'organisation.
-export async function updateTrackMapGating() {
-const label = document.getElementById('trackmap-upload-label');
-const upsell = document.getElementById('trackmap-upsell');
-if (!label && !upsell) return;
-let allowed = true;
-try {
-allowed = await hasFeature('track_map');
-} catch (e) {
-allowed = true; // en cas d'erreur réseau/RLS, on ne bloque pas l'admin (fail-open côté UI, la fonction reste gardée)
-}
-if (label) label.style.display = allowed ? 'inline-flex' : 'none';
-if (upsell) upsell.style.display = allowed ? 'none' : 'block';
-}
-
-export async function uploadTrackMap(input) {
-const file = input.files && input.files[0];
-if (!file) return;
-const msgId = 'msg-trackmap';
-const allowed = await hasFeature('track_map').catch(() => true);
-if (!allowed) {
-showMsg(msgId, 'Le plan du circuit est réservé au plan Premium.', 'err');
-input.value = '';
-return;
-}
-try {
-showMsg(msgId, 'Upload du plan du circuit…', 'ok');
-const compressed = await compressLogo(file, 1200);
-const tenantId = await currentTenantId();
-if (!tenantId) {
-  showMsg(msgId, 'Session admin expiree : reconnecte-toi avant d\'envoyer un plan.', 'err');
-  return;
-}
-const path = 'tracks/' + tenantId + '/' + Date.now() + '.png';
-const { error: upErr } = await db.storage.from('org-logos').upload(path, compressed, {
-upsert: true,
-contentType: 'image/png',
-});
-if (upErr) {
-showMsg(msgId, 'Upload échoué (' + upErr.message + ').', 'err');
-return;
-}
-const { data: urlData } = db.storage.from('org-logos').getPublicUrl(path);
-state.prefs.track_map_url = urlData.publicUrl;
-renderTrackMapPreview();
-markPrefsDirty();
-showMsg(msgId, 'Plan uploadé. Clique Enregistrer pour le publier.', 'ok');
-} catch (e) {
-showMsg(msgId, 'Erreur: ' + e.message, 'err');
-} finally {
-input.value = '';
-}
-}
-
-export function removeTrackMap() {
-state.prefs.track_map_url = null;
-renderTrackMapPreview();
-markPrefsDirty();
-showMsg('msg-trackmap', 'Plan retiré. Clique Enregistrer pour confirmer.', 'ok');
-}
+// 02/08 (client) : "enleve l'option plan du circuit pour le moment partout".
+// L'option est retiree de l'UI, des preferences et de la page publique. La colonne
+// app_settings.value.track_map_url est nettoyee cote base ; rien d'autre n'en depend.
 
 // Sous-onglets de l'onglet Parametres (voir admin.html > panel-parametres) : meme
 // convention pastille/.selected que switchStatsSubtab() dans stats.js — un seul bloc
@@ -929,7 +849,6 @@ card_address: (document.getElementById('pref-card-address')?.value || '').trim()
 card_position_picks: (state.prefs.card_position_picks || []).slice(0, CARD_POSITION_MAX),
 card_record_picks: state.prefs.card_record_picks || {},
 logo_url: state.prefs.logo_url || null,
-track_map_url: state.prefs.track_map_url || null,
 level_expert_max_seconds: Math.max(1, parseInt(document.getElementById('pref-level-expert')?.value, 10) || 45),
 level_intermediaire_max_seconds: Math.max(1, parseInt(document.getElementById('pref-level-intermediaire')?.value, 10) || 55),
 });
