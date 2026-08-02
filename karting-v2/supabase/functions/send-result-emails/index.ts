@@ -253,7 +253,13 @@ Deno.serve(async (req) => {
   // arriver ici (pas d'e-mail), mais on retombe sur l'adresse par securite.
   const groups = new Map<string, Delivery[]>();
   for (const r of rows) {
-    const key = (r.registration_id || '') + '|' + r.email.toLowerCase();
+    // 02/08 — `session_id` ajoute a la cle : UN SEUL e-mail par pilote ET PAR
+    // SESSION, portant toutes ses pieces jointes (classement, fiche pilote,
+    // carte de position, carte de record s'il y en a une). Sans lui, un pilote
+    // ayant roule sur deux seances publiees dans la meme fenetre de prise de
+    // file voyait ses deux seances fusionnees dans un seul e-mail : mauvais
+    // titre, mauvaise date, pieces jointes melangees. Un envoi = une seance.
+    const key = r.session_id + '|' + (r.registration_id || '') + '|' + r.email.toLowerCase();
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(r);
   }
