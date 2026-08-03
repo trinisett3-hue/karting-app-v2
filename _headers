@@ -1,0 +1,51 @@
+# En-tetes Cloudflare Pages — cree le 03/08/2026.
+#
+# Les pages publiques de l'application sont protegees par un jeton opaque passe en
+# parametre d'URL (?result=, ?session=, ?c=, ?v=). Ce modele ne tient que si le jeton
+# ne fuite pas. Deux fuites possibles, traitees ici :
+#
+#   1. l'indexation — une page de resultats referencee par un moteur rend le jeton
+#      public pour toujours, et avec lui les noms des pilotes de la session ;
+#   2. l'en-tete Referer — chaque ressource tierce chargee par la page (police,
+#      module ESM, image) recoit par defaut l'origine de la page appelante ; en
+#      `no-referrer` elle ne recoit rien du tout, jeton compris.
+#
+# Voir docs/ARCHITECTURE-URL.md.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: SAMEORIGIN
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# SAMEORIGIN et non DENY : karting-v2/src/modules/pdf-bridge.js charge une iframe de
+# meme origine pour produire les PDF. DENY casserait l'export.
+
+/results
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+
+/results.html
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+
+/register
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+
+/register.html
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+
+/j
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+
+/j.html
+  X-Robots-Tag: noindex, nofollow, noarchive
+  Referrer-Policy: no-referrer
+
+/admin
+  X-Robots-Tag: noindex, nofollow, noarchive
+
+/admin.html
+  X-Robots-Tag: noindex, nofollow, noarchive

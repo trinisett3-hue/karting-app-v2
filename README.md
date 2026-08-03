@@ -20,7 +20,22 @@ Application de gestion de karting : inscriptions pilotes, résultats publics, ad
 
 ## Déploiement
 
-Push sur `main` → déploiement automatique Cloudflare Pages (~10-25s). Pas de pipeline CI pour l'instant : aucun lint ni build ne s'exécute avant merge, donc les erreurs ne sont détectées qu'en production. À corriger (voir Backlog).
+Push sur `main` → déploiement automatique Cloudflare Pages (~10-25s). Le workflow
+`.github/workflows/check.yml` s'exécute sur chaque push et chaque PR : syntaxe de tous les
+modules JS, absence de domaine applicatif écrit en dur, et absence de collision sur le
+paramètre d'URL `v`. Toujours pas de build — HTML et modules ES natifs servis tels quels,
+racine du dépôt = racine du site.
+
+**Domaines, secrets et configuration hors-code : [`docs/DEPLOIEMENT.md`](docs/DEPLOIEMENT.md).**
+L'application tourne sur `app.trinisette.fr` ; le code navigateur, lui, ne connaît pas son
+domaine (`APP_CONFIG.baseUrl` = `window.location.origin`), ce qui la rend portable d'une
+origine à l'autre sans modification. La seule origine écrite en dur de tout le système est
+le secret `PUBLIC_APP_URL` de l'Edge Function `send-result-emails`, hors dépôt par nature —
+d'où le contrat versionné dans `karting-v2/supabase/functions/.env.example`.
+
+**Schéma des URL publiques, espace de noms clients et mots réservés :
+[`docs/ARCHITECTURE-URL.md`](docs/ARCHITECTURE-URL.md).** À lire avant d'ajouter une page
+publique, d'imprimer un QR code ou de créer un compte client.
 
 ## Base de données
 

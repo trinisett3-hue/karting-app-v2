@@ -25,3 +25,41 @@ jobs:
             fi
           done < <(find . -name '*.js' -not -path './node_modules/*' -print0)
           exit $status
+
+      - name: Aucun domaine applicatif ecrit en dur
+        run: |
+          # Ajoute le 03/08 avec la bascule vers trinisette.fr.
+          #
+          # Toute l'application repose sur une regle non ecrite jusqu'ici : le code
+          # navigateur ne connait pas son propre domaine. APP_CONFIG.baseUrl vaut
+          # window.location.origin, et chaque lien est soit construit a partir de la, soit
+          # relatif. C'est ce qui permet de changer d'origine (.pages.dev ->
+          # app.trinisette.fr, ou demain autre chose) sans toucher une seule ligne.
+          #
+          # Une regle non ecrite se perd. Il suffit d'un copier-coller d'URL depuis la
+          # barre d'adresse pour figer l'application sur un domaine, et rien ne le
+          # signale : ca marche parfaitement... jusqu'au jour du changement de domaine.
+          # D'ou ce garde-fou. Voir docs/ARCHITECTURE-URL.md.
+          #
+          # Le nom d'hote du projet Supabase (config.js) n'est pas concerne : ce n'est pas
+          # l'origine de l'application, et il est public par conception (cle anon).
+          if grep -rnE 'https?://[A-Za-z0-9.-]*(pages\.dev|trinisette\.fr)' \
+               --include='*.js' --include='*.html' \
+               karting-v2/src *.html; then
+            echo "::error::Domaine applicatif ecrit en dur. Utiliser APP_CONFIG.baseUrl (= window.location.origin) ou une URL relative — cf. docs/ARCHITECTURE-URL.md"
+            exit 1
+          fi
+          echo "OK : aucune origine applicative en dur."
+
+      - name: Un seul sens par parametre d URL
+        run: |
+          # `v` est le jeton de circuit, lu par public-results.js et register.js.
+          # Il a servi un temps de cache-buster dans results.js, ce qui creait deux
+          # parametres homonymes dans le meme espace d'URL — collision reelle, masquee
+          # seulement par l'ordre des tests. Le cache-buster s'appelle `_r` depuis le
+          # 03/08 ; ce test empeche la regression.
+          if grep -rn "'&v=' *+ *Date.now()\|\"&v=\" *+ *Date.now()" karting-v2/src; then
+            echo "::error::Le parametre 'v' est reserve au jeton de circuit. Utiliser '_r' pour un cache-buster."
+            exit 1
+          fi
+          echo "OK : pas de collision sur le parametre 'v'."

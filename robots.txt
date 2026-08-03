@@ -1,0 +1,15 @@
+# Cree le 03/08/2026 — cf. docs/ARCHITECTURE-URL.md.
+#
+# Aucune page de cette application n'a vocation a etre indexee : l'admin est derriere
+# authentification, et les pages publiques ne sont "publiques" qu'au sens ou elles sont
+# atteignables sans compte — leur confidentialite repose entierement sur un jeton opaque
+# passe en parametre d'URL. Un jeton indexe est un jeton perdu.
+#
+# La vitrine, elle, est servie par un autre projet Cloudflare Pages sur trinisette.fr et
+# possede son propre robots.txt. Ce fichier ne concerne que app.trinisette.fr.
+#
+# robots.txt n'est qu'une demande ; l'en-tete X-Robots-Tag defini dans _headers est la
+# vraie garantie. Les deux sont poses volontairement.
+
+User-agent: *
+Disallow: /

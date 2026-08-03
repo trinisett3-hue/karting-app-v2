@@ -15,9 +15,15 @@
 // Configuration (Supabase > Edge Functions > Secrets) :
 //   EMAIL_PROVIDER   resend | brevo        (defaut: resend)
 //   EMAIL_API_KEY    la cle du fournisseur
-//   EMAIL_FROM       "Karting X <resultats@ton-domaine.fr>"
+//   EMAIL_FROM       "Karting X <resultats@trinisette.fr>"
 //   EMAIL_REPLY_TO   optionnel
-//   PUBLIC_APP_URL   https://ton-app.pages.dev  (pour le lien resultats)
+//   PUBLIC_APP_URL   https://app.trinisette.fr   (origine de l'application, SANS / final)
+//
+// 03/08 : PUBLIC_APP_URL est la SEULE origine ecrite en dur de tout le systeme. Le
+// navigateur, lui, deduit toujours la sienne de window.location.origin (APP_CONFIG.baseUrl) ;
+// ici il n'y a pas de navigateur, donc il faut la lui donner. Si ce secret est faux, les
+// e-mails partent quand meme mais le lien "Voir mes resultats" pointe dans le vide.
+// Valeurs de reference et procedure : docs/DEPLOIEMENT.md.
 //
 // Deployee avec verify_jwt = false : pg_cron n'a pas de JWT a presenter, et
 // la fonction ne fait rien d'autre que vider une file deja constituee.

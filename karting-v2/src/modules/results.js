@@ -779,7 +779,10 @@ export async function refreshPublishVerify(scope) {
     html += '</div>';
   }
   if (published && row.public_results_token) {
-    const url = APP_CONFIG.baseUrl + '/results.html?result=' + row.public_results_token;
+    // 03/08 : URL propre /results et non /results.html — Cloudflare Pages repond 308 sur
+    // la forme .html, ce qui ajoutait un aller-retour a chaque ouverture et faisait
+    // apparaitre une URL differente de celle affichee dans la barre d'adresse.
+    const url = APP_CONFIG.baseUrl + '/results?result=' + row.public_results_token;
     html +=
       '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px">' +
       '<a class="btn btn-ghost btn-sm" href="' + url + '" target="_blank" rel="noopener">Ouvrir la page publique</a>' +
@@ -839,9 +842,15 @@ export async function resendPilot(btn, registrationId, scope) {
 
 export function copyLink(type) {
   let url;
-  if (type === 'reg' && state.activeDetailSession) url = APP_CONFIG.baseUrl + '/register.html?session=' + state.activeDetailSession.public_registration_token;
+  // 03/08 — deux corrections d'un coup (voir docs/ARCHITECTURE-URL.md) :
+  //  a) URL propres (/register, /results) : la forme .html declenche un 308 Cloudflare.
+  //  b) le cache-buster s'appelait `v`... qui est DEJA le parametre du jeton de circuit
+  //     lu par public-results.js (`params.get('v') || params.get('venue')`). Aucun degat
+  //     visible jusqu'ici parce que `result` est teste en premier, mais deux parametres
+  //     homonymes dans le meme espace d'URL est une bombe a retardement. Renomme `_r`.
+  if (type === 'reg' && state.activeDetailSession) url = APP_CONFIG.baseUrl + '/register?session=' + state.activeDetailSession.public_registration_token;
   if (type === 'res' && isSessionPublished(state.activeDetailSession) && state.activeDetailSession.public_results_token)
-    url = APP_CONFIG.baseUrl + '/results.html?result=' + state.activeDetailSession.public_results_token + '&v=' + Date.now();
+    url = APP_CONFIG.baseUrl + '/results?result=' + state.activeDetailSession.public_results_token + '&_r=' + Date.now();
   if (!url) {
     showMsg('msg-res', 'Lien indisponible.', 'err');
     return;
@@ -1058,7 +1067,8 @@ export function archCopyLink() {
     showMsg('msg-arch', "Publie d'abord.", 'err');
     return;
   }
-  navigator.clipboard.writeText(APP_CONFIG.baseUrl + '/results.html?result=' + state.archiveSession.public_results_token + '&v=' + Date.now());
+  // 03/08 : idem copyLink — URL propre et cache-buster renomme `_r` (cf. collision sur `v`).
+  navigator.clipboard.writeText(APP_CONFIG.baseUrl + '/results?result=' + state.archiveSession.public_results_token + '&_r=' + Date.now());
   showMsg('msg-arch', 'Lien copie !', 'ok');
 }
 
