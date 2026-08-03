@@ -11,7 +11,7 @@ import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { state } from '../state.js';
 import { showMsg, formatTime, formatDate, randomCode4, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
-import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid, isSessionPublished } from './sessions.js';
+import { loadInscrits, refreshOccupation, renderActivesGrid, isSessionPublished } from './sessions.js';
 import { uploadSessionAsset, triggerResultEmails, BUCKET as SESSION_EXPORTS_BUCKET } from './publish-exports.js';
 import { generateSessionPDFs } from './publish-pdfs.js';
 import { hasFeature, renderPremiumLock } from './plan.js';
@@ -864,8 +864,10 @@ export function copyLink(type) {
 // vers la page publique de CETTE session, alors que le circuit affiche depuis le
 // 31/07 un QR permanent unique. Deux QR visibles en meme temps, c'est la garantie
 // qu'un pilote scanne le mauvais. togglePres()/archTogglePres() et l'overlay
-// #pres-overlay d'admin.html sont donc retires. qrSrc() reste utilise ailleurs
-// (QR d'inscription, sessions.js).
+// #pres-overlay d'admin.html sont donc retires.
+// MAJ 03/08 : le dernier appelant de qrSrc() (updateQRReg() dans sessions.js,
+// deja mort a ce moment) a lui aussi ete retire — qrSrc() n'a plus d'appelant
+// dans le code. Elle reste definie dans ui.js si un futur QR ad hoc en a besoin.
 
 // --- Archives ------------------------------------------------------------------------------
 

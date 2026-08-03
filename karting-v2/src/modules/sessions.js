@@ -6,7 +6,7 @@
 // (l'onglet "Session active"), les séparer artificiellement aurait cassé ce couplage.
 import { db, fetchAll } from '../lib/supabase.js';
 import { state } from '../state.js';
-import { showMsg, randomCode4, qrSrc, avatarColor, avatarInitial, confirmModal } from './ui.js';
+import { showMsg, randomCode4, avatarColor, avatarInitial, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 import { sessionTypeBadgeHTML, defaultSessionType } from '../state.js';
 
@@ -141,7 +141,6 @@ export async function openActiveDetail(id, { onOpened } = {}) {
   const notesEl = document.getElementById('det-notes-input');
   if (notesEl) notesEl.value = s.internal_notes || '';
   document.getElementById('det-save-btn').style.display = 'none';
-  updateQRReg();
   await loadInscrits();
   await refreshOccupation();
   if (onOpened) await onOpened(s);
@@ -297,16 +296,14 @@ export async function confirmTerminerSession() {
   showMsg('msg-create', 'Session archivee.', 'ok');
 }
 
-// --- QR code d'inscription -----------------------------------------------------------
-
-export function updateQRReg() {
-  if (!state.activeDetailSession) return;
-  const url = APP_CONFIG.baseUrl + '/register.html?session=' + state.activeDetailSession.public_registration_token;
-  const wrap = document.getElementById('qr-reg-wrap');
-  if (wrap) wrap.innerHTML = '<img src="' + qrSrc(url, 160) + '" alt="QR"/>';
-}
-
 // --- Inscriptions (pilotes) -----------------------------------------------------------
+// 03/08 (audit) : updateQRReg() est retiree — elle ciblait #qr-reg-wrap, un element
+// retire d'admin.html depuis le passage au QR unique de circuit (31/07). Code mort
+// depuis cette date : le garde `if (wrap)` empechait toute erreur, mais la fonction
+// ne dessinait plus jamais rien. Elle etait aussi le dernier appelant de qrSrc() dans
+// ce module (voir ui.js), qui construisait l'URL via api.qrserver.com — un service
+// tiers auquel on envoyait le jeton d'inscription en clair a chaque ouverture de
+// fiche session. Plus d'appel = plus de fuite.
 
 export async function loadInscrits() {
   if (!state.activeDetailSession) return;

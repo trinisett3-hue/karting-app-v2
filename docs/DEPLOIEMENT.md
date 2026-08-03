@@ -72,7 +72,8 @@ Les `A 217.160.0.185` et `AAAA 2001:8d8:100f:f000::200` de parking IONOS ont ét
 en une seule opération, ce qui évite la fenêtre pendant laquelle le domaine n'aurait plus
 répondu du tout.
 
-À finaliser : repasser `autodiscover` et `_domainconnect` en « DNS uniquement ».
+`autodiscover` et `_domainconnect` (héritages IONOS) sont vérifiés en « DNS uniquement » —
+contrôlé le 03/08, rien à faire.
 
 ## Secrets et configuration hors-code
 
@@ -102,17 +103,17 @@ asynchrone et a mis plusieurs heures). `EMAIL_FROM` a donc été basculé sur
 **Supabase — Authentication > URL Configuration** :
 
 - Site URL : `https://app.trinisette.fr` — posé
-- Redirect URLs : `https://app.trinisette.fr/admin`, `https://app.trinisette.fr/**` — posées
+- Redirect URLs (2, au 03/08) : `https://app.trinisette.fr/**` et
+  `https://karting-app-v2.pages.dev/**` (repli, deploiement Cloudflare Pages brut).
 
-Quatre URL Lovable héritées restent volontairement dans la liste blanche le temps de la
-transition (six entrées au total). Elles se retirent une fois le parcours « mot de passe
-oublié » validé sur `app.trinisette.fr`, pas avant.
+Les quatre URL Lovable héritées (`*.lovableproject.com`, `*.lovable.app`) ont été retirées le
+03/08, après validation du test de bout en bout (inscription, publication, e-mail de résultats,
+lien « voir le classement ») sur `app.trinisette.fr`.
 
 Ces valeurs sont obligatoires : `karting-v2/src/modules/auth.js` appelle
 `resetPasswordForEmail(email, { redirectTo: APP_CONFIG.baseUrl + '/admin' })`, et Supabase
 refuse toute `redirectTo` absente de la liste blanche — le parcours « mot de passe oublié »
-échoue silencieusement si l'ancien domaine `.pages.dev` reste seul déclaré. Garder l'ancienne
-origine dans la liste pendant la transition, la retirer une fois `app.trinisette.fr` validé.
+échoue silencieusement si l'origine appelante n'y figure pas.
 
 **Cloudflare Pages** : projet `karting-app-v2`, branche de production `main`, déploiement
 automatique à chaque push. Pas d'étape de build — HTML et modules ES natifs servis tels
