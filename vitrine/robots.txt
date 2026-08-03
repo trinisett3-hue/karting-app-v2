@@ -1,0 +1,9 @@
+# Vitrine publique — trinisette.fr
+#
+# Contrairement a app.trinisette.fr (qui interdit tout : voir /robots.txt a la racine du
+# depot), cette vitrine a vocation a etre trouvee. Tout est ouvert a l'indexation.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://trinisette.fr/sitemap.xml

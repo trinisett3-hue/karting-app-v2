@@ -43,6 +43,16 @@ jobs:
           #
           # Le nom d'hote du projet Supabase (config.js) n'est pas concerne : ce n'est pas
           # l'origine de l'application, et il est public par conception (cle anon).
+          #
+          # PERIMETRE : `karting-v2/src` (recursif) et les .html a la racine du depot.
+          # `vitrine/` en est volontairement exclu, et cette exclusion n'est pas un oubli.
+          # La vitrine est un site distinct, servi par un autre projet Pages sur un autre
+          # domaine (trinisette.fr) ; le seul moyen pour elle de pointer vers l'application
+          # est justement d'ecrire https://app.trinisette.fr en clair, puisque son
+          # window.location.origin n'est pas celui de l'application. La regle « pas de
+          # domaine en dur » protege la portabilite de l'application, pas celle d'un lien
+          # sortant. Si la vitrine devait un jour vivre dans le meme projet Pages, cette
+          # exclusion serait a reexaminer.
           if grep -rnE 'https?://[A-Za-z0-9.-]*(pages\.dev|trinisette\.fr)' \
                --include='*.js' --include='*.html' \
                karting-v2/src *.html; then

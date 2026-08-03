@@ -21,11 +21,17 @@ et toute modification de domaine doit passer par une mise à jour de ce tableau.
 
 | Nom | Cible | Statut |
 |---|---|---|
-| `trinisette.fr` | vitrine — projet Cloudflare Pages dédié | à créer |
-| `www.trinisette.fr` | redirection 301 vers l'apex | à créer |
-| `app.trinisette.fr` | projet Cloudflare Pages `karting-app-v2` (ce dépôt) | à brancher |
-| `envoi.trinisette.fr` | Return-Path Resend (Amazon SES `eu-west-1`) | DNS posé |
+| `trinisette.fr` | vitrine — second projet Pages, même dépôt, racine `vitrine/` | à créer |
+| `www.trinisette.fr` | même projet Pages que l'apex | à créer |
+| `app.trinisette.fr` | projet Cloudflare Pages `karting-app-v2` (ce dépôt) | **en ligne, SSL actif** |
+| `envoi.trinisette.fr` | Return-Path Resend (Amazon SES `eu-west-1`) | vérifié |
 | `news.trinisette.fr` | second domaine Resend, e-mails marketing | prévu |
+
+Deux défauts sont ouverts tant que le projet Pages de la vitrine n'existe pas :
+`https://trinisette.fr/` répond **525** (les A de l'apex sont proxifiés par Cloudflare vers
+l'origine de parking IONOS, qui n'a pas de certificat pour ce nom) et
+`https://www.trinisette.fr/` répond **502** (aucun enregistrement DNS). Les deux disparaissent
+en branchant le projet vitrine ; il n'y a rien à corriger côté application.
 
 Registrar : IONOS. DNS : Cloudflare (plan Free), zone `trinisette.fr`,
 compte `0800a8606b90e0fe96cc14596afeb8a4`, serveurs de noms `gabriel.ns.cloudflare.com`
@@ -55,11 +61,15 @@ humain), celui d'Amazon couvre `envoi`, qui n'est que le Return-Path. L'aligneme
 relaxé accepte qu'un sous-domaine s'aligne sur le domaine organisationnel, donc une adresse
 `From:` en `@trinisette.fr` avec un Return-Path en `@envoi.trinisette.fr` passe.
 
-À finaliser : remplacer le `CNAME _dmarc → dmarc.ionos.fr` hérité par un enregistrement à
-nous, `TXT _dmarc = v=DMARC1; p=none; rua=mailto:contact@trinisette.fr` (`p=none` le temps
-d'observer les rapports, durcissement en `quarantine` ensuite) ; repasser `autodiscover` et
-`_domainconnect` en « DNS uniquement » ; supprimer les `A 217.160.0.185` et
-`AAAA 2001:8d8:100f:f000::200` de parking IONOS quand la vitrine sera branchée sur l'apex.
+DMARC est posé depuis le 03/08 : le `CNAME _dmarc → dmarc.ionos.fr` hérité a été remplacé par
+`TXT _dmarc = v=DMARC1; p=none; rua=mailto:contact@trinisette.fr`. `p=none` est délibéré le
+temps de lire les rapports agrégés ; le durcissement en `quarantine` viendra ensuite, et pas
+avant d'avoir la certitude qu'aucun envoi légitime n'est cassé.
+
+À finaliser : repasser `autodiscover` et `_domainconnect` en « DNS uniquement » ; supprimer
+les `A 217.160.0.185` et `AAAA 2001:8d8:100f:f000::200` de parking IONOS **au moment** de
+brancher la vitrine sur l'apex — pas avant, sinon le domaine ne répond plus du tout au lieu
+de répondre mal.
 
 ## Secrets et configuration hors-code
 
@@ -73,12 +83,26 @@ d'observer les rapports, durcissement en `quarantine` ensuite) ; repasser `autod
 | `EMAIL_FROM` | `Trinisette <resultats@trinisette.fr>` | rejet par le destinataire si le domaine n'est pas vérifié |
 | `EMAIL_REPLY_TO` | `contact@trinisette.fr` | optionnel |
 
+Les cinq clés sont posées depuis le 03/08. Les trois dernières manquaient jusque-là, et
+l'absence de `PUBLIC_APP_URL` était un bug silencieux : `send-result-emails` construit le
+lien par `env('PUBLIC_APP_URL') && head.results_token ? … : ''`, donc le paragraphe « voir le
+classement » disparaissait purement et simplement de chaque e-mail envoyé, sans erreur nulle
+part.
+
+`EMAIL_FROM` reste sur sa valeur d'origine tant que le DKIM `resend._domainkey` n'est pas
+`verified` chez Resend : basculer sur `resultats@trinisette.fr` avant vérification ferait
+rejeter tous les envois.
+
 `PUBLIC_APP_URL` est la seule origine écrite en dur de tout le système. Sans `/` final.
 
 **Supabase — Authentication > URL Configuration** :
 
-- Site URL : `https://app.trinisette.fr`
-- Redirect URLs : `https://app.trinisette.fr/admin`, `https://app.trinisette.fr/**`
+- Site URL : `https://app.trinisette.fr` — posé
+- Redirect URLs : `https://app.trinisette.fr/admin`, `https://app.trinisette.fr/**` — posées
+
+Quatre URL Lovable héritées restent volontairement dans la liste blanche le temps de la
+transition (six entrées au total). Elles se retirent une fois le parcours « mot de passe
+oublié » validé sur `app.trinisette.fr`, pas avant.
 
 Ces valeurs sont obligatoires : `karting-v2/src/modules/auth.js` appelle
 `resetPasswordForEmail(email, { redirectTo: APP_CONFIG.baseUrl + '/admin' })`, et Supabase
@@ -95,6 +119,22 @@ doit être fait en connaissance de cause (voir `docs/ARCHITECTURE-URL.md`).
 Comportement à connaître : Pages répond **308** sur `/X.html` et redirige vers `/X`. Tous les
 liens publics doivent donc omettre l'extension. Seule exception assumée,
 `karting-v2/src/modules/pdf-bridge.js`, qui conserve `.html` pour une iframe de même origine.
+
+**Cloudflare Pages — projet vitrine** (à créer) : même dépôt GitHub `karting-app-v2`, même
+branche de production `main`, mais **Root directory = `vitrine`**, sans commande de build.
+Domaines personnalisés : `trinisette.fr` et `www.trinisette.fr`.
+
+Ce réglage « Root directory » est ce qui permet de servir deux sites depuis un seul dépôt,
+sur le plan gratuit, sans second dépôt ni second workflow. Les deux projets se déploient au
+même push sur `main` ; chacun ne voit que sa racine. C'est aussi pour ça que `vitrine/`
+embarque ses propres `_headers`, `robots.txt` et `sitemap.xml` : à la racine du projet
+vitrine, ce sont ces fichiers-là qui s'appliquent, et surtout pas le `robots.txt` de
+l'application, qui interdit toute indexation.
+
+La vitrine n'a aucune dépendance vers ce dépôt côté code : elle parle à Supabase en `anon`
+pour insérer dans `public.leads` (politique `leads_public_insert`, `status = 'new'` imposé
+côté serveur), et ne lit rien. Un formulaire de contact ne peut donc pas servir à lire des
+données de circuits.
 
 **Resend** : domaine `trinisette.fr`, ID `fef03a09-76e1-4a67-b74f-201e03e696cb`, région
 `eu-west-1`. Plan gratuit — 3 000 e-mails par mois, 100 par jour, domaines vérifiés illimités.

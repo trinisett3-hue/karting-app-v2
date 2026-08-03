@@ -1,0 +1,11 @@
+# En-tetes de la vitrine — projet Cloudflare Pages distinct de l'application.
+#
+# Ici, a l'inverse de app.trinisette.fr, il n'y a aucun jeton a proteger et la page doit
+# etre indexee : pas de X-Robots-Tag, et un Referrer-Policy standard plutot que
+# `no-referrer`, pour que les sites qui nous citent apparaissent dans les statistiques.
+
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
