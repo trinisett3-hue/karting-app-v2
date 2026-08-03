@@ -9,10 +9,10 @@
 // Les deux fonctions sont maintenant réellement implémentées ci-dessous.
 import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { state } from '../state.js';
-import { showMsg, qrSrc, formatTime, formatDate, randomCode4, confirmModal } from './ui.js';
+import { showMsg, formatTime, formatDate, randomCode4, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 import { loadInscrits, refreshOccupation, updateQRReg, renderActivesGrid, isSessionPublished } from './sessions.js';
-import { uploadSessionAsset, triggerResultEmails } from './publish-exports.js';
+import { uploadSessionAsset, triggerResultEmails, BUCKET as SESSION_EXPORTS_BUCKET } from './publish-exports.js';
 import { generateSessionPDFs } from './publish-pdfs.js';
 import { hasFeature, renderPremiumLock } from './plan.js';
 import { sessionTypeLabel, defaultSessionType } from '../state.js';
@@ -851,19 +851,12 @@ export function copyLink(type) {
 }
 
 
-export function togglePres(sess) {
-  const overlay = document.getElementById('pres-overlay');
-  if (overlay.classList.contains('show')) {
-    overlay.classList.remove('show');
-    return;
-  }
-  const s = sess || state.activeDetailSession;
-  if (!isSessionPublished(s) || !s.public_results_token) return;
-  const url = APP_CONFIG.baseUrl + '/results.html?result=' + s.public_results_token + '&v=' + Date.now();
-  document.getElementById('pres-img').src = qrSrc(url, 280);
-  document.getElementById('pres-sub').textContent = s.title;
-  overlay.classList.add('show');
-}
+// 03/08 (client) : mode presentation supprime. Il affichait en plein ecran un QR
+// vers la page publique de CETTE session, alors que le circuit affiche depuis le
+// 31/07 un QR permanent unique. Deux QR visibles en meme temps, c'est la garantie
+// qu'un pilote scanne le mauvais. togglePres()/archTogglePres() et l'overlay
+// #pres-overlay d'admin.html sont donc retires. qrSrc() reste utilise ailleurs
+// (QR d'inscription, sessions.js).
 
 // --- Archives ------------------------------------------------------------------------------
 
@@ -1042,14 +1035,21 @@ export async function archPublish() {
     results_published_at: state.archiveSession.results_published_at || new Date().toISOString(),
   }).eq('id', state.archiveSession.id);
   state.archiveSession.status = 'results_published';
-  showMsg('msg-arch', 'Resultats republies !', 'ok');
-  if (!already) {
-    // Une premiere publication depuis l'archive doit envoyer les e-mails comme
-    // une publication normale. Une REpublication, non : les lignes de file sont
-    // deja 'sent' et personne ne recoit deux fois le meme e-mail.
-    state.archiveSession.results_published_at = new Date().toISOString();
-    await afterPublish(state.archiveSession, 'msg-arch');
-  }
+  if (!already) state.archiveSession.results_published_at = new Date().toISOString();
+  showMsg('msg-arch', already ? 'Publication relancee...' : 'Resultats publies !', 'ok');
+  // 03/08 — « Relancer la publication » rejoue TOUTE la chaine, y compris sur une
+  // session deja publiee. Avant, seule une premiere publication appelait
+  // afterPublish() : un PDF rate ou un e-mail bloque ne se reparait donc par aucun
+  // bouton. Rejouer est sans risque de double envoi, verifie dans le code :
+  //   - generateSessionPDFs() reversene les assets en upsert (meme chemin, meme
+  //     ligne session_assets) : ce qui manque est regenere, le reste remplace ;
+  //   - enqueue_position_cards fait un `on conflict do nothing` sur l'index unique
+  //     (registration_id, kind, scope) : aucune ligne de file dupliquee ;
+  //   - claim_card_deliveries ne prend que les lignes `pending` : une ligne deja
+  //     'sent' n'est jamais reprise, donc personne ne recoit deux fois le meme
+  //     e-mail. Seuls les envois jamais partis (ou repasses 'pending' apres echec)
+  //     redemarrent.
+  await afterPublish(state.archiveSession, 'msg-arch');
   await refreshPublishVerify('arch');
 }
 
@@ -1060,10 +1060,6 @@ export function archCopyLink() {
   }
   navigator.clipboard.writeText(APP_CONFIG.baseUrl + '/results.html?result=' + state.archiveSession.public_results_token + '&v=' + Date.now());
   showMsg('msg-arch', 'Lien copie !', 'ok');
-}
-
-export function archTogglePres() {
-  togglePres(state.archiveSession);
 }
 
 // --- Réglages secteurs / format d'import (Trinisette) -------------------------------------
@@ -1110,23 +1106,61 @@ async function adminSectionToCanvas(node, width) {
   return canvas;
 }
 
-export async function exportSessionPDF(sess, btn) {
+// 03/08 — « Exporter PDF » telecharge desormais le fichier REELLEMENT stocke.
+// Il appelait buildSessionPDF(), le rendu interne de l'admin : sans theme du
+// circuit ni avatars, il ne ressemblait pas au classement recu par les pilotes,
+// et c'est ce document-la qui avait ete signale comme « pas du tout le bon PDF »
+// le 02/08. On lit maintenant l'asset session_assets kind='full_pdf' depose a la
+// publication, exactement celui que l'Edge Function joint aux e-mails.
+// Volontairement SANS repli sur buildSessionPDF si l'asset manque (decision du
+// 02/08 : mieux vaut aucun PDF qu'un mauvais) — l'admin est renvoye vers une
+// relance de publication, qui regenere l'asset.
+export async function exportSessionPDF(sess, btn, scope) {
+  const msgId = scope === 'arch' ? 'msg-arch' : 'msg-res';
   const s = sess;
   if (!s) {
-    showMsg('msg-res', 'Aucune session.', 'err');
+    showMsg(msgId, 'Aucune session.', 'err');
     return;
   }
   const original = btn ? btn.innerHTML : null;
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span>Export...'; }
   try {
-    const pdf = await buildSessionPDF(s);
-    pdf.save((s.title || 'session').replace(/[^a-z0-9]/gi, '_') + '-classement.pdf');
+    const { data: asset, error } = await db
+      .from('session_assets')
+      .select('storage_path')
+      .eq('session_id', s.id)
+      .eq('kind', 'full_pdf')
+      .maybeSingle();
+    if (error) throw error;
+    if (!asset || !asset.storage_path) {
+      showMsg(msgId, 'Aucun classement PDF genere pour cette session - relance la publication.', 'err');
+    } else {
+      // Meme bucket prive que le televersement (publish-exports.js) : on telecharge
+      // le binaire plutot que d'exposer une URL signee dans la page.
+      const dl = await db.storage.from(SESSION_EXPORTS_BUCKET).download(asset.storage_path);
+      if (dl.error) throw dl.error;
+      const url = URL.createObjectURL(dl.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (s.title || 'session').replace(/[^a-z0-9]/gi, '_') + '-classement.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
   } catch (e) {
-    showMsg('msg-res', 'Erreur PDF: ' + e.message, 'err');
+    showMsg(msgId, 'Erreur PDF: ' + (e.message || e), 'err');
   }
   if (btn) { btn.disabled = false; btn.innerHTML = original; }
 }
 
+// PLUS BRANCHEE SUR AUCUN BOUTON depuis le 03/08 : ni la publication (repli
+// retire le 02/08), ni « Exporter PDF » (bascule sur l'asset full_pdf) ne
+// l'appellent. Conservee comme brouillon interne : c'est le seul rendu de
+// classement qui n'a besoin ni de la page publique ni du pont d'export, donc le
+// seul utilisable si un jour l'admin doit sortir un document hors publication.
+// Ne pas la rebrancher sur un bouton visible du client sans lui donner le theme
+// et les avatars du circuit.
 // Le rendu est isole du telechargement : la publication a besoin du MEME
 // document, mais sous forme de Blob a televerser, pas de fichier a enregistrer.
 // Dupliquer le rendu garantirait qu'un jour le PDF telecharge et le PDF envoye

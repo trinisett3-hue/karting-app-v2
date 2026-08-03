@@ -12,7 +12,9 @@
 // est ce sur quoi reposent les policies Storage, il n'est pas cosmetique.
 import { db } from '../lib/supabase.js';
 
-const BUCKET = 'session-exports';
+// Exporte : results.js telecharge le classement depuis CE bucket, il ne doit pas
+// exister deux fois le nom du bucket dans le projet.
+export const BUCKET = 'session-exports';
 
 // Un echec de televersement ne doit JAMAIS empecher la publication : les
 // resultats en ligne sont l'essentiel, la piece jointe est un bonus. On

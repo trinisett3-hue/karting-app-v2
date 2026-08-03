@@ -211,7 +211,7 @@ return results.exportCSV(state.activeDetailSession);
 }
 
 function exportActivePDF(btn) {
-return results.exportSessionPDF(state.activeDetailSession, btn);
+return results.exportSessionPDF(state.activeDetailSession, btn, 'res');
 }
 
 // Flag 'archive_export' (voir plan.js) : export CSV/PDF d'une archive INDIVIDUELLE. Les
@@ -225,7 +225,7 @@ return results.exportCSV(state.archiveSession);
 
 async function exportArchivePDF(btn) {
 if (!(await hasFeature('archive_export'))) return;
-return results.exportSessionPDF(state.archiveSession, btn);
+return results.exportSessionPDF(state.archiveSession, btn, 'arch');
 }
 
 // --- Authentification -----------------------------------------------------------------------
@@ -424,7 +424,6 @@ openArchiveDetail: results.openArchiveDetail,
 backToArchives: results.backToArchives,
 archPublish: results.archPublish,
 archCopyLink: results.archCopyLink,
-archTogglePres: results.archTogglePres,
 deleteSession: results.deleteSession,
 loadArchives,
 filterArchives,
@@ -444,7 +443,6 @@ handleChronoFile: results.handleChronoFile,
 importChrono: results.importChrono,
 publishResults: results.publishResults,
 copyLink: results.copyLink,
-togglePres: results.togglePres,
 toggleSectorsField: results.toggleSectorsField,
 updateChronoFormat: results.updateChronoFormat,
 exportSessionPDF: results.exportSessionPDF,

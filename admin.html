@@ -37,14 +37,12 @@ body.light .sb-logo::before{filter:invert(0) opacity(.5)}
 .stype-del:hover{color:#ff6b5e;border-color:#ff6b5e}
 /* --- Mode clair : pop-up et fenetres de dialogue (01/08, demande client) -------------
    Les boites de dialogue (.qr-zoom-box sert a QR, historique, recap de cloture, login,
-   ajout manuel ; .pres-box au mode presentation ; .cm-box a confirmModal) etaient
+   ajout manuel ; .cm-box a confirmModal) etaient
    degradees vers #0c0e17 en dur : blanc en haut, quasi noir en bas, texte illisible.
    On repasse ici sur des surfaces claires, un voile de fond plus doux et des ombres
    colorees en bleu-gris plutot qu'en noir opaque. */
 body.light .overlay{background:rgba(23,25,35,.34);backdrop-filter:blur(5px)}
-body.light #pres-overlay{background:rgba(23,25,35,.46)}
 body.light .qr-zoom-box,body.light .cm-box{background:linear-gradient(180deg,#ffffff 0%,var(--surf2) 100%);border:1px solid var(--bord);box-shadow:0 22px 60px -18px rgba(20,20,40,.32),0 2px 6px rgba(20,20,40,.06)}
-body.light .pres-box{background:linear-gradient(180deg,#ffffff 0%,var(--surf2) 100%);box-shadow:0 0 0 1px rgba(255,59,48,.18),0 26px 64px -18px rgba(20,20,40,.34)}
 body.light .cm-overlay{background:rgba(23,25,35,.34)}
 body.light .cm-box .cm-cancel:hover{background:#e4e7f2}
 body.light .qr-wrap{border-color:var(--bord)}
@@ -166,10 +164,6 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .qr-zoom-box{background:linear-gradient(180deg,var(--surf),#0c0e17);border:1px solid var(--bord-soft);border-radius:24px;padding:32px;display:flex;flex-direction:column;align-items:center;gap:16px;max-width:400px;width:90%;box-shadow:0 24px 70px -14px rgba(0,0,0,.7)}
 .qr-zoom-box .qr-wrap{padding:20px}
 .qr-zoom-box .qr-wrap img{width:280px;height:280px}
-.pres-box{background:linear-gradient(180deg,var(--surf),#0c0e17);border:2px solid var(--acc);box-shadow:0 0 60px -10px var(--acc-glow);border-radius:28px;padding:40px;display:flex;flex-direction:column;align-items:center;gap:20px;max-width:460px;width:90%}
-.pres-title{font-family:var(--font-display);font-size:30px;font-weight:600;color:var(--acc2);text-align:center;text-transform:uppercase;letter-spacing:.3px}
-.pres-box .qr-wrap{padding:20px}
-.pres-box .qr-wrap img{width:280px;height:280px}
 .arch-item{background:var(--surf2);border:1px solid var(--bord-soft);border-radius:10px;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:8px;cursor:pointer;transition:.15s}
 .arch-item:hover{border-color:var(--acc);background:#1c1420;transform:translateX(3px)}
 .arch-title{font-size:14px;font-weight:700}
@@ -521,7 +515,6 @@ updateThemeToggleUI();
 <div class="flex" style="margin-top:14px">
 <button class="btn btn-yel btn-sm" onclick="publishResults()">Publier</button>
 <button class="btn btn-ghost btn-sm" onclick="copyLink('res')">Copier lien</button>
-<button class="btn btn-ghost btn-sm" onclick="togglePres()">Mode presentation</button>
 <button class="btn btn-ghost btn-sm" onclick="exportActiveCSV()">Exporter CSV</button>
 <button class="btn btn-ghost btn-sm" id="btn-pdf-active" onclick="exportActivePDF(this)">Exporter PDF</button>
 </div>
@@ -614,9 +607,8 @@ updateThemeToggleUI();
 <div class="ctitle">Publication et exports</div>
 <div style="display:flex;flex-direction:column;align-items:center;gap:12px">
 <div class="flex">
-<button class="btn btn-yel btn-sm" onclick="archPublish()">Republier</button>
+<button class="btn btn-yel btn-sm" onclick="archPublish()">Relancer la publication</button>
 <button class="btn btn-ghost btn-sm" onclick="archCopyLink()">Copier lien</button>
-<button class="btn btn-ghost btn-sm" onclick="archTogglePres()">Presentation</button>
 <button class="btn btn-ghost btn-sm" id="btn-csv-archive" onclick="exportArchiveCSV()">Exporter CSV</button>
 <button class="btn btn-ghost btn-sm" id="btn-pdf-archive" onclick="exportArchivePDF(this)">Exporter PDF</button>
 </div>
@@ -1212,15 +1204,6 @@ perimetre de cette refonte visuelle.
 <div class="flex" style="justify-content:center;margin-top:6px">
 <button class="btn btn-primary btn-sm" onclick="closeRecapModal()">Fermer</button>
 </div>
-</div>
-</div>
-
-<div class="overlay" id="pres-overlay" onclick="if(event.target===this)togglePres()" style="background:rgba(10,12,20,.88)">
-<div class="pres-box">
-<div class="pres-title">Scanne pour les resultats !</div>
-<div class="qr-wrap"><img id="pres-img" src="" alt="QR"/></div>
-<div style="font-size:13px;color:var(--mut);text-align:center" id="pres-sub"></div>
-<button class="btn btn-ghost btn-sm" onclick="togglePres()">Quitter</button>
 </div>
 </div>
 
