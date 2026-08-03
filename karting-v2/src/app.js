@@ -287,9 +287,80 @@ appInitialized = false;
 location.reload();
 }
 
+// --- Mot de passe oublie : ecran de choix d'un nouveau mot de passe -------------------------
+// Le lien recu par e-mail ouvre l'admin avec un jeton de recuperation. Deux voies mènent
+// ici, volontairement redondantes : le drapeau window.__kartexRecovery pose par le script
+// inline d'admin.html (le SDK efface le fragment avant que ce module ne s'execute) et
+// l'evenement PASSWORD_RECOVERY. Tant que le mot de passe n'est pas change, on n'initialise
+// PAS l'application : le client ne doit voir que ce formulaire.
+
+let recoveryMode = false;
+
+function showRecoveryOverlay() {
+recoveryMode = true;
+hideLoginOverlay();
+const overlay = document.getElementById('recovery-overlay');
+if (overlay) overlay.classList.add('show');
+}
+
+function hideRecoveryOverlay() {
+recoveryMode = false;
+const overlay = document.getElementById('recovery-overlay');
+if (overlay) overlay.classList.remove('show');
+}
+
+function setRecoveryMsg(text, kind) {
+const el = document.getElementById('recovery-msg');
+if (!el) return;
+el.textContent = text || '';
+el.className = text ? 'msg ' + (kind || 'err') : 'msg';
+}
+
+async function submitNewPassword() {
+const pass = document.getElementById('recovery-password')?.value || '';
+const pass2 = document.getElementById('recovery-password2')?.value || '';
+if (pass.length < 8) {
+setRecoveryMsg('Le mot de passe doit contenir au moins 8 caracteres.', 'err');
+return;
+}
+if (pass !== pass2) {
+setRecoveryMsg('Les deux mots de passe ne sont pas identiques.', 'err');
+return;
+}
+const btn = document.getElementById('recovery-btn');
+if (btn) btn.disabled = true;
+setRecoveryMsg('Enregistrement...', 'ok');
+try {
+await auth.updatePassword(pass);
+setRecoveryMsg('Mot de passe modifie. Ouverture de votre espace...', 'ok');
+// On efface le jeton de recuperation de l'URL : un rechargement ne doit pas rouvrir
+// cet ecran, et le lien ne doit pas rester dans l'historique du navigateur.
+try { history.replaceState(null, '', window.location.pathname); } catch (e) {}
+hideRecoveryOverlay();
+const session = await auth.getSession();
+if (session) {
+await initAppOnce(session);
+} else {
+showLoginOverlay('Mot de passe modifie. Connecte-toi avec ton nouveau mot de passe.');
+}
+} catch (err) {
+setRecoveryMsg(err?.message || 'Impossible de modifier le mot de passe.', 'err');
+} finally {
+if (btn) btn.disabled = false;
+}
+}
+
+auth.onAuthStateChange((session, event) => {
+if (event === 'PASSWORD_RECOVERY') showRecoveryOverlay();
+});
+
 // --- Initialisation ------------------------------------------------------------------------
 
 window.addEventListener('DOMContentLoaded', async () => {
+if (window.__kartexRecovery || recoveryMode) {
+showRecoveryOverlay();
+return;
+}
 const session = await auth.getSession();
 if (session) {
 hideLoginOverlay();
@@ -319,6 +390,7 @@ onSessionTypeInput: sessionTypes.onSessionTypeInput,
 // Authentification
 doLogin,
 doLogout,
+submitNewPassword,
 // Navigation
 switchTab,
 // Sessions

@@ -1,0 +1,43 @@
+diff --git a/karting-v2/src/modules/manual-add.js b/karting-v2/src/modules/manual-add.js
+index b61a0f6..1441c97 100644
+--- a/karting-v2/src/modules/manual-add.js
++++ b/karting-v2/src/modules/manual-add.js
+@@ -161,6 +161,15 @@ async function insertRegistration(row) {
+}
+const { error } = await db.from('session_registrations').insert(row);
+if (error) {
+
+// Filet de securite serveur en plus du controle local already :
+// deux admins (ou un admin + le QR public) peuvent ajouter le meme
+// pilote au meme instant. La contrainte session_registrations_session_pilot_uidx
+// (ajoutee le 30/07, correctif bug A4/B28) l'empeche ; ici on transforme
+// juste l'erreur brute en message comprehensible.
+if (error.code === '23505' && (error.details || error.message || '').indexOf('session_pilot_uidx') !== -1) {
+ maMsg('Ce pilote vient d etre inscrit a cette session (par un autre ecran ou le QR) - pas besoin de le rajouter.', 'err');
+ return false;
+}
+maMsg('Erreur : ' + error.message, 'err');
+return false;
+}
+diff --git a/karting-v2/src/modules/register.js b/karting-v2/src/modules/register.js
+index 0f10162..c685688 100644
+--- a/karting-v2/src/modules/register.js
++++ b/karting-v2/src/modules/register.js
+@@ -535,7 +535,16 @@ export async function submitForm() {
+document.getElementById('success-card').style.display = 'block';
+document.getElementById('success-name').textContent = 'Bonne course ' + regState.pilot.pseudo + ' !';
+} catch (e) {
+if (e && e.code === '23505') {
+// Deux contraintes uniques distinctes peuvent lever un 23505 ici : il
+// faut les distinguer par leur nom, sinon un pilote qui tente de se
+// reinscrire une seconde fois se voit repondre avatar deja pris,
+// ce qui n'a aucun sens et l'incite a retenter en boucle (bug A4/B28,
+// corrige le 30/07 - la contrainte session_registrations_session_pilot_uidx
+// n'existait pas avant, donc les doublons passaient silencieusement).
+const constraint = (e && (e.details || e.message || '')) + '';
+if (e && e.code === '23505' && constraint.indexOf('session_pilot_uidx') !== -1) {
+ showMsg('msg-2', 'Tu es deja inscrit a cette session - inutile de t inscrire une seconde fois.', 'err');
+} else if (e && e.code === '23505') {
+// Collision sur (session_id, avatar_scheme) : un autre pilote vient de
+// prendre exactement le meme avatar entre le chargement du carrousel
+// et la soumission. On rafraichit la liste des disponibles et on

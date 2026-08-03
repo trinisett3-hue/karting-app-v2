@@ -345,6 +345,17 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 <button class="btn btn-ghost btn-sm" style="width:100%" onclick="doLogout()">Deconnexion</button>
 </div>
 <script>
+// Le SDK Supabase consomme (et efface) le fragment #access_token...&type=recovery des son
+// initialisation dans app.js. Ce script inline s'executant AVANT le module, c'est le seul
+// endroit ou l'on peut encore lire l'URL telle que l'a ouverte le client depuis son e-mail.
+// On memorise donc le drapeau ici ; l'evenement PASSWORD_RECOVERY reste la 2e voie d'entree.
+(function(){
+try{
+var hash=window.location.hash||'';
+var search=window.location.search||'';
+window.__kartexRecovery=(hash.indexOf('type=recovery')>-1)||(search.indexOf('type=recovery')>-1);
+}catch(e){}
+})();
 (function(){
 try{
 var saved=localStorage.getItem('kartex_theme');
@@ -1222,6 +1233,20 @@ perimetre de cette refonte visuelle.
 <div class="field" style="width:100%"><label>Mot de passe</label><input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"/></div>
 <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Se connecter</button>
 <div class="msg" id="login-msg"></div>
+</div>
+</div>
+
+<!-- OVERLAY RECUPERATION : ecran de choix d'un nouveau mot de passe, affiche uniquement
+     apres un clic sur le lien recu par e-mail. Il passe DEVANT l'overlay de connexion
+     (z-index superieur) pour que le client ne voie qu'un seul formulaire. -->
+<div class="overlay" id="recovery-overlay" style="z-index:210">
+<div class="qr-zoom-box" style="max-width:360px">
+<div style="font-size:18px;font-weight:900">Nouveau <span style="color:var(--yel)">mot de passe</span></div>
+<div style="font-size:12px;color:var(--mut);text-align:center">Choisis un mot de passe d'au moins 8 caracteres.</div>
+<div class="field" style="width:100%"><label>Nouveau mot de passe</label><input type="password" id="recovery-password" autocomplete="new-password"/></div>
+<div class="field" style="width:100%"><label>Confirmation</label><input type="password" id="recovery-password2" autocomplete="new-password" onkeydown="if(event.key==='Enter'){event.preventDefault();submitNewPassword();}"/></div>
+<button class="btn btn-primary" style="width:100%" id="recovery-btn" onclick="submitNewPassword()">Enregistrer le nouveau mot de passe</button>
+<div class="msg" id="recovery-msg"></div>
 </div>
 </div>
 
