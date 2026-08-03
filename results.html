@@ -1348,11 +1348,15 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 <!-- Fond décoratif -->
 <div class="results-bg" aria-hidden="true"></div>
 
-<!-- Navigation Inscription / Résultats -->
-<nav class="page-switch" aria-label="Navigation">
-  <a href="register" id="nav-register-link">Inscription</a>
-  <span class="current">Résultats</span>
-</nav>
+<!-- 03/08 (client) : la pilule Inscription/Résultats a été retirée de la page de
+     résultats d'un pilote (lien direct ?result=TOKEN reçu par e-mail ou via une
+     carte partageable). Cliquer sur "Inscription" depuis là renvoyait vers la
+     MÊME session déjà courue — non-sens pour quelqu'un qui vient de recevoir
+     son classement. La pilule reste en revanche sur l'écran "choix de session"
+     du QR unique de circuit (renderVenuePicker), où elle a un sens : c'est elle
+     qui construit sa propre nav (venueTabs()) et retire déjà celle-ci via
+     floatSwitch.remove(). Voir applyRegistrationNavLink() dans
+     public-results.js, devenue un no-op inoffensif faute d'élément #nav-register-link. -->
 
 <!-- Switcher de thème -->
 

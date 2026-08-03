@@ -1051,9 +1051,13 @@ if (el && out) out.textContent = String(el.value.length);
 // =====================================================================================
 // Les deux QR par session (inscription + resultats) ont ete retires de l'onglet
 // Sessions : ils obligeaient a reimprimer un QR a chaque course. A la place, un
-// seul QR permanent par circuit, base sur tenants.public_venue_token, qui pointe
-// vers results.html?v=<token>. Cette page liste d'elle-meme les sessions ouvertes
-// et les resultats publies (RPC public_venue_sessions).
+// seul QR permanent par circuit, base sur tenants.public_venue_token.
+//
+// Cible le 03/08 (client) : register.html?v=<token>, pas results.html?v=<token>.
+// Un QR affiche a l'accueil sert d'abord a s'inscrire ; register.js sait deja
+// basculer vers "Resultats" pour ce meme venueToken (nav-results-link,
+// applyResultsNavLink), donc rien n'est perdu — on choisit juste le meilleur
+// point d'entree pour quelqu'un qui scanne en arrivant sur le circuit.
 let _venueLinkCache = null;
 
 export async function loadVenueLink() {
@@ -1068,7 +1072,7 @@ export async function loadVenueLink() {
       if (box) box.innerHTML = '';
       return '';
     }
-    url = window.location.origin + '/results?v=' + data.public_venue_token;
+    url = window.location.origin + '/register?v=' + data.public_venue_token;
     _venueLinkCache = url;
   }
   if (input) input.value = url;

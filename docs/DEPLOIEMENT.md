@@ -21,17 +21,18 @@ et toute modification de domaine doit passer par une mise à jour de ce tableau.
 
 | Nom | Cible | Statut |
 |---|---|---|
-| `trinisette.fr` | vitrine — second projet Pages, même dépôt, racine `vitrine/` | à créer |
-| `www.trinisette.fr` | même projet Pages que l'apex | à créer |
+| `trinisette.fr` | vitrine — projet Pages `trinisette-vitrine`, même dépôt, racine `vitrine/` | **en ligne, SSL actif** |
+| `www.trinisette.fr` | même projet Pages que l'apex | **en ligne, SSL actif** |
 | `app.trinisette.fr` | projet Cloudflare Pages `karting-app-v2` (ce dépôt) | **en ligne, SSL actif** |
 | `envoi.trinisette.fr` | Return-Path Resend (Amazon SES `eu-west-1`) | vérifié |
 | `news.trinisette.fr` | second domaine Resend, e-mails marketing | prévu |
 
-Deux défauts sont ouverts tant que le projet Pages de la vitrine n'existe pas :
-`https://trinisette.fr/` répond **525** (les A de l'apex sont proxifiés par Cloudflare vers
-l'origine de parking IONOS, qui n'a pas de certificat pour ce nom) et
-`https://www.trinisette.fr/` répond **502** (aucun enregistrement DNS). Les deux disparaissent
-en branchant le projet vitrine ; il n'y a rien à corriger côté application.
+Les deux défauts constatés le 03/08 au matin sont résolus : `https://trinisette.fr/` répondait
+**525** (les A de l'apex étaient proxifiés vers l'origine de parking IONOS, qui n'a pas de
+certificat pour ce nom) et `https://www.trinisette.fr/` répondait **502** (aucun enregistrement
+DNS). En branchant le domaine sur le projet vitrine, Cloudflare a remplacé les
+`A 217.160.0.185` / `AAAA 2001:8d8:100f:f000::200` par un `CNAME @ → trinisette-vitrine.pages.dev`
+et créé `CNAME www → trinisette-vitrine.pages.dev`. Les deux noms répondent **200** en HTTPS.
 
 Registrar : IONOS. DNS : Cloudflare (plan Free), zone `trinisette.fr`,
 compte `0800a8606b90e0fe96cc14596afeb8a4`, serveurs de noms `gabriel.ns.cloudflare.com`
@@ -66,10 +67,12 @@ DMARC est posé depuis le 03/08 : le `CNAME _dmarc → dmarc.ionos.fr` hérité 
 temps de lire les rapports agrégés ; le durcissement en `quarantine` viendra ensuite, et pas
 avant d'avoir la certitude qu'aucun envoi légitime n'est cassé.
 
-À finaliser : repasser `autodiscover` et `_domainconnect` en « DNS uniquement » ; supprimer
-les `A 217.160.0.185` et `AAAA 2001:8d8:100f:f000::200` de parking IONOS **au moment** de
-brancher la vitrine sur l'apex — pas avant, sinon le domaine ne répond plus du tout au lieu
-de répondre mal.
+Les `A 217.160.0.185` et `AAAA 2001:8d8:100f:f000::200` de parking IONOS ont été supprimés le
+03/08, au moment même du branchement de la vitrine — Cloudflare les a remplacés par le CNAME
+en une seule opération, ce qui évite la fenêtre pendant laquelle le domaine n'aurait plus
+répondu du tout.
+
+À finaliser : repasser `autodiscover` et `_domainconnect` en « DNS uniquement ».
 
 ## Secrets et configuration hors-code
 
@@ -89,9 +92,10 @@ lien par `env('PUBLIC_APP_URL') && head.results_token ? … : ''`, donc le parag
 classement » disparaissait purement et simplement de chaque e-mail envoyé, sans erreur nulle
 part.
 
-`EMAIL_FROM` reste sur sa valeur d'origine tant que le DKIM `resend._domainkey` n'est pas
-`verified` chez Resend : basculer sur `resultats@trinisette.fr` avant vérification ferait
-rejeter tous les envois.
+Le DKIM `resend._domainkey` est passé `verified` le 03/08 (les trois enregistrements — DKIM
+TXT, SPF MX et SPF TXT sur `envoi` — sont vérifiés, la vérification côté Amazon SES est
+asynchrone et a mis plusieurs heures). `EMAIL_FROM` a donc été basculé sur
+`Trinisette <resultats@trinisette.fr>` dans la foulée.
 
 `PUBLIC_APP_URL` est la seule origine écrite en dur de tout le système. Sans `/` final.
 
@@ -120,9 +124,13 @@ Comportement à connaître : Pages répond **308** sur `/X.html` et redirige ver
 liens publics doivent donc omettre l'extension. Seule exception assumée,
 `karting-v2/src/modules/pdf-bridge.js`, qui conserve `.html` pour une iframe de même origine.
 
-**Cloudflare Pages — projet vitrine** (à créer) : même dépôt GitHub `karting-app-v2`, même
-branche de production `main`, mais **Root directory = `vitrine`**, sans commande de build.
-Domaines personnalisés : `trinisette.fr` et `www.trinisette.fr`.
+**Cloudflare Pages — projet vitrine** : projet `trinisette-vitrine`
+(`trinisette-vitrine.pages.dev`), même dépôt GitHub `karting-app-v2`, même branche de
+production `main`, mais **Root directory = `vitrine`**, sans commande de build. Domaines
+personnalisés : `trinisette.fr` et `www.trinisette.fr`. Créé le 03/08.
+
+Le nom du projet ne pouvait pas être `karting-app-v2` : ce nom est déjà pris par le projet de
+l'application, et Cloudflare aurait suffixé silencieusement en `karting-app-v2-4iz`.
 
 Ce réglage « Root directory » est ce qui permet de servir deux sites depuis un seul dépôt,
 sur le plan gratuit, sans second dépôt ni second workflow. Les deux projets se déploient au
