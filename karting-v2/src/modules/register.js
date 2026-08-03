@@ -340,6 +340,8 @@ function applyCircuitBranding(cfg) {
   document.querySelectorAll('.js-circuit-name').forEach(el => { el.textContent = circuitName; });
   document.title = 'Inscription — ' + circuitName;
   applyThemeAccent(cfg && cfg.results_theme);
+const wmBadge = document.getElementById('wm-badge');
+if (wmBadge) wmBadge.style.display = (cfg && cfg.plan === 'starter') ? 'inline-flex' : 'none';
   const wrap = document.getElementById('circuit-logo-wrap');
   if (wrap) {
     wrap.innerHTML = cfg.logo_url

@@ -148,6 +148,8 @@ const data = { value: cfg.settings };
 const theme = data.value && data.value.results_theme;
 PDF_SHOW_SECTORS = !!(data.value && data.value.sectors_enabled);
 PDF_AVATAR_MODE = (data.value && data.value.avatar_mode) || 'kart';
+const wmBadge = document.getElementById('wm-badge');
+if (wmBadge) wmBadge.style.display = (cfg.avatars && cfg.avatars.plan === 'starter') ? 'inline-flex' : 'none';
 if (theme) document.documentElement.setAttribute('data-theme', MAP[theme] || 'classic');
 // 02/08 (client) : theme memorise pour etre applique avant le premier rendu
 // (voir le script en tete de results.html) et supprimer le flash rouge.
