@@ -646,8 +646,8 @@ export async function refreshPublishVerify(scope) {
 
   const [assetsRes, delivRes, regsRes, sessRes] = await Promise.all([
     db.from('session_assets').select('kind').eq('session_id', sess.id),
-    db.from('card_deliveries').select('status').eq('session_id', sess.id),
-    db.from('session_registrations').select('email').eq('session_id', sess.id),
+    db.from('card_deliveries').select('status,registration_id,sent_at,last_error').eq('session_id', sess.id),
+    db.from('session_registrations').select('id,display_name,email').eq('session_id', sess.id),
     db.from('sessions').select('status,results_published_at,public_results_token').eq('id', sess.id).maybeSingle(),
   ]);
 
@@ -722,6 +722,62 @@ export async function refreshPublishVerify(scope) {
 
   // Le lien public : la verification ultime, c'est de l'ouvrir soi-meme.
   const sc = arch ? ",'arch'" : '';
+
+  // Detail par pilote : le compteur global ci-dessus dit "3 en echec", il ne dit pas
+  // LESQUELS. Ici une ligne par destinataire, son etat reel relu dans card_deliveries,
+  // et un bouton pour relancer ce pilote seul (RPC resend_pilot_results).
+  const byReg = new Map();
+  (delivRes.data || []).forEach((d) => {
+    if (!d.registration_id) return;
+    const arr = byReg.get(d.registration_id) || [];
+    arr.push(d);
+    byReg.set(d.registration_id, arr);
+  });
+  const dest = (regsRes.data || []).filter((r) => (r.email || '').trim().length > 3);
+  if (dest.length) {
+    let list = '';
+    dest.forEach((r) => {
+      const lines = byReg.get(r.id) || [];
+      let tone = 'mut';
+      let txt = 'Non planifie';
+      let hint = escapeHTML(r.email);
+      if (lines.length) {
+        const bad = lines.filter((d) => d.status === 'failed' || d.status === 'error');
+        const wait = lines.filter((d) => ['pending', 'queued', 'claimed', 'sending'].indexOf(d.status) >= 0);
+        if (bad.length) {
+          tone = 'err';
+          txt = 'Echec';
+          const err = (bad.find((d) => d.last_error) || {}).last_error;
+          if (err) hint += ' — ' + escapeHTML(String(err).slice(0, 120));
+        } else if (wait.length) {
+          tone = 'warn';
+          txt = 'En attente';
+        } else {
+          tone = 'ok';
+          txt = 'Envoye';
+          const times = lines.map((d) => d.sent_at).filter(Boolean).sort();
+          const last = times.length ? new Date(times[times.length - 1]) : null;
+          if (last && !isNaN(last.getTime())) {
+            hint += ' — ' + String(last.getHours()).padStart(2, '0') + ':' +
+              String(last.getMinutes()).padStart(2, '0');
+          }
+        }
+      }
+      const btn = '<button class="btn btn-ghost btn-sm" onclick="resendPilot(this,\'' +
+        escapeHTML(r.id) + '\'' + sc + ')">Renvoyer</button>';
+      const name = escapeHTML((r.display_name || '').trim() || r.email);
+      list += pvRow(name, pvPill(tone, txt) + '<span style="margin-left:8px">' + btn + '</span>', hint);
+    });
+    html += '<div style="margin-top:12px">';
+    if (dest.length > 12) {
+      html += '<details><summary style="cursor:pointer;font-size:12px;font-weight:600;color:var(--mut);padding:4px 0">' +
+        'Detail par pilote (' + dest.length + ')</summary><div style="margin-top:6px">' + list + '</div></details>';
+    } else {
+      html += '<div style="font-size:12px;font-weight:600;color:var(--mut);padding:4px 0">Detail par pilote (' +
+        dest.length + ')</div>' + list;
+    }
+    html += '</div>';
+  }
   if (published && row.public_results_token) {
     const url = APP_CONFIG.baseUrl + '/results.html?result=' + row.public_results_token;
     html +=
@@ -750,6 +806,29 @@ export async function verifyPublication(btn, scope) {
       btn.disabled = false;
       btn.innerHTML = original;
     }
+  }
+}
+
+// Bouton "Renvoyer" d'une ligne pilote : la RPC remet ses lignes card_deliveries en
+// 'pending' (ou en cree une si le pilote n'en avait aucune), puis on redeclenche l'envoi
+// tout de suite plutot que d'attendre le cron de rattrapage, et on relit le bandeau.
+export async function resendPilot(btn, registrationId, scope) {
+  const original = btn ? btn.innerHTML : null;
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = 'Envoi...';
+  }
+  try {
+    const r = await db.rpc('resend_pilot_results', { _registration_id: registrationId });
+    if (r && r.error) throw r.error;
+    await triggerResultEmails();
+    await refreshPublishVerify(scope);
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+    showMsg(scope === 'arch' ? 'msg-arch' : 'msg-res', 'Renvoi impossible : ' + (e.message || e), 'err');
   }
 }
 

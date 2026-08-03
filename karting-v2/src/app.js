@@ -449,6 +449,7 @@ toggleSectorsField: results.toggleSectorsField,
 updateChronoFormat: results.updateChronoFormat,
 exportSessionPDF: results.exportSessionPDF,
 verifyPublication: results.verifyPublication,
+resendPilot: results.resendPilot,
 downloadChronoImport: results.downloadChronoImport,
 // Paramètres
 markPrefsDirty: () => (state.prefsDirty = true),
