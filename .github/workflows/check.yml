@@ -53,16 +53,16 @@ jobs:
           # domaine en dur » protege la portabilite de l'application, pas celle d'un lien
           # sortant. Si la vitrine devait un jour vivre dans le meme projet Pages, cette
           # exclusion serait a reexaminer.
-        # 2026-08-03 : trinisette.fr (sans sous-domaine) est le domaine de la
-        # vitrine -- un lien sortant vers elle (ex. badge "Propulse par
-        # TRINISETTE") n'est pas une origine applicative en dur, contrairement
-        # a un sous-domaine comme app.trinisette.fr. On ne bloque donc que les
-        # sous-domaines et pages.dev, pas le domaine racine trinisette.fr.
-        if grep -rnE 'https?://[A-Za-z0-9.-]*pages\.dev|https?://[A-Za-z0-9-]+\.trinisette\.fr' \
-               --include='*.js' --include='*.html' \
-               karting-v2/src *.html; then
-            echo "::error::Domaine applicatif ecrit en dur. Utiliser APP_CONFIG.baseUrl (= window.location.origin) ou une URL relative — cf. docs/ARCHITECTURE-URL.md"
-            exit 1
+          # 2026-08-03 : trinisette.fr (sans sous-domaine) est le domaine de la
+          # vitrine -- un lien sortant vers elle (ex. badge "Propulse par
+          # TRINISETTE") n'est pas une origine applicative en dur, contrairement
+          # a un sous-domaine comme app.trinisette.fr. On ne bloque donc que les
+          # sous-domaines et pages.dev, pas le domaine racine trinisette.fr.
+          if grep -rnE 'https?://[A-Za-z0-9.-]*pages\.dev|https?://[A-Za-z0-9-]+\.trinisette\.fr' \
+                 --include='*.js' --include='*.html' \
+                 karting-v2/src *.html; then
+              echo "::error::Domaine applicatif ecrit en dur. Utiliser APP_CONFIG.baseUrl (= window.location.origin) ou une URL relative — cf. docs/ARCHITECTURE-URL.md"
+              exit 1
           fi
           echo "OK : aucune origine applicative en dur."
 
