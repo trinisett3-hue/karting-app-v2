@@ -73,12 +73,34 @@ export async function loadRanking(sess) {
   const laps = lapsRes.data;
   const regs = regsRes.data;
   if (!laps || !regs) return [];
+  // Classement au MEILLEUR TOUR (et non au temps cumule). Le cumul penalisait
+  // mecaniquement les pilotes ayant fait le plus de tours : un pilote arrive en
+  // retard, parti en tete-a-queue ou rentre au stand se retrouvait devant les
+  // autres. En karting loisir, la reference est le meilleur tour de chacun.
+  const bests = new Map();
   const totals = new Map();
-  laps.forEach((l) => totals.set(l.registration_id, (totals.get(l.registration_id) || 0) + Number(l.lap_time_seconds)));
+  const counts = new Map();
+  laps.forEach((l) => {
+    const v = Number(l.lap_time_seconds);
+    if (!Number.isFinite(v) || v <= 0) return;
+    const prev = bests.get(l.registration_id);
+    if (prev == null || v < prev) bests.set(l.registration_id, v);
+    totals.set(l.registration_id, (totals.get(l.registration_id) || 0) + v);
+    counts.set(l.registration_id, (counts.get(l.registration_id) || 0) + 1);
+  });
   const results = [];
   regs.forEach((r) => {
-    const t = totals.get(r.id);
-    if (t != null) results.push({ name: r.display_name || '--', kart: r.kart_number, t, nat: r.nationality || 'FR' });
+    const t = bests.get(r.id);
+    if (t != null) {
+      results.push({
+        name: r.display_name || '--',
+        kart: r.kart_number,
+        t,                                  // temps de classement = meilleur tour
+        total: totals.get(r.id) || 0,       // cumul conserve, a titre indicatif
+        lapsCount: counts.get(r.id) || 0,
+        nat: r.nationality || 'FR',
+      });
+    }
   });
   results.sort((a, b) => a.t - b.t);
   return results;
@@ -111,14 +133,16 @@ export function renderSessionStats(results, cardId, gridId) {
     return;
   }
   card.style.display = 'block';
+  // Toutes les stats portent sur le meilleur tour : c'est la valeur sur laquelle
+  // le classement est etabli, donc la seule qui soit comparable entre pilotes.
   const times = results.map((r) => r.t);
   const best = Math.min(...times);
   const avg = times.reduce((a, b) => a + b, 0) / times.length;
   const bestDriver = results.find((r) => r.t === best);
   const gapLeader = results.length > 1 ? results[1].t - results[0].t : 0;
   grid.innerHTML =
-    statBox('Meilleur temps', formatTime(best), bestDriver ? escapeHTML(bestDriver.name) : '') +
-    statBox('Temps moyen', formatTime(avg), results.length + ' pilotes') +
+    statBox('Meilleur tour', formatTime(best), bestDriver ? escapeHTML(bestDriver.name) : '') +
+    statBox('Meilleur tour moyen', formatTime(avg), results.length + ' pilotes') +
     statBox('Ecart 1er/2eme', results.length > 1 ? formatTime(gapLeader) : '--', '');
 }
 

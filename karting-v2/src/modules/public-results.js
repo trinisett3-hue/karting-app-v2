@@ -252,12 +252,13 @@ return new Date(d + 'T12:00:00').toLocaleDateString('fr-FR', { day: 'numeric', m
 /* Badge écart/temps, partagé podium + listes : au 1er on affiche son temps, sinon l'écart, sinon '--' */
 function gapBadge(d) {
 if (!d.hasTime) return '--';
-return d.gap === 0 ? fmtTime(d.total) : fmtGap(d.gap);
+return d.gap === 0 ? fmtTime(d.bestLap) : fmtGap(d.gap);
 }
 
 /* ------------------------------------------------------------------
-RENDER — PODIUM (top 3) — classement = temps total (somme des tours),
-comme dans l'admin (sessions.js > loadRanking), pas le meilleur tour seul.
+RENDER — PODIUM (top 3) — classement = MEILLEUR TOUR de chaque pilote,
+identique a l'admin (results.js > loadRanking). Le temps cumule n'est plus
+utilise pour classer : il penalisait les pilotes ayant boucle le plus de tours.
 ------------------------------------------------------------------ */
 function renderPodium(items) {
 const wrap = document.getElementById('podium-wrap');
@@ -700,10 +701,16 @@ if (r.kart_number != null) usedKarts.add(Number(r.kart_number));
 // apparaître comme lignes "Kart libre" dans les résultats publics — seuls
 // les pilotes réellement inscrits sont affichés (retour client explicite).
 
-results.sort((a, b) => a.total - b.total);
-const leader = results.find(r => r.hasTime);
-const leaderTotal = leader ? leader.total : 0;
-results.forEach((r, i) => { r.gap = r.hasTime ? (r.total - leaderTotal) : null; r.pos = i + 1; });
+// Le classement se fait sur le meilleur tour. rankTime isole cette valeur pour
+// que les pilotes sans chrono restent tries en dernier (sentinelle NO_TIME).
+results.forEach(r => { r.rankTime = (r.hasTime && r.bestLap != null) ? r.bestLap : NO_TIME; });
+results.sort((a, b) => a.rankTime - b.rankTime);
+const leader = results.find(r => r.hasTime && r.bestLap != null);
+const leaderBest = leader ? leader.bestLap : 0;
+results.forEach((r, i) => {
+  r.gap = (r.hasTime && r.bestLap != null) ? (r.bestLap - leaderBest) : null;
+  r.pos = i + 1;
+});
 
 allResults = results;
 renderPodium(results.slice(0, 3));
@@ -1376,7 +1383,7 @@ function pdfxBestSec(d, si) {
 
 function pdfxRankGap(d) {
   if (!d.hasTime) return '--';
-  if (d.gap === 0) return fmtPdfTime(d.total);
+  if (d.gap === 0) return fmtPdfTime(d.bestLap);
   return fmtPdfDelta(d.gap);
 }
 
@@ -2481,7 +2488,8 @@ function positionCtx(pilot) {
   const list = allResults || [];
   const prev = list.find((r) => r.pos === pilot.pos - 1);
   let gapPrev = '--';
-  if (pilot.hasTime && prev && prev.hasTime) gapPrev = '&minus; ' + fmtCardTime(pilot.total - prev.total) + ' s';
+  if (pilot.hasTime && prev && prev.hasTime && pilot.bestLap != null && prev.bestLap != null)
+    gapPrev = '&minus; ' + fmtCardTime(pilot.bestLap - prev.bestLap) + ' s';
   else if (pilot.pos === 1) gapPrev = 'Leader';
   return {
     pos: pilot.pos,
