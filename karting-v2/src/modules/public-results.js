@@ -2273,9 +2273,23 @@ function cardBodyWrap(inner) {
 // attendre le reseau : on lit donc le cache synchrone prechauffe par
 // prewarmCardAvatars(), et on retombe silencieusement sur l'avatar classique
 // quand le cache est froid ou le pack indisponible.
-const CARD_AV_FOOTER = { shape: 'circle', size: 200 };
-const CARD_AV_HERO = { shape: 'circle', size: 300 };
-const CARD_AV_RECORD = { shape: 'circle', size: 280 };
+// 03/08 (client) : avatar footer des cartes partageables rendu comme un
+// fragment zoome/coupe (visor d'un casque au lieu du casque entier) sur les
+// images recues par mail. Cause confirmee par reproduction locale : html2canvas
+// 1.4.1 rasterise l'<img src="data:image/svg+xml..."> a sa taille INTRINSEQUE
+// (l'attribut width/height du SVG genere, ici 200) puis semble ne pas
+// redimensionner correctement vers une boite CSS plus petite (104px, cf.
+// cardFooterHTML) pour une source SVG — object-fit:cover et width/height:100%
+// ne suffisent pas a compenser. Le SVG genere n'etant qu'un carre de couleurs
+// vectorielles (aucune perte de nettete a le generer directement a la bonne
+// taille), la correction retenue est d'aligner size EXACTEMENT sur la boite
+// CSS reelle de chaque emplacement plutot que de compter sur un redimensionnement
+// navigateur pendant la capture — HERO 320px (cardBodyHTML '02-avatar-central'),
+// RECORD 300px ('02r-avatar-record'), FOOTER 104px (cardFooterHTML). Le rendu a
+// l'ecran (HTML normal, hors html2canvas) n'est pas concerne par ce bug.
+const CARD_AV_FOOTER = { shape: 'circle', size: 104 };
+const CARD_AV_HERO = { shape: 'circle', size: 320 };
+const CARD_AV_RECORD = { shape: 'circle', size: 300 };
 
 function cardAvatarHTML(pilot, base) {
   const kart = pilot ? pilot.kart : null;
