@@ -82,7 +82,7 @@ let PDF_LOGO_URL = null;
 // d'ou une limite de caracteres plus courte cote admin) et le pied de page.
 // Vides => on retombe sur circuit_name : aucun reglage obligatoire.
 let PDF_CIRCUIT_HEAD = ''; let PDF_CIRCUIT_FOOT = '';
-let SITE_CIRCUIT_NAME = null; let CARD_POSITION_PICKS = []; let CARD_RECORD_PICKS = {}; let CARD_TAGLINE = ''; let CARD_ADDRESS = '';
+let SITE_CIRCUIT_NAME = null; let CARD_POSITION_PICKS = []; let CARD_RECORD_PICKS = {}; let CARD_TAGLINE = ''; let CARD_ADDRESS = ''; let CARD_QR_URL = '';
 
 // Génère la source d'un avatar (kart ou pilote selon le réglage courant), pour un
 // <img src> — utilisé aussi bien dans les exports PDF que sur la page web publique.
@@ -158,7 +158,7 @@ try { localStorage.setItem('kt_theme', String(theme).trim()); } catch (e) {}
 
 const logoUrl = data.value && data.value.logo_url;
 PDF_LOGO_URL = logoUrl || null;
-SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null; CARD_POSITION_PICKS = Array.isArray(data.value && data.value.card_position_picks) ? data.value.card_position_picks : []; CARD_RECORD_PICKS = (data.value && data.value.card_record_picks) || {}; CARD_TAGLINE = (data.value && data.value.card_tagline) || ''; CARD_ADDRESS = (data.value && data.value.card_address) || ''; PDF_CIRCUIT_HEAD = String((data.value && data.value.circuit_name_pdf_header) || '').trim(); PDF_CIRCUIT_FOOT = String((data.value && data.value.circuit_name_pdf_footer) || '').trim();
+SITE_CIRCUIT_NAME = (data.value && data.value.circuit_name) || null; CARD_POSITION_PICKS = Array.isArray(data.value && data.value.card_position_picks) ? data.value.card_position_picks : []; CARD_RECORD_PICKS = (data.value && data.value.card_record_picks) || {}; CARD_TAGLINE = (data.value && data.value.card_tagline) || ''; CARD_ADDRESS = (data.value && data.value.card_address) || ''; CARD_QR_URL = String((data.value && data.value.card_qr_url) || '').trim(); PDF_CIRCUIT_HEAD = String((data.value && data.value.circuit_name_pdf_header) || '').trim(); PDF_CIRCUIT_FOOT = String((data.value && data.value.circuit_name_pdf_footer) || '').trim();
 // 31/07 : le nom du circuit est pose des le retour de la config, sans attendre
 // load() — la page ne doit jamais afficher de nom en dur, meme brievement, ni
 // sur le chemin d'erreur (session archivee, jeton invalide).
@@ -2234,7 +2234,7 @@ function cardHeaderHTML(t) {
       <div style="font:700 40px ${CARD_UI};line-height:1.5;letter-spacing:.045em;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${circuit}</div>
       ${address ? `<div style="font:400 20px ${CARD_MONO};line-height:1.5;letter-spacing:.02em;color:${t.muted};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${address}</div>` : ''}
     </div>
-    <div style="position:absolute;right:72px;top:278px">${cardQRHTML(cardResultsURL(), 160)}</div>
+    <div style="position:absolute;right:72px;top:278px">${cardQRHTML(CARD_QR_URL || cardResultsURL(), 160)}</div>
     <div style="position:absolute;left:74px;width:712px;top:448px;height:1px;background:${t.border}"></div>
     ${tagline ? `<div style="position:absolute;left:74px;right:74px;top:466px;font:400 20px ${CARD_MONO};line-height:1.6;letter-spacing:.02em;color:${t.muted};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${tagline}</div>` : ''}`;
 }
