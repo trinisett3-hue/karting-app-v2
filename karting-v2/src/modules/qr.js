@@ -255,3 +255,25 @@ export function qrSVG(text, fg = '#0a0a0a', bg = '#ffffff') {
     `<rect width="${T}" height="${T}" fill="${bg}"/><path d="${d}" fill="${fg}"/></svg>`;
 }
 
+/* Rendu canvas — necessaire pour produire un PNG telechargeable et imprimable.
+   Le SVG precedent portait width/height="100%" : ouvert seul (hors page HTML) il
+   n'avait aucune dimension intrinseque et s'affichait vide dans l'Apercu macOS,
+   Photos ou Word. Un PNG s'ouvre, s'imprime et se colle partout.
+   L'echelle est un entier : sans cela les modules tombent entre deux pixels et
+   le QR devient flou, donc plus lent voire impossible a scanner. */
+export function qrCanvas(text, px = 1024, fg = '#000000', bg = '#ffffff') {
+  const m = qrMatrix(text), n = m.length, q = 4, T = n + q * 2;
+  const scale = Math.max(1, Math.round(px / T));
+  const size = T * scale;
+  const cv = document.createElement('canvas');
+  cv.width = size; cv.height = size;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = fg;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (m[r][c]) ctx.fillRect((c + q) * scale, (r + q) * scale, scale, scale);
+    }
+  }
+  return cv;
+}

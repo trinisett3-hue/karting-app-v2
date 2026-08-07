@@ -19,7 +19,7 @@ import { kartAvatarSVG } from './kart-avatar.js';
 import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature, getCurrentPlanCode } from './plan.js';
 import { requestPasswordReset as authRequestPasswordReset } from './auth.js';
-import { qrSVG } from './qr.js';
+import { qrSVG, qrCanvas } from './qr.js';
 import { renderSessionTypesEditor, refreshSessionTypeSelects, readSessionTypesFromEditor } from '../state.js';
 import {
 configureSignatureAvatars,
@@ -1092,18 +1092,63 @@ export async function copyVenueLink() {
   } catch (e) { /* presse-papiers indisponible : le champ reste selectionnable */ }
 }
 
+// Telechargement en PNG et non plus en SVG. Le SVG rendu dans la page porte
+// width/height="100%" : parfait a l'ecran, inexploitable une fois telecharge, car
+// le fichier n'a alors aucune dimension propre et s'ouvre vide dans l'Apercu, Photos
+// ou Word. On regenere donc le QR depuis l'URL — et non depuis le DOM, pour ne pas
+// dependre du fait que l'apercu soit rendu — et on exporte un PNG large, imprimable.
 export async function downloadVenueQR() {
-  const box = document.getElementById('venue-qr');
-  const svg = box && box.querySelector('svg');
-  if (!svg) return;
-  const blob = new Blob([svg.outerHTML], { type: 'image/svg+xml' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'qr-circuit.svg';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  const url = document.getElementById('venue-link')?.value || await loadVenueLink();
+  if (!url) return;
+  let cv;
+  try { cv = qrCanvas(url, 1200); } catch (e) { return; }
+  cv.toBlob((blob) => {
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'qr-circuit.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }, 'image/png');
+}
+
+// Affichage plein ecran : sert a faire scanner le QR directement sur l'ecran, sans
+// avoir a l'imprimer — utile a l'accueil comme en demonstration. image-rendering
+// pixelated garde les modules nets a l'agrandissement, condition d'un scan rapide.
+export async function enlargeVenueQR() {
+  const url = document.getElementById('venue-link')?.value || await loadVenueLink();
+  if (!url) return;
+  document.getElementById('venue-qr-overlay')?.remove();
+  let cv;
+  try { cv = qrCanvas(url, 1400); } catch (e) { return; }
+
+  const ov = document.createElement('div');
+  ov.id = 'venue-qr-overlay';
+  ov.setAttribute('role', 'dialog');
+  ov.setAttribute('aria-label', 'QR code du circuit en grand');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(5,6,10,.94);' +
+    'display:flex;flex-direction:column;align-items:center;justify-content:center;' +
+    'gap:20px;padding:24px;cursor:zoom-out';
+
+  const title = document.createElement('div');
+  title.textContent = 'Scannez ce QR code pour vous inscrire';
+  title.style.cssText = 'color:#fff;font-size:19px;font-weight:800;text-align:center;letter-spacing:-.01em';
+
+  cv.style.cssText = 'width:min(74vh,74vw);height:min(74vh,74vw);background:#fff;' +
+    'border-radius:16px;padding:16px;box-sizing:border-box;image-rendering:pixelated';
+
+  const hint = document.createElement('div');
+  hint.textContent = 'Cliquez n\'importe ou, ou appuyez sur Echap, pour fermer';
+  hint.style.cssText = 'color:rgba(255,255,255,.5);font-size:13px;text-align:center';
+
+  ov.append(title, cv, hint);
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  function close() { ov.remove(); document.removeEventListener('keydown', onKey); }
+  ov.addEventListener('click', close);
+  document.addEventListener('keydown', onKey);
+  document.body.appendChild(ov);
 }
 
 // QR genere localement (module qr.js) : aucun appel a un service tiers, donc l'URL du
