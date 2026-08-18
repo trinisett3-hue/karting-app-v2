@@ -26,6 +26,10 @@ export const DEFAULT_POINTS_SCALE = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 // point de corde, goutte de carburant, flèches de couple, piston et bielle,
 // bouteille de nitro, enchaînement de chicane, joint de cardan, roue inclinée,
 // pneu slick, traces de dérive, étincelle de magnéto, tourbillon aéro.
+// Les 12 glyphes d'origine restent ici comme REPLI : le catalogue sert
+// désormais des fichiers PNG (logo_kind='url'), mais si un fichier manque au
+// déploiement — ou si un circuit remet logo_kind='glyph' — le front redessine
+// le pictogramme vectoriel au lieu d'afficher une image cassée.
 export const TEAM_GLYPHS = {
   apex:    '<path d="M6 58C6 26 24 8 58 8" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round"/><circle cx="21" cy="23" r="6.5"/>',
   octane:  '<path d="M32 4c12 18 18 27 18 34a18 18 0 1 1-36 0c0-7 6-16 18-34z"/><path d="M24 40a8 8 0 0 0 8 8" fill="none" stroke="#000" stroke-opacity=".35" stroke-width="3.5" stroke-linecap="round"/>',
@@ -45,6 +49,47 @@ export const TEAM_GLYPHS = {
 // ajouté côté SQL avant déploiement du front), on dessine un disque plutôt que
 // de laisser un trou.
 const FALLBACK_GLYPH = '<circle cx="32" cy="32" r="24"/>';
+
+// DEUX FORMATS PAR ÉCURIE, ET C'EST VOLONTAIRE
+//
+// Les logos fournis sont des badges ronds qui contiennent le nom et le
+// trigramme. Superbes à 200 px, illisibles à 18 px dans une ligne de
+// classement : à cette taille le texte devient une bouillie grise et les 12
+// écuries se ressemblent toutes. On sert donc deux fichiers :
+//
+//   logo_ref  -> assets/teams/mark/<id>.png   pictogramme seul, sans texte
+//   badge_ref -> assets/teams/badge/<id>.png  badge complet avec le nom
+//
+// Règle simple : au-dessus de ~64 px on peut poser le badge, en dessous il
+// faut le pictogramme. teamLogoHTML() sert le pictogramme, teamBadgeHTML() le
+// badge — l'appelant choisit selon le contexte, il n'y a pas de bascule
+// automatique cachée.
+//
+// Les deux jeux ont un fond transparent : le disque noir d'origine a été
+// retiré, ce qui les rend utilisables sur les 8 thèmes, y compris les clairs
+// (arctic, champagne).
+
+// Tant que les RPC publiques ne redescendent pas encore badge_ref, on le
+// déduit du chemin du pictogramme. Dès que la clé arrive, elle est prioritaire.
+export function teamBadgeSrc(team) {
+  if (!team) return null;
+  if (team.badge_ref) return team.badge_ref;
+  if (team.logo_kind === 'url' && team.logo_ref && team.logo_ref.indexOf('/mark/') !== -1) {
+    return team.logo_ref.replace('/mark/', '/badge/');
+  }
+  return null;
+}
+
+// Badge complet. Repli sur le pictogramme si aucun badge n'est disponible,
+// plutôt que de laisser un trou dans une carte ou un PDF.
+export function teamBadgeHTML(team, size) {
+  const src = teamBadgeSrc(team);
+  if (!src) return teamLogoHTML(team, size);
+  const px = size || 96;
+  return '<img class="team-badge" src="' + src + '" alt="' + escapeAttr(team.name) +
+         '" width="' + px + '" height="' + px +
+         '" style="width:' + px + 'px;height:' + px + 'px;object-fit:contain">';
+}
 
 // Les <linearGradient> vivent dans un espace de noms global au document : deux
 // logos de la même écurie à deux tailles différentes se piétineraient sans ce
@@ -85,7 +130,7 @@ export async function loadTeamCatalog({ force = false } = {}) {
   if (catalogCache && !force) return catalogCache;
   const { data, error } = await db
     .from('v_tenant_team_catalog')
-    .select('team_id,name,short,color,color_2,logo_kind,logo_ref,sort_order,is_active')
+    .select('team_id,name,short,color,color_2,logo_kind,logo_ref,badge_ref,sort_order,is_active')
     .eq('is_active', true)
     .order('sort_order', { ascending: true });
   if (error || !data) return catalogCache || [];
