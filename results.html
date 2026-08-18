@@ -1443,6 +1443,31 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     </div>
   </section>
 
+  <!-- PAGE 4 — Championnat constructeur. Masquee par defaut : renderTeamPage()
+       ne l'affiche (et n'ajoute son point de navigation) que si la session est
+       en mode Ecurie ET qu'au moins une ecurie a marque. -->
+  <section class="page-screen" id="page-screen-4" style="display:none">
+    <header class="circuit-header" aria-label="Championnat constructeur">
+      <div class="circuit-name">Championnat écuries</div>
+      <div class="circuit-meta">
+        <div class="circuit-meta-item"><span class="val">Classement constructeur</span></div>
+      </div>
+    </header>
+
+    <section aria-labelledby="page4-title">
+      <h2 id="page4-title" class="section-title">Championnat écuries</h2>
+      <p id="page4-sub" style="color:var(--c-muted);font-size:var(--label-size);margin:calc(-1 * var(--space-2)) 0 var(--space-4)"></p>
+      <div class="top10-wrap"><div id="page4-teams" role="list" aria-label="Championnat constructeur"></div></div>
+    </section>
+
+    <div class="pdf-btn-wrap">
+      <button class="pdf-btn" id="btn-pdf-teams">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+        PDF championnat écuries
+      </button>
+    </div>
+  </section>
+
 </main>
 
 <nav class="page-nav" id="page-nav" style="display:none" aria-label="Navigation entre les pages de résultats">
@@ -1454,6 +1479,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     <button type="button" class="nav-dot active" data-dot="1" aria-label="Page 1 — Podium"></button>
     <button type="button" class="nav-dot" data-dot="2" aria-label="Page 2 — Classement complet"></button>
     <button type="button" class="nav-dot" data-dot="3" aria-label="Page 3 — Détail tour par tour"></button>
+    <button type="button" class="nav-dot" data-dot="4" aria-label="Page 4 — Championnat écuries" style="display:none"></button>
   </div>
   <button class="nav-btn" id="nav-next">
     <span id="nav-next-label">Classement</span>
@@ -1467,6 +1493,91 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .wm-badge{position:fixed;left:50%;bottom:calc(var(--nav-h, 0px) + 4px);transform:translateX(-50%);z-index:25;display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .85rem;font-family:var(--font-body);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted);text-decoration:none;opacity:.6;border:1px solid var(--c-border);border-radius:.6rem;background:var(--c-surface);transition:opacity var(--transition)}
 .wm-badge:hover{opacity:1}
 .wm-badge b{color:var(--c-text);font-weight:700}
+
+/* ============================================================
+   MODE ÉCURIE (18/08)
+   Aucune couleur en dur : chaque ligne porte --tc, alimenté par
+   team_catalog / tenant_teams. Le badge de points est en CONTOUR
+   et jamais en aplat — .rank-gap doit rester le seul élément
+   plein de la ligne, sinon les deux se disputent l'œil.
+   ============================================================ */
+.top10-row.has-team { grid-template-columns: 2.5rem 3.2rem 1fr auto auto; position: relative; }
+.top10-row.has-team::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--tc, transparent);
+}
+.rank-avatar { position: relative; }
+.rank-avatar .team-dot {
+  position: absolute; right: -1px; bottom: -1px; width: 1.25rem; height: 1.25rem;
+  border-radius: 50%; background: var(--c-bg); border: 1.5px solid var(--tc);
+  display: grid; place-items: center; overflow: hidden;
+}
+.rank-avatar .team-dot img, .rank-avatar .team-dot svg { width: 74%; height: 74%; object-fit: contain; }
+.rank-kartline .team-tag { color: var(--tc); font-weight: 700; }
+.rank-pts {
+  font-family: var(--font-body); font-size: var(--gap-size); font-weight: 700;
+  letter-spacing: .05em; color: var(--c-text); background: transparent;
+  padding: .2rem .5rem; border-radius: var(--corner-radius);
+  border: 1px solid var(--tc, var(--c-border));
+  min-width: 3.4rem; text-align: center; white-space: nowrap; flex-shrink: 0;
+}
+.rank-pts b { font-family: var(--font-display); font-size: 1.25em; font-style: italic;
+  color: var(--tc, var(--c-accent)); margin-right: .15em; }
+.rank-pts.zero { opacity: .4; }
+
+/* --- Page 4 : championnat constructeur --- */
+.team-row {
+  display: grid; grid-template-columns: 2.5rem 3.4rem 1fr auto auto;
+  align-items: center; gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid rgba(255,255,255,.07); position: relative;
+}
+.team-row:first-child { border-top: none; }
+.team-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tc); }
+.team-badge-cell img, .team-badge-cell svg { display: block; }
+.team-main { min-width: 0; }
+.team-name {
+  font-family: var(--font-display); font-size: clamp(1.05rem, 2.1vw, 1.55rem);
+  font-weight: 700; font-style: italic; text-transform: uppercase;
+  letter-spacing: .03em; transform: skewX(-7deg); line-height: 1.05;
+}
+.team-members { font-size: var(--kart-size); color: var(--c-muted);
+  letter-spacing: .06em; text-transform: uppercase; margin-top: .1rem;
+  display: flex; flex-wrap: wrap; gap: .1rem .7rem; }
+.tm-member b { color: var(--c-text); font-weight: 700; }
+.tm-member i { font-style: normal; color: var(--tc); font-weight: 700; }
+.team-bar { height: 4px; border-radius: 99px; background: rgba(255,255,255,.08); margin-top: .4rem; overflow: hidden; }
+.team-bar i { display: block; height: 100%; background: var(--tc); border-radius: 99px; }
+.team-avg { font-size: var(--label-size); color: var(--c-muted); letter-spacing: .05em; white-space: nowrap; }
+
+/* Sur mobile, les grilles de lignes sont redefinies par des selecteurs a
+   specificite d'ID (#page-screen-1 / #page2-ranking) : une regle de classe ne
+   peut pas les battre. Chaque variante doit donc etre reprise nommement avec
+   sa 5e colonne, sinon le badge de points pousse le badge d'ecart sur une
+   deuxieme ligne — c'est exactement ce qui s'est produit au premier essai. */
+@media (max-width: 640px) {
+  #page-screen-1 .top10-row.has-team {
+    grid-template-columns: 1.45rem 1.8rem minmax(0, 1fr) auto auto;
+  }
+  #page2-ranking .top10-row.has-team {
+    grid-template-columns: calc(1.55rem * var(--page2-density, 1)) calc(2rem * var(--page2-density, 1)) minmax(0, 1fr) auto auto;
+  }
+  #page2-ranking.is-ultra-dense .top10-row.has-team {
+    grid-template-columns: calc(1.45rem * var(--page2-density, 1)) minmax(0, 1fr) auto auto;
+  }
+  .top10-row.has-team { grid-template-columns: 2rem 2.4rem 1fr auto auto; gap: .45rem; }
+  .rank-pts { min-width: 2.6rem; padding: .08rem .3rem; font-size: .62rem; }
+  #page-screen-1 .rank-pts,
+  #page2-ranking .rank-pts { min-width: 0; padding: .06rem .28rem; font-size: .6rem; }
+  /* La pastille d'ecurie suit la taille de l'avatar : a 1.8rem sur la page 1,
+     une pastille de 1.25rem le recouvrirait presque entierement. */
+  #page-screen-1 .rank-avatar .team-dot { width: .8rem; height: .8rem; border-width: 1px; }
+  #page2-ranking .rank-avatar .team-dot { width: .85rem; height: .85rem; border-width: 1px; }
+
+  .team-row { grid-template-columns: 1.9rem 2.6rem 1fr auto; gap: .5rem; padding: .6rem .7rem; }
+  .team-avg { display: none; }
+  .team-members { font-size: .65rem; gap: .05rem .5rem; }
+}
 </style>
 
 <!-- ============================================================

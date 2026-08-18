@@ -3,6 +3,8 @@
 // résolution de session par public_results_token, classement (temps total), podium,
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
+import { teamLogoHTML, teamBadgeHTML, indexTeams, computeTeamStandings,
+         pointsForPosition, DEFAULT_POINTS_SCALE } from './teams.js';
 // Chargement paresseux (30/07, audit du 28/07 section 1.2) : kart-avatar.js
 // (486 Ko) et pilot-avatar.js (161 Ko) ne sont plus importes statiquement ici --
 // un tenant donne n'utilise jamais qu'un seul des deux (avatar_mode), l'autre
@@ -41,6 +43,13 @@ const NO_TIME = 999999; // valeur sentinelle : toujours trié en dernier
 
 let allResults = [];
 let sessionInfo = null;
+// --- Mode Écurie ---------------------------------------------------------------
+// teamMode est la SEULE porte : il vient du serveur (RPC), qui a déjà croisé
+// sessions.team_mode avec le droit du plan. Le front ne redécide rien.
+let teamMode = false;
+let teamsById = {};
+let teamStandings = [];
+let pointsScale = DEFAULT_POINTS_SCALE;
 let resultsToken = null; // jeton public de la session : requis par les RPC token-gated
 // 🆕 v28 : caches du palmares. Cles par session / par pseudo, vides a chaque
 // load(). Indispensables des qu'on genere les fiches de toute la grille d'un
@@ -288,16 +297,36 @@ return `<article class="podium-card ${cls}" aria-label="P${d.pos} — ${d.name}"
 RENDER — une ligne de classement, réutilisée par le Top 10 (page 1)
 et le Classement complet (page 2, avec le nombre de tours en plus)
 ------------------------------------------------------------------ */
+/* Ligne de classement.
+
+   Le mode Écurie n'ajoute QUE trois choses, et jamais une ligne de plus :
+     · un liseré de 3 px à la couleur de l'écurie sur le bord gauche
+     · le nom de l'écurie glissé dans la ligne KART qui existe déjà
+     · un badge de points, en contour et non en aplat
+
+   Le badge d'écart doit rester le seul élément plein de la ligne : deux
+   pastilles pleines côte à côte se disputent l'œil et on ne sait plus laquelle
+   lire en premier. */
 function rankRowHTML(d, extraLine) {
 const gapTxt = gapBadge(d);
 const isLdr = d.hasTime && d.gap === 0;
-return `<article class="top10-row" role="listitem" aria-label="P${d.pos} — ${d.name}">
+const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+const styleAttr = team ? ` style="--tc:${team.color}"` : '';
+const teamCls = teamMode ? ' has-team' : '';
+const teamTag = team ? ` · <span class="team-tag">${escapeHTML(team.name)}</span>` : '';
+const teamDot = team ? `<span class="team-dot">${teamLogoHTML(team, 13)}</span>` : '';
+const ptsBadge = teamMode
+  ? `<span class="rank-pts ${d.points ? '' : 'zero'}" aria-label="${d.points} points">
+<b>${d.points}</b>PTS</span>`
+  : '';
+return `<article class="top10-row${teamCls}"${styleAttr} role="listitem" aria-label="P${d.pos} — ${d.name}">
 <span class="rank-pos" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>
+<div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}${teamDot}</div>
 <div class="rank-main">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
-<div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${extraLine ? ' · ' + extraLine : ''}</div>
+<div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${extraLine ? ' · ' + extraLine : ''}${teamTag}</div>
 </div>
+${ptsBadge}
 <span class="rank-gap ${isLdr ? 'leader' : ''} ${!d.hasTime ? 'no-data' : ''}" aria-label="Écart : ${gapTxt}">${gapTxt}</span>
 </article>`;
 }
@@ -646,6 +675,12 @@ document.title = 'Resultats — ' + circuitName();
 document.getElementById('session-label').textContent = session.title || '--';
 document.getElementById('session-date').textContent = fmtSessionDate(session.session_date);
 
+// Mode Écurie : lu avant le calcul du classement, les points en dépendent.
+teamMode = !!(session && session.team_mode);
+teamsById = indexTeams(bundle.teams || []);
+pointsScale = (session && Array.isArray(session.points_scale) && session.points_scale.length)
+  ? session.points_scale : DEFAULT_POINTS_SCALE;
+
 const lapsRes = { data: bundle.laps || [], error: null };
 const regsRes = { data: bundle.registrations || [], error: null };
 const driversRes = { data: bundle.drivers || [], error: null };
@@ -693,6 +728,7 @@ lapsCount: lapCounts.get(r.id) || 0,
 lapsArr, bestLap,
 isUnknown: !!r.is_unknown,
 hasTime,
+teamId: r.team_id || null,
 });
 if (r.kart_number != null) usedKarts.add(Number(r.kart_number));
 });
@@ -712,11 +748,32 @@ results.forEach((r, i) => {
   r.pos = i + 1;
 });
 
+// Points et championnat constructeur. Calcules ici, une seule fois, sur le
+// classement DEJA trie et positionne : la page, la carte et le PDF lisent le
+// meme objet plutot que de refaire le tri chacun de leur cote.
+//
+// Un pilote sans chrono ne marque pas : sa position vient de la sentinelle de
+// tri (NO_TIME), pas d'un resultat en piste. Lui donner des points
+// recompenserait un abandon.
+if (teamMode) {
+  results.forEach(r => { r.points = r.hasTime ? pointsForPosition(r.pos, pointsScale) : 0; });
+  teamStandings = computeTeamStandings(
+    results.filter(r => r.teamId && r.hasTime).map(r => ({
+      registration_id: r.regId, team_id: r.teamId, position: r.pos,
+      name: r.name, kart: r.kart, bestLap: r.bestLap, nat: r.nat,
+      photo: r.photo, scheme: r.scheme,
+    })), pointsScale);
+} else {
+  results.forEach(r => { r.points = 0; });
+  teamStandings = [];
+}
+
 allResults = results;
 renderPodium(results.slice(0, 3));
 renderTop10(results.slice(3, PAGE1MAX));
 renderPage2(results);
 renderAccordion(results.filter(r => r.hasTime));
+renderTeamPage();
 
 document.getElementById('page-nav').style.display = 'flex';
 goToPage(1);
@@ -738,8 +795,59 @@ if (el) el.innerHTML = msg;
 /* ------------------------------------------------------------------
 NAVIGATION — Précédent / points / Suivant
 ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   PAGE 4 — CHAMPIONNAT CONSTRUCTEUR (mode Écurie uniquement)
+
+   La page n'existe pas hors mode Écurie : elle est retirée de la
+   navigation plutôt que d'être affichée vide. C'est pageCount() qui
+   fait autorité, pas une constante 3 en dur.
+   ------------------------------------------------------------------ */
+function pageCount() { return (teamMode && teamStandings.length) ? 4 : 3; }
+
+function teamRowHTML(t, maxPts) {
+  const team = teamsById[t.team_id];
+  if (!team) return '';
+  const width = maxPts > 0 ? Math.round((t.points / maxPts) * 100) : 0;
+  const members = t.members.map(m =>
+    `<span class="tm-member"><b>P${m.position}</b> ${escapeHTML(m.name)} <i>${m.points} pts</i></span>`
+  ).join('');
+  return `<article class="team-row" style="--tc:${team.color}" role="listitem"
+ aria-label="${t.rank}e — ${escapeHTML(team.name)}, ${t.points} points">
+<span class="rank-pos" aria-hidden="true">${t.rank}</span>
+<div class="team-badge-cell" aria-hidden="true">${teamBadgeHTML(team, 54)}</div>
+<div class="team-main">
+<div class="team-name">${escapeHTML(team.name)}</div>
+<div class="team-members">${members}</div>
+<div class="team-bar" aria-hidden="true"><i style="width:${width}%"></i></div>
+</div>
+<span class="team-avg" title="Moyenne des positions — départage les égalités">moy. P${t.avgPosition.toFixed(1)}</span>
+<span class="rank-pts"><b>${t.points}</b>PTS</span>
+</article>`;
+}
+
+function renderTeamPage() {
+  const wrap = document.getElementById('page4-teams');
+  const screen = document.getElementById('page-screen-4');
+  const dot = document.querySelector('.nav-dot[data-dot="4"]');
+  const show = teamMode && teamStandings.length > 0;
+  if (screen) screen.style.display = show ? '' : 'none';
+  if (dot) dot.style.display = show ? '' : 'none';
+  if (!wrap || !show) return;
+
+  const maxPts = teamStandings[0].points || 0;
+  wrap.innerHTML = teamStandings.map(t => teamRowHTML(t, maxPts)).join('');
+
+  const sub = document.getElementById('page4-sub');
+  if (sub) {
+    const tie = teamStandings.some(t => t.tiebroken);
+    sub.textContent = tie
+      ? 'Égalité départagée à la moyenne des positions'
+      : 'Barème ' + pointsScale.join('-') + ' — somme des points des pilotes';
+  }
+}
+
 export function goToPage(n) {
-if (n < 1 || n > 3) return;
+if (n < 1 || n > pageCount()) return;
 currentPage = n;
 document.querySelectorAll('.page-screen').forEach(el => el.classList.toggle('active', el.id === `page-screen-${n}`));
 document.body.classList.toggle('podium-page-active', n === 1);
@@ -754,8 +862,9 @@ const prevBtn = document.getElementById('nav-prev');
 prevBtn.disabled = (n === 1 && !venueTok0);
 const prevLabel = prevBtn.querySelector('span');
 if (prevLabel) prevLabel.textContent = (n === 1 && venueTok0) ? 'Résultats' : 'Précédent';
-document.getElementById('nav-next').disabled = (n === 3);
-document.getElementById('nav-next-label').textContent = (n === 1 ? 'Classement' : 'Détails');
+document.getElementById('nav-next').disabled = (n === pageCount());
+document.getElementById('nav-next-label').textContent =
+  (n === 1 ? 'Classement' : (n === 2 ? 'Détails' : 'Écuries'));
 window.scrollTo(0, 0);
 }
 
@@ -1266,6 +1375,23 @@ function ensurePdfStyles() {
 .pdfx-page.landscape .pdfx-tbl-row,.pdfx-page.landscape .pdfx-tbl-head{padding-left:14px;padding-right:14px}
 .pdfx-page.landscape .pdfx-tbl-row{padding-top:4.5px;padding-bottom:4.5px;font-size:11.5px}
 .pdfx-page.landscape .pdfx-tbl-head{padding-bottom:5px}
+
+/* --- Championnat constructeur (mode Ecurie) ---------------------------------
+   Les couleurs sont prises sur les memes variables de theme que le reste du
+   PDF : la page suit donc automatiquement les 8 themes, sans branche. */
+.tpdf-table{width:100%;border-collapse:collapse;margin-top:10px;font-size:12.5px}
+.tpdf-table th{text-align:left;font-size:9px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--c-muted);border-bottom:1.5px solid var(--c-text);padding:5px 4px;font-weight:800}
+.tpdf-table td{padding:7px 4px;border-bottom:1px solid var(--c-border);vertical-align:middle}
+.tpdf-pos{font-family:var(--font-display);font-size:19px;font-weight:800;font-style:italic;width:26px;text-align:center}
+.tpdf-logo{width:38px}
+.tpdf-logo img,.tpdf-logo svg{display:block;width:34px;height:34px;object-fit:contain}
+.tpdf-name{font-weight:800;white-space:nowrap}
+.tpdf-mem{color:var(--c-muted);font-size:10.5px;line-height:1.35}
+.tpdf-num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tpdf-pts{font-weight:900;font-size:15px}
+.tpdf-legend{margin-top:12px;font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--c-muted);border-top:1px solid var(--c-border);padding-top:7px}
 `;
   document.head.appendChild(style);
   PDF_STYLES_INJECTED = true;
@@ -1892,6 +2018,119 @@ export function initPdfFullButton() {
   if (!btn) return;
   btn.addEventListener('click', (e) => downloadFullPDF(e.currentTarget));
   initPdfOrientControl(btn);
+
+  const teamBtn = document.getElementById('btn-pdf-teams');
+  if (teamBtn) teamBtn.addEventListener('click', (e) => downloadTeamsPDF(e.currentTarget));
+}
+
+/* ==================================================================
+   PDF CHAMPIONNAT CONSTRUCTEUR (mode Écurie)
+
+   Une page, jamais plus : douze écuries au maximum tiennent largement
+   sur un A4. On réutilise volontairement le châssis existant
+   (pdxPageClass / pdfx-sheet / bandeau / pied de page) plutôt que
+   d'inventer une deuxième mise en page — le PDF suit ainsi le thème
+   actif exactement comme le classement complet, sans code de thème
+   dupliqué.
+
+   Toujours forcé en PORTRAIT : le tableau est étroit et haut, le
+   paysage laisserait deux tiers de page vides.
+   ================================================================== */
+export async function downloadTeamsPDF(btn) {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `${SPIN_ICON} Génération…`;
+  try {
+    const pdf = await buildTeamsPDF();
+    if (pdf) pdf.save('championnat_ecuries.pdf');
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = original;
+}
+
+export async function buildTeamsPDF() {
+  if (!teamMode || !teamStandings.length) return null;
+  ensurePdfStyles();
+  const { jsPDF } = window.jspdf;
+  const g = pdfxGeom('portrait');
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const t = themeColors();
+
+  const title = escapeHTML(circuitNamePdfHead());
+  const footName = escapeHTML(circuitNamePdfFoot());
+  const label = escapeHTML((sessionInfo && sessionInfo.title) || 'Session');
+  const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  const dateShort = escapeHTML(sessionInfo && sessionInfo.session_date
+    ? new Date(sessionInfo.session_date + 'T12:00:00').toLocaleDateString('fr-FR')
+    : '--');
+  const headLogo = PDF_LOGO_URL
+    ? `<img class="pdfx-head-logo" src="${PDF_LOGO_URL}" alt="Logo du circuit" crossorigin="anonymous">`
+    : '';
+
+  const rows = teamStandings.map((st) => {
+    const team = teamsById[st.team_id];
+    if (!team) return '';
+    const members = st.members
+      .map(m => `P${m.position} ${escapeHTML(m.name)} (${m.points})`)
+      .join(' · ');
+    return `<tr>
+<td class="tpdf-pos">${st.rank}</td>
+<td class="tpdf-logo">${teamBadgeHTML(team, 34)}</td>
+<td class="tpdf-name" style="border-left:3px solid ${team.color};padding-left:8px">${escapeHTML(team.name)}</td>
+<td class="tpdf-mem">${members}</td>
+<td class="tpdf-num">${st.avgPosition.toFixed(1)}</td>
+<td class="tpdf-num tpdf-pts">${st.points}</td>
+</tr>`;
+  }).join('');
+
+  const tie = teamStandings.some(x => x.tiebroken);
+  const page = document.createElement('div');
+  page.className = pdxPageClass(false);
+  // Le classement complet remplit sa page en y versant des lignes jusqu'au
+  // budget ; ici le tableau est court et laisserait un tiers de page vide.
+  // On impose la hauteur d'un A4 et on laisse la feuille s'etirer, pour que
+  // le pied de page tombe en bas de la feuille et non au milieu.
+  page.style.minHeight = g.sheetH + 'px';
+  page.style.display = 'flex';
+  page.style.flexDirection = 'column';
+  page.innerHTML = `<div class="pdfx-sheet" style="flex:1">
+<div class="pdfx-head-band">
+${headLogo}
+<div class="pdfx-head-left">
+<div class="pdfx-circuit-name">${title}</div>
+<div class="pdfx-session-lbl">Championnat écuries — ${label}</div>
+</div>
+<div class="pdfx-head-right">
+<div class="pdfx-date">${dateShort}</div>
+<div class="pdfx-count">${teamStandings.length} écuries</div>
+</div>
+</div>
+<div class="pdfx-body-wrap" style="flex:1">
+<div class="pdfx-rank-wrap">
+<div class="pdfx-rank-title">Classement constructeur</div>
+<table class="tpdf-table">
+<thead><tr>
+<th></th><th></th><th>Écurie</th><th>Pilotes</th>
+<th class="tpdf-num">Moy. pos.</th><th class="tpdf-num">Points</th>
+</tr></thead>
+<tbody>${rows}</tbody>
+</table>
+<div class="tpdf-legend">Barème ${pointsScale.join('-')} · somme des points des pilotes de l'écurie${
+  tie ? ' · égalité départagée à la moyenne des positions, la plus basse gagne' : ''}</div>
+</div>
+</div>
+<div class="pdfx-sheet-footer"><span>${footName}</span><span><b>${date}</b></span></div>
+</div>`;
+
+  // Pas de passe de mesure ici, contrairement au classement complet : le
+  // tableau tient sur une page par construction (12 écuries maximum), il n'y a
+  // rien à répartir. sectionToCanvas() monte le nœud et attend déjà le
+  // décodage des <img> — les badges d'écurie en font partie.
+  const canvas = await sectionToCanvas(page, g.renderW, t.bg);
+  pdfxPlace(pdf, canvas, g, true, t);
+  return pdf;
 }
 
 /* ==================================================================

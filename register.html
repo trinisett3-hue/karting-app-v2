@@ -11,25 +11,7 @@
      et n'etait corrige qu'apres public_registration_config() : la page s'affichait donc en
      rouge pendant un instant, meme sur un theme cyan. Ce script synchrone restitue le
      dernier theme connu (memorise par applyThemeAccent) avant le premier rendu. -->
-<script>(function(){try{var T={"classic":["#ff2a2a","#ff6a4d","#c81e18"],"neon":["#00d4ff","#5ce1ff","#0088aa"],"carbon":["#c9a84c","#e0c476","#8f7529"],"checkered":["#ece8dd","#ffffff","#a9a396"],"endurance":["#ffb238","#ffcb73","#c47c12"],"pitlane":["#f0c419","#ffdc5c","#b08c00"],"champagne":["#d9b978","#f0d7a4","#a1854a"],"arctic":["#1a6fbd","#4f9fe0","#0d4a83"]};var ok=false;var t=localStorage.getItem('kt_theme');var v=T[t];if(v){var s=document.documentElement.style;s.setProperty('--acc',v[0]);s.setProperty('--acc2',v[1]);s.setProperty('--acc-deep',v[2]);ok=true;}var d=document.documentElement;window.__ktReveal=function(){try{d.classList.remove('kt-pending');}catch(e){}};if(!ok){d.classList.add('kt-pending');d.insertAdjacentHTML('afterbegin','<style id="kt-pending-css">html.kt-pending body{visibility:hidden!important}
-/* ============================================================
-   MODE ÉCURIE (18/08) — choix de l'écurie sur l'écran 2.
-   Le badge complet est utilisé ici : on a la place, et c'est
-   le format le plus reconnaissable pour un choix.
-   ============================================================ */
-.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
-.team-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;
-  border:2px solid transparent;border-radius:14px;background:rgba(255,255,255,.04);
-  cursor:pointer;transition:border-color .15s,background .15s,transform .12s;
-  -webkit-tap-highlight-color:transparent}
-.team-card img{width:100%;max-width:64px;height:auto;display:block}
-.team-card .tc-state{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.6}
-.team-card.on{border-color:var(--tc);background:color-mix(in srgb,var(--tc) 16%,transparent);transform:translateY(-1px)}
-.team-card.on .tc-state{opacity:1;color:var(--tc)}
-.team-card.full{opacity:.32;cursor:not-allowed;filter:grayscale(.7)}
-.team-card:not(.full):active{transform:scale(.97)}
-.team-hint{margin-top:8px;font-size:12px;opacity:.65;line-height:1.35}
-</style>');setTimeout(window.__ktReveal,1500);}}catch(e){}})();</script>
+<script>(function(){try{var T={"classic":["#ff2a2a","#ff6a4d","#c81e18"],"neon":["#00d4ff","#5ce1ff","#0088aa"],"carbon":["#c9a84c","#e0c476","#8f7529"],"checkered":["#ece8dd","#ffffff","#a9a396"],"endurance":["#ffb238","#ffcb73","#c47c12"],"pitlane":["#f0c419","#ffdc5c","#b08c00"],"champagne":["#d9b978","#f0d7a4","#a1854a"],"arctic":["#1a6fbd","#4f9fe0","#0d4a83"]};var ok=false;var t=localStorage.getItem('kt_theme');var v=T[t];if(v){var s=document.documentElement.style;s.setProperty('--acc',v[0]);s.setProperty('--acc2',v[1]);s.setProperty('--acc-deep',v[2]);ok=true;}var d=document.documentElement;window.__ktReveal=function(){try{d.classList.remove('kt-pending');}catch(e){}};if(!ok){d.classList.add('kt-pending');d.insertAdjacentHTML('afterbegin','<style id="kt-pending-css">html.kt-pending body{visibility:hidden!important}</style>');setTimeout(window.__ktReveal,1500);}}catch(e){}})();</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{
@@ -523,6 +505,24 @@ input:focus,select:focus{border-color:var(--acc);box-shadow:0 0 0 3.5px var(--ac
 .wm-badge{position:fixed;left:50%;bottom:10px;transform:translateX(-50%);z-index:35;display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .85rem;font-family:var(--font-body);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);text-decoration:none;opacity:.6;border:1px solid var(--bord);border-radius:999px;background:var(--surf2);transition:opacity .15s var(--ease)}
 .wm-badge:hover{opacity:1}
 .wm-badge b{color:var(--txt);font-weight:700}
+
+/* ============================================================
+   MODE ÉCURIE (18/08) — choix de l'écurie sur l'écran 2.
+   Le badge complet est utilisé ici : on a la place, et c'est
+   le format le plus reconnaissable pour un choix.
+   ============================================================ */
+.team-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px}
+.team-card{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 4px 6px;
+  border:2px solid transparent;border-radius:14px;background:rgba(255,255,255,.04);
+  cursor:pointer;transition:border-color .15s,background .15s,transform .12s;
+  -webkit-tap-highlight-color:transparent}
+.team-card img{width:100%;max-width:64px;height:auto;display:block}
+.team-card .tc-state{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.6}
+.team-card.on{border-color:var(--tc);background:color-mix(in srgb,var(--tc) 16%,transparent);transform:translateY(-1px)}
+.team-card.on .tc-state{opacity:1;color:var(--tc)}
+.team-card.full{opacity:.32;cursor:not-allowed;filter:grayscale(.7)}
+.team-card:not(.full):active{transform:scale(.97)}
+.team-hint{margin-top:8px;font-size:12px;opacity:.65;line-height:1.35}
 </style>
 
 <script type="module" src="karting-v2/src/register-app.js"></script>
