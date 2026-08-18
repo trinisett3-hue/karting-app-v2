@@ -7,6 +7,9 @@ export const state = {
   activeSessions: [],
   activeDetailSession: null,
   inscritsData: [],
+  // Catalogue d'ecuries resolu du circuit, charge a la demande par loadInscrits()
+  // uniquement quand la session ouverte est en mode Ecurie.
+  teamCatalog: [],
   archiveSession: null,
   selectedPilotId: null,
   helmetColors: null, // anciennement _helmetColors

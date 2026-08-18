@@ -9,6 +9,8 @@ import { state } from '../state.js';
 import { showMsg, randomCode4, avatarColor, avatarInitial, confirmModal } from './ui.js';
 import { APP_CONFIG } from '../config.js';
 import { sessionTypeBadgeHTML, defaultSessionType } from '../state.js';
+import { mountTeamBlock, readTeamBlock, syncSessionTeams, countByTeam, teamSelectHTML } from './teams-admin.js';
+import { loadTeamCatalog } from './teams.js';
 
 // --- Verite de publication --------------------------------------------------------
 // ATTENTION : `public_results_token` a une valeur par DEFAUT en base
@@ -108,14 +110,26 @@ export async function createSession({ onCreated } = {}) {
   }
   const fullTitle = title + ' - ' + time;
   const today = new Date().toISOString().slice(0, 10);
+  // Mode Ecurie : lu AVANT l'insert pour partir avec la session plutot que
+  // d'etre pose apres coup — une session creee sans team_mode puis basculee
+  // laisserait une fenetre pendant laquelle le lien d'inscription est deja
+  // copiable mais n'affiche pas le choix d'ecurie.
+  const team = readTeamBlock('s');
   const { data, error } = await db
     .from('sessions')
-    .insert({ title: fullTitle, max_karts: karts, laps_count: laps, session_date: today, status: 'registration_open', session_type: sessionType })
+    .insert({
+      title: fullTitle, max_karts: karts, laps_count: laps, session_date: today,
+      status: 'registration_open', session_type: sessionType,
+      team_mode: team.team_mode, team_size_max: team.team_size_max,
+    })
     .select()
     .single();
   if (error) {
     showMsg('msg-create', error.message, 'err');
     return;
+  }
+  if (team.team_mode && team.teams.length) {
+    await syncSessionTeams(data.id, team.teams);
   }
   showMsg('msg-create', 'Session demarree !', 'ok');
   document.getElementById('s-title').value = '';
@@ -142,6 +156,13 @@ export async function openActiveDetail(id, { onOpened } = {}) {
   if (notesEl) notesEl.value = s.internal_notes || '';
   document.getElementById('det-save-btn').style.display = 'none';
   await loadInscrits();
+  // Monte apres loadInscrits() : le bloc a besoin du compte de pilotes par
+  // ecurie pour verrouiller celles qui sont deja occupees.
+  await mountTeamBlock('det', {
+    session: s,
+    taken: countByTeam(state.inscritsData),
+    onChange: markDetailDirty,
+  });
   await refreshOccupation();
   if (onOpened) await onOpened(s);
 }
@@ -177,7 +198,16 @@ export async function saveDetailMeta() {
                   return;
           }
     }
-  await db.from('sessions').update({ title, max_karts: karts, laps_count: laps, session_type: sessionType, internal_notes: internalNotes }).eq('id', state.activeDetailSession.id);
+  const team = readTeamBlock('det');
+  await db.from('sessions').update({
+    title, max_karts: karts, laps_count: laps, session_type: sessionType, internal_notes: internalNotes,
+    team_mode: team.team_mode, team_size_max: team.team_size_max,
+  }).eq('id', state.activeDetailSession.id);
+  if (team.team_mode) {
+    await syncSessionTeams(state.activeDetailSession.id, team.teams);
+  }
+  state.activeDetailSession.team_mode = team.team_mode;
+  state.activeDetailSession.team_size_max = team.team_size_max;
   state.activeDetailSession.title = title;
   state.activeDetailSession.max_karts = karts;
   state.activeDetailSession.laps_count = laps;
@@ -185,8 +215,25 @@ export async function saveDetailMeta() {
   state.activeDetailSession.internal_notes = internalNotes;
   document.getElementById('det-save-btn').style.display = 'none';
   showMsg('msg-ins', 'Informations mises a jour.', 'ok');
+  await loadInscrits();
   await loadActiveSessions();
   await refreshOccupation();
+}
+
+// Correction de l'affiliation par l'organisateur. Le trigger serveur
+// trg_validate_registration_team reste seul juge : si l'ecurie est pleine ou
+// non engagee, l'UPDATE est refuse et on remet la liste dans son etat reel
+// plutot que de laisser le <select> mentir.
+export async function saveTeamInline(selectEl) {
+  const rid = selectEl.dataset.rid;
+  const val = selectEl.value || null;
+  const { error } = await db.from('session_registrations').update({ team_id: val }).eq('id', rid);
+  if (error) {
+    showMsg('msg-ins', error.message || 'Changement d\'ecurie refuse.', 'err');
+  } else {
+    showMsg('msg-ins', val ? 'Ecurie mise a jour.' : 'Pilote retire de son ecurie.', 'ok');
+  }
+  await loadInscrits();
 }
 
 export async function refreshOccupation() {
@@ -313,6 +360,11 @@ export async function loadInscrits() {
     .eq('session_id', state.activeDetailSession.id)
     .order('created_at', { ascending: true });
   state.inscritsData = data || [];
+  // Le catalogue n'est charge que si la session est reellement en mode Ecurie :
+  // une session normale ne paie pas une requete de plus.
+  if (state.activeDetailSession.team_mode) {
+    state.teamCatalog = await loadTeamCatalog();
+  }
   renderInscritsTable();
 }
 
@@ -398,8 +450,15 @@ export function renderInscritsTable(onRowActions) {
     renderKartGrid();
     return;
   }
+  const teamOn = !!(state.activeDetailSession && state.activeDetailSession.team_mode);
+  const teams = teamOn ? (state.teamCatalog || []) : [];
+  const taken = teamOn ? countByTeam(state.inscritsData) : {};
+  const sizeMax = (state.activeDetailSession && state.activeDetailSession.team_size_max) || 2;
+
   el.innerHTML =
-    '<table class="tbl"><thead><tr><th>Photo</th><th>Nom</th><th>Nat.</th><th>Kart</th><th></th><th></th></tr></thead><tbody>' +
+    '<table class="tbl"><thead><tr><th>Photo</th><th>Nom</th>' +
+    (teamOn ? '<th>Ecurie</th>' : '') +
+    '<th>Nat.</th><th>Kart</th><th></th><th></th></tr></thead><tbody>' +
     state.inscritsData
       .map((r) => {
         const drv = r.drivers;
@@ -414,6 +473,7 @@ export function renderInscritsTable(onRowActions) {
           '<tr class="pilot-row-select' + (isSelected ? ' selected' : '') + ' " data-rid="' + r.id + '">' +
           '<td>' + photo + '</td>' +
           '<td><input class="input-inline" value="' + (r.display_name || '') + '" data-rid="' + r.id + '" placeholder="Nom" onchange="saveNameInline(this)"/></td>' +
+          (teamOn ? '<td>' + teamSelectHTML(r, teams, taken, sizeMax) + '</td>' : '') +
           '<td>' + (r.nationality || '--') + '</td>' +
           '<td>' + kartBadge + '</td>' +
           '<td><button class="btn btn-ghost btn-sm icon-btn hist-btn" data-rid="' + r.id + '" data-name="' + (r.display_name || '') + '"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></button></td>' +
@@ -426,8 +486,15 @@ export function renderInscritsTable(onRowActions) {
 
   el.querySelectorAll('tr.pilot-row-select').forEach((tr) => {
     tr.addEventListener('click', function (e) {
-      if (e.target.closest('.del-btn') || e.target.closest('.hist-btn') || e.target.closest('input')) return;
+      if (e.target.closest('.del-btn') || e.target.closest('.hist-btn') || e.target.closest('input') || e.target.closest('select')) return;
       selectPilotForKart(tr.dataset.rid, e);
+    });
+  });
+  el.querySelectorAll('.team-select').forEach((sel) => {
+    sel.addEventListener('click', (e) => e.stopPropagation());
+    sel.addEventListener('change', (e) => {
+      e.stopPropagation();
+      saveTeamInline(sel);
     });
   });
   el.querySelectorAll('.del-btn').forEach((btn) => {
