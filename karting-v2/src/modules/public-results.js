@@ -3040,10 +3040,24 @@ const POSITION_BODIES = {
 
 const POSITION_FALLBACK = '01-track-hero';
 
-function pickPositionConcept() {
+// Choix DETERMINISTE, pas aleatoire : avec Math.random(), republier ou
+// renvoyer le meme e-mail changeait le fond de la carte de position a chaque
+// fois, et rien ne garantissait un rendu identique d'un pilote a l'autre pour
+// un meme visuel — retour client du 20/08, "les arriere-plans sont
+// aleatoires". regId est stable pour un pilote donne sur une session donnee :
+// le meme pilote obtient donc toujours le meme visuel parmi ceux coches en
+// Parametres, tout en variant honnetement d'un pilote a l'autre quand
+// plusieurs visuels sont coches.
+function hashSeed(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) | 0; }
+  return Math.abs(h);
+}
+function pickPositionConcept(regId) {
   const picks = (CARD_POSITION_PICKS || []).filter((id) => POSITION_BODIES[id]);
   if (!picks.length) return POSITION_FALLBACK;
-  return picks[Math.floor(Math.random() * picks.length)];
+  const idx = regId ? hashSeed(String(regId)) % picks.length : 0;
+  return picks[idx];
 }
 
 function positionCtx(pilot) {
@@ -3069,7 +3083,7 @@ export async function positionCardPNGBytes(regId, conceptId) {
   const pilot = (allResults || []).find((r) => r.regId === regId);
   if (!pilot) throw new Error('Pilote introuvable dans cette session : ' + regId);
   const t = themeColors();
-  const id = (conceptId && POSITION_BODIES[conceptId]) ? conceptId : pickPositionConcept();
+  const id = (conceptId && POSITION_BODIES[conceptId]) ? conceptId : pickPositionConcept(regId);
   const build = POSITION_BODIES[id] || POSITION_BODIES[POSITION_FALLBACK];
   await prewarmCardAvatars(pilot);
   return renderCardPNG(cardShell(t, build(t, pilot, positionCtx(pilot)), pilot, id, { showTeam: true }));
