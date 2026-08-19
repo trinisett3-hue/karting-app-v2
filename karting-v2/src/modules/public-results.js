@@ -286,7 +286,7 @@ const gapTxt = gapBadge(d);
 const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
 const teamAttr = team ? ` style="--tc:${team.color}"` : '';
 const teamCls = team ? ' has-team' : '';
-const teamDot = team ? `<span class="podium-team-dot" title="${escapeHTML(team.name)}">${teamLogoHTML(team, 22)}</span>` : '';
+const teamDot = team ? `<span class="podium-team-mark" title="${escapeHTML(team.name)}">${teamLogoHTML(team, 30)}</span>` : '';
 const ptsChip = teamMode
   ? `<span class="pilot-pts ${d.points ? '' : 'zero'}" aria-label="${d.points} points"><b>${d.points}</b>PTS</span>`
   : '';
@@ -310,35 +310,67 @@ ${ptsChip}
 RENDER — une ligne de classement, réutilisée par le Top 10 (page 1)
 et le Classement complet (page 2, avec le nombre de tours en plus)
 ------------------------------------------------------------------ */
-/* Ligne de classement.
+/* Ligne de classement — deux dispositions possibles.
 
-   Le mode Écurie n'ajoute QUE trois choses, et jamais une ligne de plus :
-     · un liseré de 3 px à la couleur de l'écurie sur le bord gauche
-     · le nom de l'écurie glissé dans la ligne KART qui existe déjà
-     · un badge de points, en contour et non en aplat
+   TEAM_ROW_LAYOUT choisit laquelle. Les deux respectent la même règle de
+   couleur, demandée explicitement : sur le classement PILOTE, la couleur de
+   l'écurie ne teinte QUE le nom de l'écurie. Les points, l'écart, le rang et
+   le fond restent neutres. La couleur reste pleinement en usage sur la page
+   Championnat écuries, où elle sert à distinguer les écuries entre elles.
 
-   Le badge d'écart doit rester le seul élément plein de la ligne : deux
-   pastilles pleines côte à côte se disputent l'œil et on ne sait plus laquelle
-   lire en premier. */
+     'inline' — la ligne d'origine, inchangée. Le nom de l'écurie est glissé
+                dans la ligne KART qui existe déjà. Aucune colonne en plus,
+                donc aucun risque sur les petits écrans.
+
+     'column' — structure inspirée des habillages F1 : l'écurie occupe sa
+                propre colonne, logo puis nom. Plus lisible sur large, mais il
+                faut de la place. En dessous de 640 px la colonne ne tient
+                plus : le même contenu bascule alors sous le nom du pilote
+                (les deux formes sont émises, une seule est visible — c'est
+                volontaire, une grille CSS ne sait pas déplacer un enfant d'une
+                cellule à une autre).
+
+   Dans les deux cas le logo d'écurie est posé À CHEVAL sur le bord de
+   l'avatar : il déborde vers l'extérieur et mord le cercle, au lieu d'être
+   enfermé dedans. */
+const TEAM_ROW_LAYOUT = 'inline';
+
+function teamMarkHTML(team) {
+  return team ? `<span class="team-mark" title="${escapeHTML(team.name)}">${teamLogoHTML(team, 18)}</span>` : '';
+}
+
 function rankRowHTML(d, extraLine) {
 const gapTxt = gapBadge(d);
 const isLdr = d.hasTime && d.gap === 0;
 const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
 const styleAttr = team ? ` style="--tc:${team.color}"` : '';
-const teamCls = teamMode ? ' has-team' : '';
-const teamTag = team ? ` · <span class="team-tag">${escapeHTML(team.name)}</span>` : '';
-const teamDot = team ? `<span class="team-dot">${teamLogoHTML(team, 13)}</span>` : '';
-const ptsBadge = teamMode
-  ? `<span class="rank-pts ${d.points ? '' : 'zero'}" aria-label="${d.points} points">
-<b>${d.points}</b>PTS</span>`
+const layoutCls = teamMode ? ` has-team layout-${TEAM_ROW_LAYOUT}` : '';
+const teamName = team ? escapeHTML(team.name) : '';
+
+const avatar = `<div class="rank-avatar-wrap" aria-hidden="true">
+<div class="rank-avatar">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>${teamMarkHTML(team)}</div>`;
+
+// Forme « colonne » : cellule dédiée, plus la reprise inline pour les petits
+// écrans. Forme « inline » : uniquement la reprise inline.
+const teamCell = (TEAM_ROW_LAYOUT === 'column' && team)
+  ? `<div class="rank-team">${teamLogoHTML(team, 26)}<span class="rank-team-name">${teamName}</span></div>`
   : '';
-return `<article class="top10-row${teamCls}"${styleAttr} role="listitem" aria-label="P${d.pos} — ${d.name}">
+// Le séparateur est dans son propre span : en disposition colonne on masque
+// les deux, sinon la ligne kart se termine par un « · » orphelin.
+const teamTag = team ? `<span class="team-sep"> · </span><span class="team-tag">${teamName}</span>` : '';
+
+const ptsBadge = teamMode
+  ? `<span class="rank-pts ${d.points ? '' : 'zero'}" aria-label="${d.points} points"><b>${d.points}</b>PTS</span>`
+  : '';
+
+return `<article class="top10-row${layoutCls}"${styleAttr} role="listitem" aria-label="P${d.pos} — ${d.name}">
 <span class="rank-pos" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}${teamDot}</div>
+${avatar}
 <div class="rank-main">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
 <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${extraLine ? ' · ' + extraLine : ''}${teamTag}</div>
 </div>
+${teamCell}
 ${ptsBadge}
 <span class="rank-gap ${isLdr ? 'leader' : ''} ${!d.hasTime ? 'no-data' : ''}" aria-label="Écart : ${gapTxt}">${gapTxt}</span>
 </article>`;
@@ -390,12 +422,12 @@ return `<div class="lap-chip ${isBest ? 'best' : ''}"><div class="lc-idx">Tour $
 const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
 const teamAttr = team ? ` style="--tc:${team.color}"` : '';
 const teamCls = team ? ' has-team' : '';
-const teamDot = team ? `<span class="team-dot">${teamLogoHTML(team, 13)}</span>` : '';
-const teamTag = team ? ` · <span class="team-tag">${escapeHTML(team.name)}</span>` : '';
+const teamTag = team ? `<span class="team-sep"> · </span><span class="team-tag">${escapeHTML(team.name)}</span>` : '';
 return `<article class="acc-item${teamCls}"${teamAttr}>
 <div class="acc-head">
 <span class="rank-pos acc-toggle" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}${teamDot}</div>
+<div class="rank-avatar-wrap acc-toggle" aria-hidden="true">
+<div class="rank-avatar">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>${teamMarkHTML(team)}</div>
 <div class="rank-main acc-toggle">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
 <div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${teamTag}</div>

@@ -1495,69 +1495,90 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .wm-badge b{color:var(--c-text);font-weight:700}
 
 /* ============================================================
-   MODE ÉCURIE (18/08)
-   Aucune couleur en dur : chaque ligne porte --tc, alimenté par
-   team_catalog / tenant_teams. Le badge de points est en CONTOUR
-   et jamais en aplat — .rank-gap doit rester le seul élément
-   plein de la ligne, sinon les deux se disputent l'œil.
+   MODE ÉCURIE — classement pilote
+
+   RÈGLE DE COULEUR, décidée avec le client : sur le classement
+   PILOTE, la couleur de l'écurie ne teinte QUE le nom de
+   l'écurie. Rang, points, écart, fond et bordures restent
+   neutres. Une ligne où tout est coloré devient un patchwork et
+   on ne sait plus quoi lire en premier. La couleur reprend tous
+   ses droits sur la page Championnat écuries, où elle sert à
+   distinguer les écuries entre elles.
+
+   Le logo est posé À CHEVAL sur le bord de l'avatar : il déborde
+   vers l'extérieur et mord le cercle. C'est pour ça que le cercle
+   (qui doit rester clippé) et le logo (qui ne doit pas l'être)
+   sont deux éléments frères dans .rank-avatar-wrap.
    ============================================================ */
-.top10-row.has-team { grid-template-columns: 2.5rem 3.2rem 1fr auto auto; position: relative; }
-.top10-row.has-team::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  background: var(--tc, transparent);
+.rank-avatar-wrap { position: relative; flex-shrink: 0; }
+.rank-avatar-wrap .rank-avatar { width: 100%; height: 100%; }
+.team-mark {
+  position: absolute; right: -.5rem; bottom: -.28rem; z-index: 2;
+  width: 1.7rem; height: 1.7rem; display: grid; place-items: center;
+  filter: drop-shadow(0 0 3px var(--c-bg)) drop-shadow(0 0 2px var(--c-bg));
+  pointer-events: none;
 }
-.rank-avatar { position: relative; }
-.rank-avatar .team-dot {
-  position: absolute; right: -1px; bottom: -1px; width: 1.25rem; height: 1.25rem;
-  border-radius: 50%; background: var(--c-bg); border: 1.5px solid var(--tc);
-  display: grid; place-items: center; overflow: hidden;
-}
-.rank-avatar .team-dot img, .rank-avatar .team-dot svg { width: 74%; height: 74%; object-fit: contain; }
+.team-mark img, .team-mark svg { width: 100%; height: 100%; object-fit: contain; }
+
+/* Le nom de l'écurie — le seul élément coloré de la ligne. */
 .rank-kartline .team-tag { color: var(--tc); font-weight: 700; }
+
+/* Points : même gabarit que le badge d'écart, mais en contour et NEUTRE.
+   L'écart reste le seul élément plein de la ligne. */
 .rank-pts {
   font-family: var(--font-body); font-size: var(--gap-size); font-weight: 700;
   letter-spacing: .05em; color: var(--c-text); background: transparent;
   padding: .2rem .5rem; border-radius: var(--corner-radius);
-  border: 1px solid var(--tc, var(--c-border));
+  border: 1px solid var(--c-border);
   min-width: 3.4rem; text-align: center; white-space: nowrap; flex-shrink: 0;
 }
 .rank-pts b { font-family: var(--font-display); font-size: 1.25em; font-style: italic;
-  color: var(--tc, var(--c-accent)); margin-right: .15em; }
+  color: var(--c-text); margin-right: .15em; }
 .rank-pts.zero { opacity: .4; }
 
-/* Page 3 — même liseré que les lignes de classement. */
-.acc-item.has-team { position: relative; }
-.acc-item.has-team::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  background: var(--tc); z-index: 2;
-}
+/* --- Disposition « inline » : la ligne d'origine + 1 colonne de points --- */
+.top10-row.has-team.layout-inline { grid-template-columns: 2.5rem 3.2rem 1fr auto auto; }
 
-/* --- Podium (page 1) en mode Écurie ---
-   Deux marqueurs seulement, les mêmes que sur les lignes de classement : la
-   pastille d'écurie posée en haut à droite de la carte, et le badge de points
-   glissé dans la barre d'infos existante. La carte est contrainte en hauteur
-   (podium-wrap est dimensionné en dvh sur mobile) : toute ligne
-   supplémentaire ferait déborder le podium hors du viewport. */
-.podium-card.has-team { border-color: var(--tc); }
-.podium-team-dot {
-  position: absolute; top: var(--space-2); right: var(--space-2); z-index: 3;
-  width: 2rem; height: 2rem; border-radius: 50%;
-  background: color-mix(in srgb, var(--c-bg) 82%, transparent);
-  border: 1.5px solid var(--tc); display: grid; place-items: center; overflow: hidden;
-  backdrop-filter: blur(4px);
+/* --- Disposition « colonne » : l'écurie a sa propre colonne --- */
+.top10-row.has-team.layout-column { grid-template-columns: 2.5rem 3.2rem 1.35fr 1fr auto auto; }
+.rank-team { display: flex; align-items: center; gap: .5rem; min-width: 0; }
+.rank-team img, .rank-team svg { width: 1.6rem; height: 1.6rem; object-fit: contain; flex-shrink: 0; }
+.rank-team-name {
+  font-family: var(--font-display); font-size: clamp(.9rem, 1.5vw, 1.15rem);
+  font-weight: 700; font-style: italic; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--tc); transform: skewX(-7deg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
 }
-.podium-team-dot img, .podium-team-dot svg { width: 68%; height: 68%; object-fit: contain; }
+/* En disposition colonne, l'écurie ne doit pas être écrite deux fois. */
+.top10-row.layout-column .rank-kartline .team-tag,
+.top10-row.layout-column .rank-kartline .team-sep { display: none; }
+
+/* Page 3 — mêmes marqueurs, sans badge de points (cette page parle de chronos). */
+.acc-head .rank-avatar-wrap { width: 3.2rem; height: 3.2rem; }
+.acc-head .team-mark { width: 1.2rem; height: 1.2rem; right: -.3rem; }
+
+/* Podium (page 1) — le logo mord le bord de l'avatar, en haut à droite de la carte. */
+.podium-team-mark {
+  position: absolute; top: var(--space-2); right: var(--space-2); z-index: 3;
+  width: 2.1rem; height: 2.1rem; display: grid; place-items: center;
+  filter: drop-shadow(0 0 4px rgba(0,0,0,.85)) drop-shadow(0 0 2px rgba(0,0,0,.7));
+}
+.podium-team-mark img, .podium-team-mark svg { width: 100%; height: 100%; object-fit: contain; }
 .pilot-pts {
   font-family: var(--font-body); font-size: var(--kart-size); font-weight: 700;
   letter-spacing: .06em; color: var(--c-text); background: transparent;
   padding: .05rem .4rem; border-radius: var(--corner-radius);
-  border: 1px solid var(--tc); white-space: nowrap; flex-shrink: 0;
+  border: 1px solid var(--c-border); white-space: nowrap; flex-shrink: 0;
 }
 .pilot-pts b { font-family: var(--font-display); font-size: 1.2em; font-style: italic;
-  color: var(--tc); margin-right: .15em; }
+  color: var(--c-text); margin-right: .15em; }
 .pilot-pts.zero { opacity: .45; }
 
-/* --- Page 4 : championnat constructeur --- */
+/* ============================================================
+   PAGE 4 — CHAMPIONNAT ÉCURIES
+   Ici la couleur est pleinement utilisée : c'est ce qui permet
+   de distinguer douze écuries d'un coup d'oeil.
+   ============================================================ */
 .team-row {
   display: grid; grid-template-columns: 2.5rem 3.4rem 1fr auto auto;
   align-items: center; gap: var(--space-3);
@@ -1581,16 +1602,16 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .team-bar { height: 4px; border-radius: 99px; background: rgba(255,255,255,.08); margin-top: .4rem; overflow: hidden; }
 .team-bar i { display: block; height: 100%; background: var(--tc); border-radius: 99px; }
 .team-avg { font-size: var(--label-size); color: var(--c-muted); letter-spacing: .05em; white-space: nowrap; }
+.team-row .rank-pts { border-color: var(--tc); }
+.team-row .rank-pts b { color: var(--tc); }
 
-/* Sur mobile, les grilles de lignes sont redefinies par des selecteurs a
-   specificite d'ID (#page-screen-1 / #page2-ranking) : une regle de classe ne
-   peut pas les battre. Chaque variante doit donc etre reprise nommement avec
-   sa 5e colonne, sinon le badge de points pousse le badge d'ecart sur une
-   deuxieme ligne — c'est exactement ce qui s'est produit au premier essai. */
 @media (max-width: 640px) {
-  #page-screen-1 .top10-row.has-team {
-    grid-template-columns: 1.45rem 1.8rem minmax(0, 1fr) auto auto;
-  }
+  /* Les grilles de lignes sont redéfinies sur mobile par des sélecteurs à
+     spécificité d'ID (#page-screen-1 / #page2-ranking) : une règle de classe
+     ne peut pas les battre. Chaque variante doit donc être reprise nommément
+     avec sa colonne supplémentaire, sinon le badge de points pousse le badge
+     d'écart sur une deuxième ligne. */
+  #page-screen-1 .top10-row.has-team { grid-template-columns: 1.45rem 1.8rem minmax(0, 1fr) auto auto; }
   #page2-ranking .top10-row.has-team {
     grid-template-columns: calc(1.55rem * var(--page2-density, 1)) calc(2rem * var(--page2-density, 1)) minmax(0, 1fr) auto auto;
   }
@@ -1598,16 +1619,19 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     grid-template-columns: calc(1.45rem * var(--page2-density, 1)) minmax(0, 1fr) auto auto;
   }
   .top10-row.has-team { grid-template-columns: 2rem 2.4rem 1fr auto auto; gap: .45rem; }
+  /* Sous 640 px la colonne d'écurie ne tient plus : on la masque et on
+     réaffiche la mention dans la ligne kart. */
+  .top10-row.layout-column .rank-team { display: none; }
+  .top10-row.layout-column .rank-kartline .team-tag,
+  .top10-row.layout-column .rank-kartline .team-sep { display: inline; }
   .rank-pts { min-width: 2.6rem; padding: .08rem .3rem; font-size: .62rem; }
-  #page-screen-1 .rank-pts,
-  #page2-ranking .rank-pts { min-width: 0; padding: .06rem .28rem; font-size: .6rem; }
-  /* La pastille d'ecurie suit la taille de l'avatar : a 1.8rem sur la page 1,
-     une pastille de 1.25rem le recouvrirait presque entierement. */
-  #page-screen-1 .rank-avatar .team-dot { width: .8rem; height: .8rem; border-width: 1px; }
-  #page2-ranking .rank-avatar .team-dot { width: .85rem; height: .85rem; border-width: 1px; }
-
-  .podium-team-dot { width: 1.35rem; height: 1.35rem; border-width: 1px;
-    top: .25rem; right: .25rem; }
+  #page-screen-1 .rank-pts, #page2-ranking .rank-pts { min-width: 0; padding: .06rem .28rem; font-size: .6rem; }
+  #page-screen-1 .rank-avatar-wrap { width: 1.8rem; height: 1.8rem; }
+  #page2-ranking .rank-avatar-wrap { width: calc(2rem * var(--page2-density, 1)); height: calc(2rem * var(--page2-density, 1)); }
+  #page-screen-1 .team-mark, #page2-ranking .team-mark { width: .95rem; height: .95rem; right: -.28rem; bottom: -.15rem; }
+  .acc-head .rank-avatar-wrap { width: 2.15rem; height: 2.15rem; }
+  .acc-head .team-mark { width: 1rem; height: 1rem; }
+  .podium-team-mark { width: 1.5rem; height: 1.5rem; top: .25rem; right: .25rem; }
   .pilot-pts { padding: 0 .25rem; font-size: .62rem; letter-spacing: 0; }
 
   .team-row { grid-template-columns: 1.9rem 2.6rem 1fr auto; gap: .5rem; padding: .6rem .7rem; }
