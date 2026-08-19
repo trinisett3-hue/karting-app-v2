@@ -692,7 +692,7 @@ function dataUrlKey(kartNumber, opts) {
   // choisi explicitement) — sinon le second écraserait/lirait le cache du
   // premier. o.scheme fait donc partie de la clé, jamais kartNumber seul.
   const schemePart = o.scheme != null ? 'sch' + (((Math.round(o.scheme) % 24) + 24) % 24) : 'kart' + kartNumber;
-  return [schemePart, kind, style || '-', outline ? 1 : 0, shape, o.size || 512, num].join('|');
+  return [schemePart, kind, style || '-', outline ? 1 : 0, shape, o.size || 1024, num].join('|');
 }
 
 /** Précharge (async) les data URLs Signature pour une liste de karts.

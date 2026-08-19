@@ -1155,6 +1155,7 @@ function ensurePdfStyles() {
    line-height normal (~1.2) la boite fait pile la hauteur de la ligne et les
    jambages (p, g, j) se font raboter au rendu canvas. */
 .pdfx-av{display:block;width:100%;height:100%;background-size:cover;background-position:center;background-repeat:no-repeat}
+.pdfx-av-img{object-fit:cover}
 .pdfx-page.portrait{width:595px}
 .pdfx-page.landscape{width:842px}
 .pdfx-sheet{display:flex;flex-direction:column;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;overflow:hidden}
@@ -1384,38 +1385,39 @@ function ensurePdfStyles() {
    reconnaitre d'un coup d'oeil.
 
    Aucune couleur en dur : les 8 themes suivent sans une seule branche. */
-.tpdf-podium{display:flex;align-items:flex-end;gap:11px;padding:18px 24px 16px;border-bottom:1px solid var(--c-border)}
-.tpdf-pcard{flex:1;min-width:0;background-color:var(--c-surface-2);background-repeat:no-repeat;
-  border-radius:12px;border:2px solid var(--tc);padding:11px 8px 10px;position:relative;text-align:center}
-.tpdf-pcard.tp1{order:2;padding-top:7px}
-.tpdf-pcard.tp2{order:1}
-.tpdf-pcard.tp3{order:3}
-.tpdf-prank{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:15px;
-  position:absolute;top:5px;left:9px;color:var(--c-muted)}
-.tpdf-pcard.tp1 .tpdf-prank{color:var(--pdx-p1);font-size:19px}
-.tpdf-pcard.tp2 .tpdf-prank{color:var(--pdx-p2)}
-.tpdf-pcard.tp3 .tpdf-prank{color:var(--pdx-p3)}
-.tpdf-pbadge{margin:2px auto 5px}
-.tpdf-pbadge img{display:block;margin:0 auto}
-.tpdf-pcard.tp1 .tpdf-pbadge img{width:104px!important;height:104px!important}
-.tpdf-pname{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:14px;
-  text-transform:uppercase;letter-spacing:.02em;color:var(--c-text);line-height:1.4;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.tpdf-pcard.tp1 .tpdf-pname{font-size:16px}
-.tpdf-ppts{display:flex;align-items:baseline;justify-content:center;gap:3px;margin-top:1px}
-.tpdf-ppts b{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:26px;
-  line-height:1;color:var(--tc)}
-.tpdf-pcard.tp1 .tpdf-ppts b{font-size:32px}
-.tpdf-ppts span{font-size:8px;font-weight:800;letter-spacing:.14em;color:var(--c-muted)}
-.tpdf-pmembers{margin-top:7px;padding-top:7px;border-top:1px solid var(--c-border);
-  display:flex;flex-direction:column;gap:4px}
-.tpdf-pm{display:flex;align-items:center;gap:5px;min-width:0}
-.tpdf-pm .av{width:18px;height:18px;border-radius:50%;overflow:hidden;background:var(--c-bg);
-  border:1px solid var(--tc);flex-shrink:0}
-.tpdf-pm .av .pdfx-av{width:100%;height:100%}
-.tpdf-pm .nm{flex:1;min-width:0;font-size:9.5px;font-weight:700;text-align:left;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5}
-.tpdf-pm .pp{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12px;color:var(--tc)}
+/* --- Bloc champion ---------------------------------------------------------
+   Pleine largeur : le badge est pose a 168 px, sa vraie echelle. Toutes les
+   couleurs viennent des jetons de theme (--c-*) sauf l'accent, qui est celui
+   de l'ecurie (--tc) : la page suit donc les 8 themes sans une seule branche,
+   clairs compris. */
+.tpdf-hero{display:flex;align-items:center;gap:20px;margin:16px 24px 4px;padding:16px 20px;
+  border:2px solid var(--tc);border-radius:16px;background-color:var(--c-surface-2);
+  background-repeat:no-repeat}
+.tpdf-hero-badge{flex-shrink:0}
+.tpdf-hero-badge img{display:block}
+.tpdf-hero-main{flex:1;min-width:0}
+.tpdf-hero-kicker{font-size:10px;font-weight:800;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--tc);margin-bottom:2px}
+.tpdf-hero-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:40px;
+  line-height:1;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text)}
+.tpdf-hero-figs{display:flex;gap:22px;margin:9px 0 10px;padding-bottom:9px;
+  border-bottom:1px solid var(--c-border)}
+.tpdf-hero-figs .fig{display:flex;align-items:baseline;gap:5px}
+.tpdf-hero-figs .fig b{font-family:var(--font-display);font-weight:700;font-style:italic;
+  font-size:26px;line-height:1;color:var(--tc)}
+.tpdf-hero-figs .fig span{font-size:8.5px;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--c-muted)}
+.tpdf-hero-members{display:flex;gap:16px;flex-wrap:wrap}
+.tpdf-hm{display:flex;align-items:center;gap:6px;min-width:0}
+.tpdf-hm .av{width:26px;height:26px;border-radius:50%;overflow:hidden;background:var(--c-bg);
+  border:1.5px solid var(--tc);flex-shrink:0}
+.tpdf-hm .av .pdfx-av{width:100%;height:100%}
+.tpdf-hm .nm{font-size:11px;font-weight:800;white-space:nowrap;line-height:1.5;color:var(--c-text)}
+.tpdf-hm .pp{font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--c-muted)}
+.tpdf-hm .bl{font-size:9.5px;font-weight:700;color:var(--c-muted);font-variant-numeric:tabular-nums}
+.tpdf-hm .pt{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:15px;color:var(--tc)}
+.tpdf-hm .pt i{font-family:var(--font-body);font-style:normal;font-size:7.5px;font-weight:800;
+  letter-spacing:.1em;color:var(--c-muted);margin-left:2px}
 
 .tpdf-head{display:grid;grid-template-columns:26px 30px 1fr 2.1fr 62px;gap:6px;
   padding:0 8px 6px;font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
@@ -1434,7 +1436,7 @@ function ensurePdfStyles() {
 .tpdf-row .pos{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:14px;
   color:var(--c-muted);text-align:center;font-variant-numeric:tabular-nums}
 .tpdf-row.top3 .pos{color:var(--tc)}
-.tpdf-row .badge img,.tpdf-row .badge svg{display:block;width:24px;height:24px;margin:0 auto}
+.tpdf-row .badge img,.tpdf-row .badge svg{display:block;width:28px;height:28px;margin:0 auto}
 .tpdf-row .team{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:14.5px;
   text-transform:uppercase;letter-spacing:.02em;line-height:1.4;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1518,13 +1520,28 @@ function pdfxCssUrl(u) { return `url('${String(u).replace(/['\\]/g, '\\$&')}')`;
    Partagees entre le prechauffage et le rendu : la cle de cache inclut la forme
    et la taille, les deux appels doivent donc etre strictement identiques. */
 const PILOT_SHEET_AV_OPTS = { shape: 'square', size: 1024 };
+/* CAUSE DU FLOU DES AVATARS DANS TOUS LES PDF (et les cartes partageables).
+
+   html2canvas rasterise une `background-image` a la taille CSS de la boite,
+   PUIS applique `scale`. Un avatar de 20 a 26 px etait donc grave a 20-26 px
+   avant d'etre agrandi 2,5 a 3,5 fois : flou garanti, quel que soit le mode
+   d'avatar et quelle que soit la densite de rendu. Augmenter la taille
+   intrinseque du SVG (fait par ailleurs, 100 -> 1024) ne suffit pas : ce
+   n'est pas la source qui limite, c'est l'etape intermediaire.
+
+   Une balise <img>, elle, est dessinee directement a l'echelle finale. On
+   bascule donc sur <img> pour les avatars GENERES, qui sont carres et n'ont
+   besoin d'aucun recadrage. La background-image reste pour les VRAIES photos :
+   elles ne sont pas carrees et ont besoin d'un `cover`, que html2canvas ne
+   sait pas faire avec object-fit. */
 function pdfxAvatarImg(photo, kart, opts) {
   const real = pdfxValidPhoto(photo);
   const fallback = genAvatarDataURL(kart, opts);
-  const layers = real
-    ? `${pdfxCssUrl(real)},${pdfxCssUrl(fallback)}`
-    : pdfxCssUrl(fallback);
-  return `<div class="pdfx-av" style="background-image:${layers}"></div>`;
+  if (real) {
+    const layers = `${pdfxCssUrl(real)},${pdfxCssUrl(fallback)}`;
+    return `<div class="pdfx-av" style="background-image:${layers}"></div>`;
+  }
+  return `<img class="pdfx-av pdfx-av-img" src="${fallback}" alt="">`;
 }
 
 function pdfxPodiumHTML(field) {
@@ -1697,6 +1714,14 @@ function pdfxPlace(pdf, canvas, g, isFirst, t, quality) {
   // JPEG plutôt que PNG : le fond est opaque (pas de transparence à préserver) et
   // le PNG produisait des fichiers de ~12 Mo par page — impossibles à partager.
   // À qualité 0.94 et scale 2.5, le texte reste net pour ~1/10e du poids.
+  //
+  // Exception : quality === 'png' force le sans-perte. Réservé aux documents
+  // d'UNE page (championnat constructeur), où le poids reste raisonnable et où
+  // les avatars et les logos souffraient visiblement de la compression.
+  if (quality === 'png') {
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (g.pageW - dw) / 2, 0, dw, dh);
+    return;
+  }
   pdf.addImage(canvas.toDataURL('image/jpeg', quality || 0.94), 'JPEG', (g.pageW - dw) / 2, 0, dw, dh);
 }
 
@@ -2168,29 +2193,43 @@ ${headLogo}
 </div>
 </div>`;
 
-  /* Podium des écuries — même grammaire que le podium pilote du classement
-     complet (2e à gauche, 1re au centre surélevée, 3e à droite). La bordure
-     prend la couleur de l'écurie plutôt que l'or/argent/bronze : sur cette
-     page c'est l'écurie qu'on doit reconnaître d'un coup d'œil, et le rang
-     reste porté par le gros chiffre. */
-  const cls = { 1: 'tp1', 2: 'tp2', 3: 'tp3' };
-  const podiumOrder = [teamStandings[1], teamStandings[0], teamStandings[2]].filter(Boolean);
-  const podium = `<div class="tpdf-podium">${podiumOrder.map(st => {
-    const team = teamsById[st.team_id];
-    if (!team) return '';
-    return `<div class="tpdf-pcard ${cls[st.rank] || ''}" style="--tc:${team.color};background-image:${teamGlow(team.color, st.rank === 1 ? .30 : .20, .06)}">
-<div class="tpdf-prank">${st.rank}</div>
-<div class="tpdf-pbadge">${teamBadgeHTML(team, 84)}</div>
-<div class="tpdf-pname">${escapeHTML(team.name)}</div>
-<div class="tpdf-ppts"><b>${st.points}</b><span>PTS</span></div>
-<div class="tpdf-pmembers">${st.members.map(m => `
-<div class="tpdf-pm">
+  /* BLOC CHAMPION — pas un podium.
+
+     Un podium à trois cartes oblige à réduire chaque logo pour les faire
+     tenir côte à côte. Ici une seule écurie occupe toute la largeur : le
+     badge peut être posé en grand, à sa vraie valeur, et le reste du
+     championnat se lit dessous sans concurrence visuelle.
+
+     Le rang 2 et le rang 3 ne sont pas perdus pour autant : ils gardent leur
+     accent de couleur dans le tableau, et l'écart au champion est rappelé sur
+     la ligne du champion lui-même. */
+  const champ = teamStandings[0];
+  const champTeam = teamsById[champ.team_id];
+  const runnerUp = teamStandings[1];
+  const lead = runnerUp ? champ.points - runnerUp.points : null;
+  const heroLine = champ.members.map(m => `
+<div class="tpdf-hm">
 <span class="av">${pdfxAvatarImg(m.photo, m.kart, { small: true, scheme: m.scheme })}</span>
 <span class="nm">${escapeHTML(m.name)}</span>
 <span class="pp">P${m.position}</span>
-</div>`).join('')}</div>
-</div>`;
-  }).join('')}</div>`;
+<span class="bl">${m.bestLap != null ? fmtPdfTime(m.bestLap) : '--'}</span>
+<span class="pt">${m.points}<i>pts</i></span>
+</div>`).join('');
+
+  const hero = champTeam ? `
+<div class="tpdf-hero" style="--tc:${champTeam.color};background-image:${teamGlow(champTeam.color, .34, .07)}">
+<div class="tpdf-hero-badge">${teamBadgeHTML(champTeam, 168)}</div>
+<div class="tpdf-hero-main">
+<div class="tpdf-hero-kicker">Champion constructeur</div>
+<div class="tpdf-hero-name">${escapeHTML(champTeam.name)}</div>
+<div class="tpdf-hero-figs">
+<div class="fig"><b>${champ.points}</b><span>points</span></div>
+${lead != null ? `<div class="fig"><b>+${lead}</b><span>d'avance</span></div>` : ''}
+<div class="fig"><b>${champ.members.length}</b><span>pilote${champ.members.length > 1 ? 's' : ''}</span></div>
+</div>
+<div class="tpdf-hero-members">${heroLine}</div>
+</div>
+</div>` : '';
 
   /* Lignes du classement — mêmes proportions, même alternance de fond et même
      typographie que .pdfx-rank-row. Seules les colonnes changent. */
@@ -2206,7 +2245,7 @@ ${headLogo}
 </span>`).join('');
     return `<div class="tpdf-row${st.rank <= 3 ? ' top3' : ''}" style="--tc:${team.color}">
 <span class="pos">${st.rank}</span>
-<span class="badge">${teamLogoHTML(team, 24)}</span>
+<span class="badge">${teamLogoHTML(team, 28)}</span>
 <span class="team">${escapeHTML(team.name)}</span>
 <span class="members">${members}</span>
 <span class="pts"><b>${st.points}</b><i>PTS</i></span>
@@ -2223,7 +2262,7 @@ ${headLogo}
   page.style.flexDirection = 'column';
   page.innerHTML = `<div class="pdfx-sheet" style="flex:1;display:flex;flex-direction:column">
 ${headBand}
-${podium}
+${hero}
 <div class="pdfx-body-wrap" style="flex:1">
 <div class="pdfx-rank-wrap">
 <div class="pdfx-rank-title">Classement constructeur</div>
@@ -2239,8 +2278,12 @@ ${podium}
   // Pas de passe de mesure : le tableau tient sur une page par construction
   // (12 écuries maximum). sectionToCanvas() monte le nœud et attend déjà le
   // décodage des <img> — les badges d'écurie en font partie.
-  const canvas = await sectionToCanvas(page, g.renderW, t.bg);
-  pdfxPlace(pdf, canvas, g, true, t);
+  // Ce document fait UNE page : on peut se permettre plus de densite que le
+  // classement complet (3,5 au lieu de 2,5) et une qualite JPEG plus haute.
+  // Le PNG sans perte a ete essaye : 18 Mo, inpartageable. A 0,97 et scale 3,5
+  // les avatars et les logos sont nets au zoom pour un poids raisonnable.
+  const canvas = await sectionToCanvas(page, g.renderW, t.bg, 3.5);
+  pdfxPlace(pdf, canvas, g, true, t, 0.97);
   return pdf;
 }
 

@@ -176,6 +176,12 @@ export function pilotAvatarSVG(seed, kartNumber, opts = {}) {
 
 // Même dessin encodé en data URL — pour un <img> (affichage direct + exports PDF via html2canvas).
 export function pilotAvatarDataURL(seed, kartNumber, opts = {}) {
-  const svg = pilotAvatarSVG(seed, kartNumber, { ...opts, size: opts.size || 100 });
+  /* 1024 et non 100 : html2canvas rasterise un data URL SVG a sa taille
+     INTRINSEQUE avant de l'agrandir. A 100 px, tous les avatars du PDF (et des
+     cartes partageables, qui passent par le meme moteur) sortaient flous, quel
+     que soit le mode. signature-avatar.js avait deja ce correctif ; kart et
+     pilote ne l'avaient pas. Le SVG etant vectoriel, seul le nombre de
+     chiffres de width/height change : aucun surcout de poids. */
+  const svg = pilotAvatarSVG(seed, kartNumber, { ...opts, size: opts.size || 1024 });
   return 'data:image/svg+xml,' + encodeURIComponent(svg);
 }
