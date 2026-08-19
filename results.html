@@ -1569,13 +1569,23 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 /* ============================================================
    PAGE 4 — CHAMPIONNAT ÉCURIES
    ============================================================ */
+/* La page occupe toute la hauteur et se densifie selon le nombre d'écuries
+   (--page4-density, posée par renderTeamPage()). Même principe que la page 2. */
 .team-row {
-  display: grid; grid-template-columns: 2.5rem 3.4rem 1fr auto auto;
-  align-items: center; gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
+  display: grid;
+  grid-template-columns: calc(2.5rem * var(--page4-density, 1)) calc(3.9rem * var(--page4-density, 1)) 1fr auto;
+  align-items: center; gap: calc(var(--space-3) * var(--page4-density, 1));
+  padding: calc(var(--space-3) * var(--page4-density, 1)) var(--space-4);
   border-top: 1px solid rgba(255,255,255,.07); position: relative;
 }
 .team-row:first-child { border-top: none; }
+.team-badge-cell img, .team-badge-cell svg {
+  width: calc(3.5rem * var(--page4-density, 1)); height: calc(3.5rem * var(--page4-density, 1));
+  object-fit: contain;
+}
+.team-row .team-name { font-size: calc(clamp(1.1rem, 2.2vw, 1.65rem) * var(--page4-density, 1)); }
+.team-row .team-members { font-size: calc(var(--kart-size) * var(--page4-density, 1)); }
+.team-row .rank-pos { font-size: calc(clamp(1.5rem, 3.2vw, 2.5rem) * var(--page4-density, 1)); }
 .team-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tc); }
 .team-badge-cell img, .team-badge-cell svg { display: block; }
 .team-main { min-width: 0; }
@@ -1585,8 +1595,9 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   letter-spacing: .03em; transform: skewX(-7deg); line-height: 1.05;
 }
 .team-members { font-size: var(--kart-size); color: var(--c-muted);
-  letter-spacing: .06em; text-transform: uppercase; margin-top: .1rem;
-  display: flex; flex-wrap: wrap; gap: .1rem .7rem; }
+  letter-spacing: .04em; text-transform: uppercase; margin-top: .1rem;
+  display: flex; flex-wrap: wrap; gap: .1rem .6rem; }
+.tm-member { white-space: nowrap; }
 .tm-member b { color: var(--c-text); font-weight: 700; }
 .tm-member i { font-style: normal; color: var(--tc); font-weight: 700; }
 .team-bar { height: 4px; border-radius: 99px; background: rgba(255,255,255,.08); margin-top: .4rem; overflow: hidden; }
@@ -1697,6 +1708,21 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   .th-mtxt .meta { font-size: .55rem; }
   .th-mpts { font-size: 1rem; margin-left: auto; }
 }
+
+/* --- Page 4 : plein écran, comme les pages 1 et 2 --- */
+#page-screen-4.active { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-2); }
+#page-screen-4 > section { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+#page-screen-4 > section .section-title { flex-shrink: 0; }
+#page-screen-4 #page4-hero { flex-shrink: 0; }
+#page-screen-4 .top10-wrap { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* Les lignes s'étirent pour occuper toute la hauteur disponible : à 5 écuries
+   elles respirent, à 11 elles reviennent à leur hauteur naturelle et la liste
+   défile. C'est ce qui supprime le grand vide sous le tableau. */
+#page4-teams { display: flex; flex-direction: column; min-height: 100%; }
+#page4-teams .team-row { flex: 1 1 auto; }
+#page-screen-4 .top10-wrap { display: flex; flex-direction: column; }
+#page4-teams.is-dense .team-members { display: none; }
+#page-screen-4 .pdf-btn-wrap { flex-shrink: 0; }
 </style>
 
 <!-- ============================================================

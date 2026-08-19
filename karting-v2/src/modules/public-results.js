@@ -874,12 +874,12 @@ function teamRowHTML(t) {
   const team = teamsById[t.team_id];
   if (!team) return '';
   const members = t.members.map(m => `
-<span class="tm-member"><b>P${m.position}</b> ${escapeHTML(m.name)} <i>${m.points} pts</i></span>`
+<span class="tm-member"><b>P${m.position}</b> ${escapeHTML(m.name)} <i>${m.points}</i></span>`
   ).join('');
   return `<article class="team-row${t.rank <= 3 ? ' top3' : ''}" style="--tc:${team.color}" role="listitem"
  aria-label="${t.rank}e — ${escapeHTML(team.name)}, ${t.points} points">
 <span class="rank-pos" aria-hidden="true">${t.rank}</span>
-<div class="team-badge-cell" aria-hidden="true">${teamLogoHTML(team, 34)}</div>
+<div class="team-badge-cell" aria-hidden="true">${teamBadgeHTML(team, 56)}</div>
 <div class="team-main">
 <div class="team-name">${escapeHTML(team.name)}</div>
 <div class="team-members">${members}</div>
@@ -899,14 +899,30 @@ function renderTeamPage() {
   if (!wrap || !show) { if (heroWrap) heroWrap.innerHTML = ''; return; }
 
   if (heroWrap) heroWrap.innerHTML = teamHeroHTML(teamStandings[0], teamStandings[1]);
-  // Le champion est déjà en haut : le tableau reprend à partir du 2e.
-  wrap.innerHTML = teamStandings.slice(1).map(teamRowHTML).join('');
+  // Le tableau reprend le classement COMPLET, champion inclus — comme le PDF,
+  // et comme le font les habillages F1 : le bloc du haut met en avant, le
+  // tableau fait foi. Deux lectures différentes du même écran seraient pires
+  // qu'une répétition assumée.
+  const rest = teamStandings;
+  wrap.innerHTML = rest.map(teamRowHTML).join('');
 
+  // Même principe que renderPage2() : la page occupe toute la hauteur et se
+  // densifie selon le nombre d'écuries. À 5 écuries les lignes respirent et
+  // les badges sont posés en grand ; à 12 elles se resserrent au lieu de
+  // déborder du viewport. Sans ça, une session à 5 écuries laissait la moitié
+  // de l'écran vide.
+  const density = Math.max(.52, Math.min(1, 6 / Math.max(rest.length, 1)));
+  wrap.style.setProperty('--page4-density', String(density));
+  wrap.classList.toggle('is-dense', rest.length > 8);
+
+  // Le barème n'est plus rappelé : il n'apprend rien au pilote et prenait une
+  // ligne. Seul le départage à la moyenne des positions est signalé, et
+  // uniquement quand il a réellement servi.
   const sub = document.getElementById('page4-sub');
   if (sub) {
     const tie = teamStandings.some(t => t.tiebroken);
-    sub.textContent = 'Barème ' + pointsScale.join(' · ') + ' — somme des points des pilotes'
-      + (tie ? ' · égalité départagée à la moyenne des positions' : '');
+    sub.textContent = tie ? 'Égalité départagée à la moyenne des positions' : '';
+    sub.style.display = tie ? '' : 'none';
   }
 }
 
@@ -915,7 +931,7 @@ if (n < 1 || n > pageCount()) return;
 currentPage = n;
 document.querySelectorAll('.page-screen').forEach(el => el.classList.toggle('active', el.id === `page-screen-${n}`));
 document.body.classList.toggle('podium-page-active', n === 1);
-document.body.classList.toggle('compact-results-page', n === 1 || n === 2);
+document.body.classList.toggle('compact-results-page', n === 1 || n === 2 || n === 4);
 document.querySelectorAll('.nav-dot').forEach(d => d.classList.toggle('active', Number(d.dataset.dot) === n));
 // 31/07 : sur la page 1, "Precedent" n'est plus grise sans rien faire — s'il
 // y a un jeton de circuit (?v=) dans l'URL, il ramene vers l'accueil resultats
@@ -1506,7 +1522,8 @@ function ensurePdfStyles() {
   color:var(--c-muted);border-bottom:1px solid var(--c-border)}
 .tpdf-head span.num{text-align:center}
 .tpdf-head span{white-space:nowrap}
-.tpdf-body{margin-top:2px}
+.tpdf-body{margin-top:2px;flex:1;display:flex;flex-direction:column}
+.tpdf-row{flex:1 1 auto}
 .tpdf-row{display:grid;grid-template-columns:26px 30px 1fr 2.1fr 62px;gap:6px;align-items:center;
   padding:9px 8px;font-size:11px;color:var(--c-text);border-bottom:1px solid var(--c-border);
   position:relative}
@@ -2368,12 +2385,11 @@ ${lead != null ? `<div class="fig"><b>+${lead}</b><span>d'avance</span></div>` :
 ${headBand}
 ${hero}
 <div class="pdfx-body-wrap" style="flex:1">
-<div class="pdfx-rank-wrap">
+<div class="pdfx-rank-wrap" style="display:flex;flex-direction:column">
 <div class="pdfx-rank-title">Classement constructeur</div>
 <div class="tpdf-head"><span class="num"></span><span></span><span>Écurie</span><span>Pilotes</span><span class="num">Points</span></div>
 <div class="tpdf-body">${rows}</div>
-<div class="tpdf-legend">Barème ${pointsScale.join(' · ')} — somme des points des pilotes de l'écurie${
-  tie ? ' · égalité départagée à la moyenne des positions' : ''}</div>
+${tie ? `<div class="tpdf-legend">Égalité départagée à la moyenne des positions</div>` : ''}
 </div>
 </div>
 <div class="pdfx-sheet-footer"><span>${footName}</span><span><b>${date}</b></span></div>
