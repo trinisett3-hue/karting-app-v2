@@ -279,13 +279,26 @@ const posClass = ['', 'p1', 'p2', 'p3'];
 wrap.innerHTML = items.map(d => {
 const cls = posClass[d.pos] || '';
 const gapTxt = gapBadge(d);
-return `<article class="podium-card ${cls}" aria-label="P${d.pos} — ${d.name}">
+// Mode Écurie : le podium reçoit les deux mêmes marqueurs que les lignes de
+// classement — la pastille d'écurie sur l'avatar et le badge de points en
+// contour. Rien d'autre : cette carte est déjà contrainte en hauteur sur
+// mobile (podium-wrap est dimensionné en dvh), une ligne de plus la casserait.
+const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+const teamAttr = team ? ` style="--tc:${team.color}"` : '';
+const teamCls = team ? ' has-team' : '';
+const teamDot = team ? `<span class="podium-team-dot" title="${escapeHTML(team.name)}">${teamLogoHTML(team, 22)}</span>` : '';
+const ptsChip = teamMode
+  ? `<span class="pilot-pts ${d.points ? '' : 'zero'}" aria-label="${d.points} points"><b>${d.points}</b>PTS</span>`
+  : '';
+return `<article class="podium-card ${cls}${teamCls}"${teamAttr} aria-label="P${d.pos} — ${d.name}">
 <div class="pos-badge" aria-hidden="true">${d.pos}</div>
+${teamDot}
 <div class="pilot-photo-wrap">${avatarHTML(d.photo, d.kart, `Photo de ${d.name}`, '', d.scheme)}</div>
 <div class="pilot-name-band">
 <div class="pilot-name ${d.isUnknown ? 'unknown' : ''}"><span class="pilot-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
 <div class="pilot-info-bar">
 <span class="pilot-kart">KART&nbsp;<strong>${d.kart ?? '-'}</strong></span>
+${ptsChip}
 <span class="pilot-gap ${d.pos === 1 ? 'leader' : ''} ${!d.hasTime ? 'no-data' : ''}" aria-label="Écart : ${gapTxt}">${gapTxt}</span>
 </div>
 </div>
@@ -370,13 +383,22 @@ const chips = d.lapsArr.map(l => {
 const isBest = d.bestLap != null && l.time === d.bestLap;
 return `<div class="lap-chip ${isBest ? 'best' : ''}"><div class="lc-idx">Tour ${l.idx}</div><div class="lc-time">${fmtTime(l.time)}</div></div>`;
 }).join('') || `<div class="lap-chip-empty">Aucun tour enregistré.</div>`;
-return `<article class="acc-item">
+// Mode Écurie : la page Détail reçoit exactement les mêmes marqueurs que les
+// autres pages — liseré, pastille sur l'avatar, écurie dans la ligne kart.
+// Pas de badge de points ici : cette page parle de chronos, et les deux
+// boutons d'action de droite occupent déjà la place.
+const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+const teamAttr = team ? ` style="--tc:${team.color}"` : '';
+const teamCls = team ? ' has-team' : '';
+const teamDot = team ? `<span class="team-dot">${teamLogoHTML(team, 13)}</span>` : '';
+const teamTag = team ? ` · <span class="team-tag">${escapeHTML(team.name)}</span>` : '';
+return `<article class="acc-item${teamCls}"${teamAttr}>
 <div class="acc-head">
 <span class="rank-pos acc-toggle" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>
+<div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}${teamDot}</div>
 <div class="rank-main acc-toggle">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
-<div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span></div>
+<div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${teamTag}</div>
 </div>
 <span class="rank-gap leader" aria-label="Meilleur tour">${d.bestLap != null ? fmtTime(d.bestLap) : '--'}</span>
 <button type="button" class="acc-icon-btn acc-pdf-btn" title="Télécharger la fiche pilote" aria-label="Télécharger la fiche pilote">${PDF_ICON}</button>

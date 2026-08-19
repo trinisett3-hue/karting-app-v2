@@ -1525,6 +1525,38 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   color: var(--tc, var(--c-accent)); margin-right: .15em; }
 .rank-pts.zero { opacity: .4; }
 
+/* Page 3 — même liseré que les lignes de classement. */
+.acc-item.has-team { position: relative; }
+.acc-item.has-team::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: var(--tc); z-index: 2;
+}
+
+/* --- Podium (page 1) en mode Écurie ---
+   Deux marqueurs seulement, les mêmes que sur les lignes de classement : la
+   pastille d'écurie posée en haut à droite de la carte, et le badge de points
+   glissé dans la barre d'infos existante. La carte est contrainte en hauteur
+   (podium-wrap est dimensionné en dvh sur mobile) : toute ligne
+   supplémentaire ferait déborder le podium hors du viewport. */
+.podium-card.has-team { border-color: var(--tc); }
+.podium-team-dot {
+  position: absolute; top: var(--space-2); right: var(--space-2); z-index: 3;
+  width: 2rem; height: 2rem; border-radius: 50%;
+  background: color-mix(in srgb, var(--c-bg) 82%, transparent);
+  border: 1.5px solid var(--tc); display: grid; place-items: center; overflow: hidden;
+  backdrop-filter: blur(4px);
+}
+.podium-team-dot img, .podium-team-dot svg { width: 68%; height: 68%; object-fit: contain; }
+.pilot-pts {
+  font-family: var(--font-body); font-size: var(--kart-size); font-weight: 700;
+  letter-spacing: .06em; color: var(--c-text); background: transparent;
+  padding: .05rem .4rem; border-radius: var(--corner-radius);
+  border: 1px solid var(--tc); white-space: nowrap; flex-shrink: 0;
+}
+.pilot-pts b { font-family: var(--font-display); font-size: 1.2em; font-style: italic;
+  color: var(--tc); margin-right: .15em; }
+.pilot-pts.zero { opacity: .45; }
+
 /* --- Page 4 : championnat constructeur --- */
 .team-row {
   display: grid; grid-template-columns: 2.5rem 3.4rem 1fr auto auto;
@@ -1573,6 +1605,10 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
      une pastille de 1.25rem le recouvrirait presque entierement. */
   #page-screen-1 .rank-avatar .team-dot { width: .8rem; height: .8rem; border-width: 1px; }
   #page2-ranking .rank-avatar .team-dot { width: .85rem; height: .85rem; border-width: 1px; }
+
+  .podium-team-dot { width: 1.35rem; height: 1.35rem; border-width: 1px;
+    top: .25rem; right: .25rem; }
+  .pilot-pts { padding: 0 .25rem; font-size: .62rem; letter-spacing: 0; }
 
   .team-row { grid-template-columns: 1.9rem 2.6rem 1fr auto; gap: .5rem; padding: .6rem .7rem; }
   .team-avg { display: none; }
