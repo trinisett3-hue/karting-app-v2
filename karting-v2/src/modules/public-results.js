@@ -841,45 +841,72 @@ NAVIGATION — Précédent / points / Suivant
    ------------------------------------------------------------------ */
 function pageCount() { return (teamMode && teamStandings.length) ? 4 : 3; }
 
-function teamRowHTML(t, maxPts) {
+/* La page 4 reprend EXACTEMENT la composition du PDF championnat : un bloc
+   champion pleine largeur, puis le reste du classement. Une seule lecture à
+   apprendre pour le pilote, qu'il regarde l'écran ou le PDF. */
+function teamHeroHTML(champ, runnerUp) {
+  const team = teamsById[champ.team_id];
+  if (!team) return '';
+  const lead = runnerUp ? champ.points - runnerUp.points : null;
+  const members = champ.members.map(m => `
+<div class="th-member">
+<div class="th-av">${rankAvatarHTML(m.photo, m.kart, m.scheme)}</div>
+<div class="th-mtxt"><span class="nm">${escapeHTML(m.name)}</span>
+<span class="meta">P${m.position} · ${m.bestLap != null ? fmtTime(m.bestLap) : '--'}</span></div>
+<span class="th-mpts">${m.points}<i>pts</i></span>
+</div>`).join('');
+  return `<section class="team-hero" style="--tc:${team.color}" aria-label="Champion constructeur : ${escapeHTML(team.name)}">
+<div class="th-badge">${teamBadgeHTML(team, 132)}</div>
+<div class="th-main">
+<div class="th-kicker">Champion constructeur</div>
+<div class="th-name">${escapeHTML(team.name)}</div>
+<div class="th-figs">
+<div class="fig"><b>${champ.points}</b><span>points</span></div>
+${lead != null ? `<div class="fig"><b>+${lead}</b><span>d'avance</span></div>` : ''}
+<div class="fig"><b>${champ.members.length}</b><span>pilote${champ.members.length > 1 ? 's' : ''}</span></div>
+</div>
+<div class="th-members">${members}</div>
+</div>
+</section>`;
+}
+
+function teamRowHTML(t) {
   const team = teamsById[t.team_id];
   if (!team) return '';
-  const width = maxPts > 0 ? Math.round((t.points / maxPts) * 100) : 0;
-  const members = t.members.map(m =>
-    `<span class="tm-member"><b>P${m.position}</b> ${escapeHTML(m.name)} <i>${m.points} pts</i></span>`
+  const members = t.members.map(m => `
+<span class="tm-member"><b>P${m.position}</b> ${escapeHTML(m.name)} <i>${m.points} pts</i></span>`
   ).join('');
-  return `<article class="team-row" style="--tc:${team.color}" role="listitem"
+  return `<article class="team-row${t.rank <= 3 ? ' top3' : ''}" style="--tc:${team.color}" role="listitem"
  aria-label="${t.rank}e — ${escapeHTML(team.name)}, ${t.points} points">
 <span class="rank-pos" aria-hidden="true">${t.rank}</span>
-<div class="team-badge-cell" aria-hidden="true">${teamBadgeHTML(team, 54)}</div>
+<div class="team-badge-cell" aria-hidden="true">${teamLogoHTML(team, 34)}</div>
 <div class="team-main">
 <div class="team-name">${escapeHTML(team.name)}</div>
 <div class="team-members">${members}</div>
-<div class="team-bar" aria-hidden="true"><i style="width:${width}%"></i></div>
 </div>
-<span class="team-avg" title="Moyenne des positions — départage les égalités">moy. P${t.avgPosition.toFixed(1)}</span>
 <span class="rank-pts"><b>${t.points}</b>PTS</span>
 </article>`;
 }
 
 function renderTeamPage() {
   const wrap = document.getElementById('page4-teams');
+  const heroWrap = document.getElementById('page4-hero');
   const screen = document.getElementById('page-screen-4');
   const dot = document.querySelector('.nav-dot[data-dot="4"]');
   const show = teamMode && teamStandings.length > 0;
   if (screen) screen.style.display = show ? '' : 'none';
   if (dot) dot.style.display = show ? '' : 'none';
-  if (!wrap || !show) return;
+  if (!wrap || !show) { if (heroWrap) heroWrap.innerHTML = ''; return; }
 
-  const maxPts = teamStandings[0].points || 0;
-  wrap.innerHTML = teamStandings.map(t => teamRowHTML(t, maxPts)).join('');
+  if (heroWrap) heroWrap.innerHTML = teamHeroHTML(teamStandings[0], teamStandings[1]);
+  // Le champion est déjà en haut : le tableau reprend à partir du 2e.
+  wrap.innerHTML = teamStandings.slice(1).map(teamRowHTML).join('');
 
   const sub = document.getElementById('page4-sub');
   if (sub) {
     const tie = teamStandings.some(t => t.tiebroken);
-    sub.textContent = tie
-      ? 'Égalité départagée à la moyenne des positions'
-      : 'Barème ' + pointsScale.join('-') + ' — somme des points des pilotes';
+    sub.textContent = 'Barème ' + pointsScale.join(' · ') + ' — somme des points des pilotes'
+      + (tie ? ' · égalité départagée à la moyenne des positions' : '');
   }
 }
 
@@ -1289,6 +1316,24 @@ function ensurePdfStyles() {
    tombait sous ~95pt en portrait et les noms longs (« Emma BERNARD ») étaient coupés
    en plein glyphe — html2canvas ne dessine pas les « … » de text-overflow. */
 .pdfx-rank-head.with-sec,.pdfx-rank-row.with-sec{grid-template-columns:22px 24px minmax(92px,1fr) 30px 30px 62px 50px 42px 42px 42px;gap:3px}
+/* --- Mode Ecurie : colonne Points, et colonne Ecurie quand la place le
+   permet. Les couleurs restent neutres, comme a l'ecran : seul le nom
+   d'ecurie porte la couleur. --- */
+.pdfx-rank-head.with-team.team-col,.pdfx-rank-row.with-team.team-col{
+  grid-template-columns:24px 26px minmax(76px,1.15fr) minmax(64px,.9fr) 34px 34px 66px 56px 40px;gap:4px}
+.pdfx-rank-head.with-team:not(.team-col),.pdfx-rank-row.with-team:not(.team-col){
+  grid-template-columns:26px 28px 1.5fr 46px 44px 74px 66px 40px}
+.pdfx-rank-head.with-sec.with-team,.pdfx-rank-row.with-sec.with-team{
+  grid-template-columns:22px 24px minmax(84px,1fr) 28px 28px 58px 46px 38px 38px 38px 34px;gap:3px}
+.pdfx-rank-row .team{display:flex;align-items:center;gap:5px;font-weight:700;font-size:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfx-rank-row .team i{width:7px;height:7px;border-radius:2px;flex-shrink:0;display:block}
+.pdfx-rank-head.team-col span:nth-child(4){text-align:left}
+.pdfx-rank-row .name .team-sub{display:block;font-size:8px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;line-height:1.3;margin-top:-1px}
+.pdfx-rank-row .pts{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;
+  text-align:center;color:var(--c-text);font-variant-numeric:tabular-nums}
+.pdfx-rank-row .pts:empty::after{content:'0'}
 /* Libellés d'en-tête resserrés en mode secteurs : « TOURS » débordait de sa
    colonne de 30px et se collait à « MEILL. TOUR ». */
 .pdfx-rank-head.with-sec{font-size:8px;letter-spacing:.02em}
@@ -1589,10 +1634,12 @@ function pdfxPodiumHTML(field) {
 <div class="pdfx-p-rank">${d.pos}</div>
 <div class="pdfx-p-avatar">${pdfxAvatarImg(d.photo, d.kart, { scheme: d.scheme })}</div>
 <div class="pdfx-p-name">${escapeHTML(d.name)}</div>
-<div class="pdfx-p-kart">Kart ${d.kart ?? '-'}</div>
+<div class="pdfx-p-kart">Kart ${d.kart ?? '-'}${(teamMode && d.teamId && teamsById[d.teamId])
+  ? ` · <span style="color:${teamsById[d.teamId].color}">${escapeHTML(teamsById[d.teamId].name)}</span>` : ''}</div>
 <div class="pdfx-p-stats">
 <div class="pdfx-p-stat"><span class="k">Meill. tour</span><span class="v best">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span></div>
 <div class="pdfx-p-stat"><span class="k">Tours</span><span class="v">${d.hasTime ? d.lapsCount : '--'}</span></div>
+${teamMode ? `<div class="pdfx-p-stat"><span class="k">Points</span><span class="v">${d.points || 0}</span></div>` : ''}
 </div>
 </div>`).join('')}</div>`;
 }
@@ -1616,7 +1663,13 @@ ${order.map(d => `
 
 function pdfxRankHeadHTML(showSec) {
   const secCols = showSec ? '<span class="num">S1</span><span class="num">S2</span><span class="num">S3</span>' : '';
-  return `<div class="pdfx-rank-head${showSec ? ' with-sec' : ''}"><span class="num"></span><span></span><span>Pilote</span><span class="num">Kart</span><span class="num">Tours</span><span class="num">Meill. tour</span><span class="num">Écart</span>${secCols}</div>`;
+  // Mode Écurie : deux colonnes de plus. L'écurie n'a la sienne QUE si les
+  // secteurs sont éteints — avec les secteurs, dix colonnes se partagent déjà
+  // 503 px de large, une onzième rendrait le nom du pilote illisible. Dans ce
+  // cas l'écurie passe sous le nom, sans perte d'information.
+  const teamCol = (teamMode && !showSec) ? '<span>Écurie</span>' : '';
+  const ptsCol = teamMode ? '<span class="num">Pts</span>' : '';
+  return `<div class="pdfx-rank-head${showSec ? ' with-sec' : ''}${teamMode ? ' with-team' : ''}${(teamMode && !showSec) ? ' team-col' : ''}"><span class="num"></span><span></span><span>Pilote</span>${teamCol}<span class="num">Kart</span><span class="num">Tours</span><span class="num">Meill. tour</span><span class="num">Écart</span>${secCols}${ptsCol}</div>`;
 }
 
 function pdfxBestSec(d, si) {
@@ -1632,17 +1685,31 @@ function pdfxRankGap(d) {
 }
 
 function pdfxRankRowsHTML(chunk, showSec) {
-  return chunk.map(d => `
-<div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}">
+  const teamCol = teamMode && !showSec;
+  return chunk.map(d => {
+    const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+    // Nom d'écurie : dans sa colonne quand il y a la place, sinon sous le nom
+    // du pilote. Jamais les deux, jamais aucun.
+    const teamCell = teamCol
+      ? `<span class="team">${team ? `<i style="background:${team.color}"></i>${escapeHTML(team.name)}` : ''}</span>`
+      : '';
+    const teamUnder = (teamMode && !teamCol && team)
+      ? `<span class="team-sub" style="color:${team.color}">${escapeHTML(team.name)}</span>` : '';
+    const pts = teamMode ? `<span class="pts">${d.points || 0}</span>` : '';
+    return `
+<div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}${teamMode ? ' with-team' : ''}${teamCol ? ' team-col' : ''}">
 <span class="pos">${d.pos}</span>
 <span class="av">${pdfxAvatarImg(d.photo, d.kart, { small: true, scheme: d.scheme })}</span>
-<span class="name">${escapeHTML(d.name)}</span>
+<span class="name">${escapeHTML(d.name)}${teamUnder}</span>
+${teamCell}
 <span class="kart">#${d.kart ?? '-'}</span>
 <span class="laps">${d.hasTime ? d.lapsCount : '--'}</span>
 <span class="best">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span>
 <span class="gap">${pdfxRankGap(d)}</span>
 ${showSec ? [0, 1, 2].map(si => { const v = pdfxBestSec(d, si); return `<span class="sec">${v != null ? v.toFixed(3) : '--'}</span>`; }).join('') : ''}
-</div>`).join('');
+${pts}
+</div>`;
+  }).join('');
 }
 
 /* ---------- Fragments de markup — fiche pilote ---------- */
