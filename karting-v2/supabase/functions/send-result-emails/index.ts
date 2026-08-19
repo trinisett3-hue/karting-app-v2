@@ -135,6 +135,8 @@ const LABELS: Record<string, string> = {
   pilot_pdf: 'Ta fiche pilote',
   position_card: 'Ta carte de position',
   record_card: 'Ta carte de record',
+  team_standings_card: 'Le classement du championnat constructeur',
+  team_card: 'La carte de ton écurie',
 };
 
 function filenameFor(kind: string, mime: string) {
@@ -144,6 +146,8 @@ function filenameFor(kind: string, mime: string) {
     pilot_pdf: 'fiche-pilote',
     position_card: 'carte-position',
     record_card: 'carte-record',
+    team_standings_card: 'classement-constructeur',
+    team_card: 'carte-ecurie',
   };
   return (base[kind] || 'document') + '.' + ext;
 }

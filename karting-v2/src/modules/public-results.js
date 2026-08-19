@@ -2435,7 +2435,9 @@ ${tie ? `<div class="tpdf-legend">Égalité départagée à la moyenne des posit
 export function listExportPilots() {
   return (allResults || [])
     .filter((r) => r.regId)
-    .map((r) => ({ regId: r.regId, name: r.name, kart: r.kart, pos: r.pos, hasTime: r.hasTime }));
+    // teamId ajouté (additif) : publish-pdfs.js en a besoin pour savoir quelle
+    // carte d'écurie (teamCardPNGBytes) joindre à l'e-mail de quel pilote.
+    .map((r) => ({ regId: r.regId, name: r.name, kart: r.kart, pos: r.pos, hasTime: r.hasTime, teamId: r.teamId || null }));
 }
 
 export function setPdfOrient(v) {

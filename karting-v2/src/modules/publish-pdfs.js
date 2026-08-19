@@ -250,6 +250,61 @@ export async function generateSessionPDFs(session, onProgress) {
       }
     }
 
+    // 4. Écurie — championnat constructeur. Deux visuels, générés seulement si
+    //    la session est en Mode Écurie : le classement complet des écuries
+    //    (un seul fichier, comme le classement pilote) et, pour chaque
+    //    destinataire membre d'une écurie, la carte de SON écurie.
+    //
+    //    team_standings_card est déposée avec registrationId null : la
+    //    jointure de claim_card_deliveries() (session_assets.registration_id
+    //    is null OR = destinataire) la rattache automatiquement à TOUS les
+    //    e-mails de la session, exactement comme full_pdf.
+    if (session.team_mode) {
+      say(done, recipients.length + 2, 'championnat constructeur');
+      try {
+        const buf = await withTimeout(api.teamStandingsCardPNGBytes(), PDF_TIMEOUT, 'classement constructeur');
+        const path = await uploadSessionAsset({
+          session,
+          kind: 'team_standings_card',
+          blob: new Blob([buf], { type: 'image/png' }),
+          filename: 'classement-constructeur.png',
+        });
+        if (!path) report.cardsFailed++;
+      } catch (e) {
+        report.cardsFailed++;
+        console.warn('[publication] classement constructeur :', e.message || e);
+      }
+
+      // Une seule carte rendue par écurie (pas une par pilote) : tous les
+      // membres d'une même écurie reçoivent le même fichier déjà téléversé.
+      const teamIdByReg = new Map((api.listPilots() || []).map((p) => [p.regId, p.teamId || null]));
+      const teamCardPathById = new Map();
+      for (const reg of recipients) {
+        if (!known.has(reg.id)) continue;
+        const teamId = teamIdByReg.get(reg.id);
+        if (!teamId) continue; // pilote sans écurie (ajouté manuellement, non encore affecté)
+        const pilotLabel = reg.display_name || 'pilote';
+        try {
+          let buf = teamCardPathById.get(teamId);
+          if (buf === undefined) {
+            buf = await withTimeout(api.teamCardPNGBytes(teamId), PDF_TIMEOUT, 'carte d\'écurie');
+            teamCardPathById.set(teamId, buf);
+          }
+          const path = await uploadSessionAsset({
+            session,
+            kind: 'team_card',
+            blob: new Blob([buf], { type: 'image/png' }),
+            registrationId: reg.id,
+            filename: 'carte-ecurie_' + slug(pilotLabel) + '_' + String(reg.id).slice(0, 8) + '.png',
+          });
+          if (!path) report.cardsFailed++;
+        } catch (e) {
+          report.cardsFailed++;
+          console.warn('[publication] carte d\'écurie de ' + pilotLabel + ' :', e.message || e);
+        }
+      }
+    }
+
     return report;
   } finally {
     // Toujours, y compris sur erreur : une iframe oubliee garderait la page
