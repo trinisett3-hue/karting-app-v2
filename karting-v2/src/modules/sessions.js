@@ -156,11 +156,8 @@ export async function openActiveDetail(id, { onOpened } = {}) {
   if (notesEl) notesEl.value = s.internal_notes || '';
   document.getElementById('det-save-btn').style.display = 'none';
   await loadInscrits();
-  // Monte apres loadInscrits() : le bloc a besoin du compte de pilotes par
-  // ecurie pour verrouiller celles qui sont deja occupees.
   await mountTeamBlock('det', {
     session: s,
-    taken: countByTeam(state.inscritsData),
     onChange: markDetailDirty,
   });
   await refreshOccupation();

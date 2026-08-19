@@ -9,72 +9,29 @@
 // mountTeamBlock() est écrite une fois et branchée deux fois.
 
 import { db } from '../lib/supabase.js';
-import { loadTeamCatalog, teamLogoHTML } from './teams.js';
+import { teamLogoHTML } from './teams.js';
 import { hasFeature } from './plan.js';
 
-const blocks = {}; // prefix -> { teams, selected:Set, entitled }
+const blocks = {}; // prefix -> { entitled }
 
-// --- Rendu -----------------------------------------------------------------------------
-
-function pickerHTML(prefix, teams, selected, sizeMax, taken) {
-  return teams.map((t) => {
-    const on = selected.has(t.id);
-    const used = taken ? (taken[t.id] || 0) : 0;
-    // Une écurie qui compte déjà des pilotes ne peut plus être retirée de la
-    // session : on la verrouille cochée plutôt que de laisser l'organisateur
-    // créer des inscriptions orphelines sans s'en rendre compte.
-    const locked = used > 0;
-    return (
-      '<button type="button" class="team-chip' + (on ? ' on' : '') + (locked ? ' locked' : '') + '"' +
-      ' data-prefix="' + prefix + '" data-team="' + t.id + '"' +
-      (locked ? ' title="' + used + ' pilote(s) déjà inscrit(s) dans cette écurie"' : '') +
-      ' style="--tc:' + t.color + '">' +
-      teamLogoHTML(t, 22) +
-      '<span class="tc-name">' + t.name + '</span>' +
-      (used ? '<span class="tc-count">' + used + '/' + sizeMax + '</span>' : '') +
-      '</button>'
-    );
-  }).join('');
-}
-
-function refreshPicker(prefix) {
-  const b = blocks[prefix];
-  const el = document.getElementById(prefix + '-team-picker');
-  if (!b || !el) return;
-  el.innerHTML = pickerHTML(prefix, b.teams, b.selected, b.sizeMax, b.taken);
-  el.querySelectorAll('.team-chip').forEach((chip) => {
-    chip.addEventListener('click', () => {
-      if (chip.classList.contains('locked')) return;
-      const id = chip.dataset.team;
-      if (b.selected.has(id)) b.selected.delete(id); else b.selected.add(id);
-      chip.classList.toggle('on');
-      updateSummary(prefix);
-      if (b.onChange) b.onChange();
-    });
-  });
-  updateSummary(prefix);
-}
-
-function updateSummary(prefix) {
-  const b = blocks[prefix];
-  const el = document.getElementById(prefix + '-team-summary');
-  if (!b || !el) return;
-  const n = b.selected.size || b.teams.length;
-  const size = b.sizeMax || 2;
-  el.textContent = n + ' écurie(s) engagée(s) · ' + (n * size) + ' places pilotes' +
-    (b.selected.size ? '' : ' (aucune sélection = les ' + b.teams.length + ' écuries sont ouvertes)');
-}
-
-function setEnabled(prefix, on) {
-  const wrap = document.getElementById(prefix + '-team-config');
-  if (wrap) wrap.style.display = on ? 'block' : 'none';
-}
+// Taille d'écurie : ce n'est pas un réglage — une écurie, c'est 2 pilotes,
+// jamais plus, jamais moins. Aucune configuration ne l'expose, nulle part
+// (ni en nombre modifiable, ni même affiché comme texte côté admin).
+const TEAM_SIZE_FIXED = 2;
 
 // --- Montage ---------------------------------------------------------------------------
 //
 // `session` peut être null (panneau de création). `onChange` est appelée à
-// chaque modification pour que le détail puisse afficher son bouton Enregistrer.
-export async function mountTeamBlock(prefix, { session = null, taken = null, onChange = null } = {}) {
+// chaque modification pour que le détail puisse afficher son bouton
+// Enregistrer.
+//
+// L'organisateur n'a plus qu'une case à cocher : quelles écuries s'affrontent
+// et qui en fait partie n'est pas un choix admin, c'est le résultat des choix
+// des pilotes à l'inscription (voir renderTeamPicker() dans register.js). Il
+// n'y a donc plus de sélection d'écuries engagées ici, ni à la création ni
+// dans le détail d'une session — toutes les écuries du catalogue sont
+// toujours ouvertes aux pilotes.
+export async function mountTeamBlock(prefix, { session = null, onChange = null } = {}) {
   const root = document.getElementById(prefix + '-team-block');
   if (!root) return;
 
@@ -88,25 +45,11 @@ export async function mountTeamBlock(prefix, { session = null, taken = null, onC
       '<div style="font-size:12px;color:var(--mut);background:var(--surf2);border:1px solid var(--bord);' +
       'border-radius:8px;padding:12px;text-align:center">🔒 Championnat par écuries — réservé au plan ' +
       '<strong>Premium</strong>.</div>';
-    blocks[prefix] = { entitled: false, teams: [], selected: new Set() };
+    blocks[prefix] = { entitled: false };
     return;
   }
 
-  const teams = await loadTeamCatalog();
-  const selected = new Set();
-  if (session) {
-    const { data } = await db.from('session_teams').select('team_id').eq('session_id', session.id);
-    (data || []).forEach((r) => selected.add(r.team_id));
-  }
-
-  blocks[prefix] = {
-    entitled: true,
-    teams,
-    selected,
-    sizeMax: (session && session.team_size_max) || 2,
-    taken: taken || null,
-    onChange,
-  };
+  blocks[prefix] = { entitled: true };
 
   const on = !!(session && session.team_mode);
   root.innerHTML =
@@ -115,33 +58,12 @@ export async function mountTeamBlock(prefix, { session = null, taken = null, onC
         '<input type="checkbox" id="' + prefix + '-team-mode"' + (on ? ' checked' : '') + '>' +
         '<span>Mode Écurie</span>' +
       '</label>' +
-      '<span style="font-size:11px;color:var(--mut)">Championnat constructeur en plus du classement pilote</span>' +
-    '</div>' +
-    '<div id="' + prefix + '-team-config" style="display:' + (on ? 'block' : 'none') + ';margin-top:10px">' +
-      '<div class="flex" style="align-items:flex-end;gap:12px;margin-bottom:10px">' +
-        '<div style="width:150px">' +
-          '<label>Pilotes par écurie</label>' +
-          '<input type="number" id="' + prefix + '-team-size" min="1" max="6" value="' +
-            ((session && session.team_size_max) || 2) + '">' +
-        '</div>' +
-        '<div style="flex:1;font-size:11px;color:var(--mut)" id="' + prefix + '-team-summary"></div>' +
-      '</div>' +
-      '<label style="display:block;margin-bottom:6px">Écuries engagées</label>' +
-      '<div class="team-picker" id="' + prefix + '-team-picker"></div>' +
+      '<span style="font-size:11px;color:var(--mut)">Championnat constructeur en plus du classement pilote — les pilotes choisissent leur écurie à l\'inscription.</span>' +
     '</div>';
 
-  document.getElementById(prefix + '-team-mode').addEventListener('change', (e) => {
-    setEnabled(prefix, e.target.checked);
+  document.getElementById(prefix + '-team-mode').addEventListener('change', () => {
     if (onChange) onChange();
   });
-  const sizeEl = document.getElementById(prefix + '-team-size');
-  sizeEl.addEventListener('input', () => {
-    blocks[prefix].sizeMax = Math.min(6, Math.max(1, parseInt(sizeEl.value) || 2));
-    refreshPicker(prefix);
-    if (onChange) onChange();
-  });
-
-  refreshPicker(prefix);
 }
 
 // Lit l'état du bloc. Retourne toujours un objet exploitable, même quand le
@@ -149,13 +71,16 @@ export async function mountTeamBlock(prefix, { session = null, taken = null, onC
 // l'appelant n'a aucun cas particulier à traiter.
 export function readTeamBlock(prefix) {
   const b = blocks[prefix];
-  if (!b || !b.entitled) return { team_mode: false, team_size_max: 2, teams: [] };
+  if (!b || !b.entitled) return { team_mode: false, team_size_max: TEAM_SIZE_FIXED, teams: [] };
   const modeEl = document.getElementById(prefix + '-team-mode');
-  const sizeEl = document.getElementById(prefix + '-team-size');
   return {
     team_mode: !!(modeEl && modeEl.checked),
-    team_size_max: Math.min(6, Math.max(1, parseInt(sizeEl && sizeEl.value) || 2)),
-    teams: Array.from(b.selected),
+    team_size_max: TEAM_SIZE_FIXED,
+    // Toujours vide : plus de restriction d'écuries engagées côté admin, donc
+    // toujours « aucune sélection = toutes les écuries sont ouvertes » côté
+    // syncSessionTeams (voir sa docstring plus bas) — c'est désormais le seul
+    // mode de fonctionnement, pas un cas particulier.
+    teams: [],
   };
 }
 
@@ -174,9 +99,9 @@ export async function syncSessionTeams(sessionId, teamIds) {
     await db.from('session_teams').insert(toAdd.map((id) => ({ session_id: sessionId, team_id: id })));
   }
   if (toDrop.length) {
-    // Une écurie qui compte encore des pilotes n'est jamais retirée : le chip
-    // est verrouillé côté UI, mais la règle est re-vérifiée ici parce que
-    // l'écran de création et l'écran de détail n'ont pas le même contexte.
+    // Une écurie qui compte encore des pilotes n'est jamais retirée : la
+    // règle est re-vérifiée ici parce que l'écran de création et l'écran de
+    // détail n'ont pas le même contexte.
     const { data: used } = await db
       .from('session_registrations')
       .select('team_id')
@@ -191,7 +116,7 @@ export async function syncSessionTeams(sessionId, teamIds) {
 }
 
 // Compte les pilotes par écurie sur une session. Sert à afficher « 2/2 » sur
-// les chips et à verrouiller celles qui sont occupées.
+// la colonne Écurie du registre et à verrouiller les écuries déjà pleines.
 export function countByTeam(registrations) {
   const out = {};
   (registrations || []).forEach((r) => {
@@ -202,10 +127,17 @@ export function countByTeam(registrations) {
 
 // --- Correction de l'affiliation depuis le registre de la session ----------------------
 //
-// Le <select> de la colonne Écurie. Les écuries pleines sont désactivées, sauf
-// celle du pilote lui-même (sinon sa propre valeur disparaîtrait de la liste et
-// le navigateur choisirait la première option à sa place — un pilote changerait
-// d'écurie tout seul au premier rendu).
+// Le <select> de la colonne Écurie du tableau des inscrits (sessions.js >
+// renderInscritsTable()). C'est ici — et seulement ici — que l'admin peut
+// voir et corriger l'écurie de chaque pilote inscrit, qu'il se soit inscrit
+// lui-même en choisissant son écurie, ou qu'il ait été ajouté manuellement
+// par le staff (manual-add.js, qui n'assigne aucune écurie à la création :
+// l'admin l'affecte ensuite depuis cette même colonne).
+//
+// Les écuries pleines sont désactivées, sauf celle du pilote lui-même (sinon
+// sa propre valeur disparaîtrait de la liste et le navigateur choisirait la
+// première option à sa place — un pilote changerait d'écurie tout seul au
+// premier rendu).
 export function teamSelectHTML(reg, teams, taken, sizeMax) {
   const cur = reg.team_id || '';
   const opts = ['<option value="">— aucune —</option>'].concat(
