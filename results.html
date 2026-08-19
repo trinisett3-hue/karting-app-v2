@@ -1673,11 +1673,29 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
   font-weight: 800; letter-spacing: .12em; color: var(--c-muted); margin-left: .15rem; }
 
 @media (max-width: 640px) {
-  .team-hero { flex-direction: column; align-items: center; text-align: center;
-    gap: var(--space-3); padding: var(--space-4); }
-  .th-badge img, .th-badge svg { width: 6rem; height: 6rem; }
-  .th-figs, .th-members { justify-content: center; gap: var(--space-4); }
-  .th-name { font-size: clamp(1.8rem, 9vw, 2.6rem); }
+  /* Le bloc garde la MÊME composition qu'en large — badge à gauche, infos à
+     droite. Une version empilée et centrée doublait sa hauteur et poussait le
+     classement hors de l'écran : sur cette page le pilote doit voir le
+     champion ET les premières écuries d'un seul coup d'oeil. */
+  .team-hero { gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-lg); }
+  .th-badge img, .th-badge svg { width: 3.9rem; height: 3.9rem; }
+  .th-kicker { font-size: .54rem; letter-spacing: .2em; }
+  .th-name { font-size: clamp(1.5rem, 7.5vw, 2.1rem); }
+  .th-figs { gap: var(--space-3); margin: var(--space-2) 0; padding-bottom: var(--space-2);
+    flex-wrap: nowrap; }
+  .th-figs .fig b { font-size: 1.2rem; }
+  .th-figs .fig span { font-size: .48rem; letter-spacing: .08em; }
+  /* « 2 pilotes » saute : c'est le chiffre le moins utile, et le retirer suffit
+     à garder les deux autres sur une seule ligne. L'information reste juste
+     en dessous, dans la liste des pilotes. */
+  .th-figs .fig:last-child { display: none; }
+  .th-members { gap: .35rem var(--space-3); flex-direction: column; align-items: flex-start; }
+  .th-member { width: 100%; }
+  .th-av { width: 1.65rem; height: 1.65rem; border-width: 1.5px; }
+  .th-mtxt { flex: 1; }
+  .th-mtxt .nm { font-size: .88rem; }
+  .th-mtxt .meta { font-size: .55rem; }
+  .th-mpts { font-size: 1rem; margin-left: auto; }
 }
 </style>
 
