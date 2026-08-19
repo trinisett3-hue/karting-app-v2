@@ -1728,7 +1728,10 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 <!-- ============================================================
      JAVASCRIPT — Logique métier (à connecter avec l'existant)
      ============================================================ -->
-<script type="module" src="karting-v2/src/results-app.js"></script>
+<!-- ?v= : cache-buster (voir commentaire dans results-app.js). Sans lui, cette
+     page peut rester servie avec un ancien results-app.js pendant 4h après un
+     déploiement, qui lui-même importait encore l'ancien public-results.js. -->
+<script type="module" src="karting-v2/src/results-app.js?v=20260819b"></script>
 
 </body>
 </html>
