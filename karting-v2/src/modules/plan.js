@@ -31,7 +31,13 @@ import { db } from '../lib/supabase.js';
 //                          INDIVIDUELLE, depuis sa fiche (voir app.js > exportArchiveCSV()/
 //                          exportArchivePDF()). Ne concerne pas l'export GLOBAL CSV/XLSX de
 //                          la liste des archives (archives-export.js), qui reste Basique.
-const PREMIUM_FEATURES = ['advanced_stats', 'session_occupancy', 'archive_detail', 'registry_export', 'archive_export'];
+//  - 'team_mode'        : le mode Ecurie (championnat constructeur) — case a cocher a la
+//                          creation de session, choix des ecuries engagees, colonne Ecurie
+//                          dans le registre de session (voir teams-admin.js). Le droit est
+//                          re-verifie cote serveur par private.tenant_has_team_mode() : les
+//                          RPC publiques redescendent team_mode:false pour un plan Basique,
+//                          meme si la colonne sessions.team_mode vaut true.
+const PREMIUM_FEATURES = ['advanced_stats', 'session_occupancy', 'archive_detail', 'registry_export', 'archive_export', 'team_mode'];
 
 let cachedPlanCode = null;
 

@@ -8,6 +8,7 @@
 // configurer manuellement. Cet onglet montre la flotte et un aperçu en direct de la page
 // de résultats (thème + avatars).
 import { db } from '../lib/supabase.js';
+import { mountTeamBlock } from './teams-admin.js';
 import { state, setPrefs, markPrefsDirty } from '../state.js';
 import { showMsg, formatTime, formatDate } from './ui.js';
 import { toggleSectorsField, loadRanking } from './results.js';
@@ -80,6 +81,11 @@ return { gal: "l'avatar de son kart, coloré selon le numéro", apercu: "l'avata
 }
 
 export function updateDefaultsInfo() {
+// Le bloc Mode Ecurie du panneau de creation se monte ici plutot qu'au
+// demarrage : updateDefaultsInfo() est deja rappelee a chaque retour sur
+// l'onglet Creer, ce qui remet le bloc a zero entre deux sessions au lieu de
+// garder la selection d'ecuries de la precedente.
+mountTeamBlock('s').catch(() => {});
 const el = document.getElementById('s-defaults-info');
 const kartsWrap = document.getElementById('s-karts-wrap');
 if (!el) return;

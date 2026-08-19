@@ -28,6 +28,7 @@
 // private.avatar_config(tenant_id) a déjà tranché côté serveur (Premium ou pas),
 // exactement comme le fait déjà site-config.js pour results.html.
 import { db } from '../lib/supabase.js';
+import { teamBadgeHTML, teamLogoHTML } from './teams.js';
 import { kartAvatarSVG } from './kart-avatar.js';
 import {
   configureSignatureAvatars,
@@ -62,6 +63,12 @@ const regState = {
   avatarPool: [],
 avatarIndex: 0,
 avatarReused: false,
+// Mode Ecurie. `teams` porte deja `taken` et `full` calcules par la RPC : on
+// n'interroge jamais la base depuis ici pour savoir si une ecurie est pleine.
+teamMode: false,
+teamSizeMax: 2,
+teams: [],
+teamId: null,
 };
 
 // Validation email basique — suffisante pour un formulaire mobile, pas une
@@ -81,6 +88,11 @@ const FALLBACK_CONFIG = {
   circuit_name: null,
   logo_url: null,
   results_token: null,
+  // Mode Ecurie : absent = desactive. Un circuit qui n'y a pas droit, ou une
+  // base ou la migration n'est pas encore passee, retombe naturellement ici.
+  team_mode: false,
+  team_size_max: 2,
+  teams: [],
 };
 
 // 🆕 v17 : la nationalité est demandée via un combobox réellement
@@ -656,6 +668,9 @@ export async function initRegisterPage() {
     return;
   }
   regState.sessionId = cfg.session_id;
+  regState.teamMode = !!cfg.team_mode;
+  regState.teamSizeMax = cfg.team_size_max || 2;
+  regState.teams = Array.isArray(cfg.teams) ? cfg.teams : [];
   setSessionTitle(cfg.session_title || '--');
 
   applyCircuitBranding(cfg);
@@ -819,6 +834,80 @@ export async function confirmPilotFound() {
    ÉCRAN 2 — session : nationalité + carrousel d'avatar
    -------------------------------------------------------------------------- */
 
+/* -----------------------------------------------------------------------------
+   MODE ÉCURIE — choix de l'écurie
+   -----------------------------------------------------------------------------
+   Volontairement posé SUR l'écran 2, au-dessus du carrousel d'avatar, et pas
+   dans un écran de plus : le parcours d'inscription reste à deux étapes, on
+   n'allonge pas le tunnel. Un pilote qui ne choisit rien s'inscrit quand même —
+   l'organisateur lui attribuera une écurie depuis le registre. Bloquer ici
+   ferait perdre des inscriptions pour rien.
+
+   La disponibilité vient de la RPC (`taken` / `full`), jamais d'un comptage
+   côté client : deux pilotes peuvent viser la dernière place en même temps, et
+   c'est le trigger serveur qui tranche à la soumission.
+*/
+function renderTeamPicker() {
+  const field = document.getElementById('team-field');
+  if (!field) return;
+  if (!regState.teamMode || !regState.teams.length) {
+    field.style.display = 'none';
+    regState.teamId = null;
+    return;
+  }
+  field.style.display = 'block';
+
+  const grid = document.getElementById('team-grid');
+  grid.innerHTML = regState.teams.map((t) => {
+    const left = Math.max(0, regState.teamSizeMax - (t.taken || 0));
+    const full = !!t.full;
+    return '<button type="button" class="team-card' + (full ? ' full' : '') +
+      (regState.teamId === t.id ? ' on' : '') + '" data-team="' + t.id + '"' +
+      (full ? ' disabled aria-disabled="true"' : '') +
+      ' style="--tc:' + t.color + '">' +
+      teamBadgeHTML(t, 86) +
+      '<span class="tc-state">' + (full ? 'Complète' : left + ' place' + (left > 1 ? 's' : '')) + '</span>' +
+      '</button>';
+  }).join('');
+
+  grid.querySelectorAll('.team-card').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      // Re-clic sur la même écurie = on se désaffilie. Sans ça, un pilote qui
+      // a cliqué par erreur n'a aucun moyen de revenir en arrière.
+      regState.teamId = (regState.teamId === btn.dataset.team) ? null : btn.dataset.team;
+      renderTeamPicker();
+    });
+  });
+
+  const hint = document.getElementById('team-hint');
+  if (hint) {
+    const chosen = regState.teams.find((t) => t.id === regState.teamId);
+    hint.textContent = chosen
+      ? 'Tu cours pour ' + chosen.name + '. Re-clique dessus pour annuler.'
+      : 'Facultatif — tu peux t\'inscrire sans écurie, le circuit t\'en attribuera une.';
+  }
+}
+
+// Recharge les compteurs juste avant l'affichage : entre le chargement de la
+// page et l'arrivée sur l'écran 2, d'autres pilotes ont pu prendre des places.
+async function refreshTeamAvailability() {
+  if (!regState.teamMode || !regState.registrationToken) return;
+  try {
+    const res = await db.rpc('public_registration_config', { _registration_token: regState.registrationToken });
+    if (!res.error && res.data && Array.isArray(res.data.teams)) {
+      regState.teams = res.data.teams;
+      regState.teamSizeMax = res.data.team_size_max || regState.teamSizeMax;
+      // L'écurie visée vient peut-être de se remplir : on lâche la sélection
+      // plutôt que de laisser le pilote se prendre un refus à la soumission.
+      const cur = regState.teams.find((t) => t.id === regState.teamId);
+      if (cur && cur.full) regState.teamId = null;
+    }
+  } catch (e) {
+    console.warn('[register] disponibilité des écuries non rafraîchie', e);
+  }
+}
+
 async function enterScreen2() {
   clearMsg('msg-2');
   const sub = document.getElementById('screen2-sub');
@@ -833,6 +922,8 @@ async function enterScreen2() {
   if (promo) promo.checked = false;
   onConsentChange();
   showScreen('screen-2');
+  await refreshTeamAvailability();
+  renderTeamPicker();
   await initAvatarCarousel();
 }
 
@@ -935,6 +1026,9 @@ export async function submitForm() {
       // CSV/XLSX pour que le circuit puisse trier ses contacts opt-in.
       consent_accepted_at: new Date().toISOString(),
       promo_opt_in: !!(promoBox && promoBox.checked),
+      // Hors mode Ecurie, le trigger serveur remet cette valeur a NULL de
+      // toute facon : on peut l'envoyer sans condition.
+      team_id: regState.teamMode ? regState.teamId : null,
     });
     if (error) throw error;
     document.getElementById('screen-2').classList.remove('active');
@@ -948,7 +1042,16 @@ export async function submitForm() {
         // corrigé le 30/07 — la contrainte session_registrations_session_pilot_uidx
         // n'existait pas avant, donc les doublons passaient silencieusement).
         const constraint = (e && (e.details || e.message || '')) + '';
-        if (e && e.code === '23505' && constraint.indexOf('session_pilot_uidx') !== -1) {
+        // Mode Ecurie : trg_validate_registration_team leve un 23505 SANS nom
+        // de contrainte quand l'ecurie s'est remplie entre l'affichage et la
+        // soumission. Sans ce test, ce cas tomberait dans la branche « avatar
+        // deja pris » juste en dessous, et le pilote changerait d'avatar en
+        // boucle sans jamais comprendre.
+        if (e && /ecurie|écurie/i.test(constraint)) {
+          await refreshTeamAvailability();
+          renderTeamPicker();
+          showMsg('msg-2', 'Cette écurie vient d\'être complétée — choisis-en une autre.', 'err');
+        } else if (e && e.code === '23505' && constraint.indexOf('session_pilot_uidx') !== -1) {
                 showMsg('msg-2', 'Tu es déjà inscrit à cette session — inutile de t\'inscrire une seconde fois.', 'err');
         } else if (e && e.code === '23505') {
       // Collision sur (session_id, avatar_scheme) : un autre pilote vient de

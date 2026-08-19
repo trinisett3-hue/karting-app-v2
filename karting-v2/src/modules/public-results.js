@@ -3,6 +3,8 @@
 // résolution de session par public_results_token, classement (temps total), podium,
 // top 10, classement complet, détail tour par tour (avec secteurs), export PDF.
 import { db } from '../lib/supabase.js';
+import { teamLogoHTML, teamBadgeHTML, indexTeams, computeTeamStandings,
+         pointsForPosition, DEFAULT_POINTS_SCALE } from './teams.js';
 // Chargement paresseux (30/07, audit du 28/07 section 1.2) : kart-avatar.js
 // (486 Ko) et pilot-avatar.js (161 Ko) ne sont plus importes statiquement ici --
 // un tenant donne n'utilise jamais qu'un seul des deux (avatar_mode), l'autre
@@ -41,6 +43,13 @@ const NO_TIME = 999999; // valeur sentinelle : toujours trié en dernier
 
 let allResults = [];
 let sessionInfo = null;
+// --- Mode Écurie ---------------------------------------------------------------
+// teamMode est la SEULE porte : il vient du serveur (RPC), qui a déjà croisé
+// sessions.team_mode avec le droit du plan. Le front ne redécide rien.
+let teamMode = false;
+let teamsById = {};
+let teamStandings = [];
+let pointsScale = DEFAULT_POINTS_SCALE;
 let resultsToken = null; // jeton public de la session : requis par les RPC token-gated
 // 🆕 v28 : caches du palmares. Cles par session / par pseudo, vides a chaque
 // load(). Indispensables des qu'on genere les fiches de toute la grille d'un
@@ -210,27 +219,27 @@ return (!bad && looksLikeUrl) ? p : '';
 // choisi un explicitement au moment de l'inscription (nouveau parcours) —
 // prioritaire sur la déduction historique depuis le numéro de kart. `null`/
 // `undefined` reproduit exactement le comportement d'avant (repli sur kart).
-function avatarHTML(src, kart, alt, cls = '', scheme) {
+function avatarHTML(src, kart, alt, cls = '', scheme, teamId) {
 const p = pdfxLikeValidSrc(src);
 if (p) {
-const fallback = genAvatarDataURL(kart, { scheme });
+const fallback = genAvatarDataURL(kart, { scheme, teamId });
 return `<img class="pilot-avatar ${cls}" src="${p}" alt="${alt}" loading="lazy" crossorigin="anonymous" width="200" height="280" onerror="this.onerror=null;this.src='${fallback}'">`;
 }
 if (signatureAvatarsActive()) {
-return `<div class="pilot-avatar-placeholder kart sigav-host ${cls}">${signatureAvatarHTML(kart, { title: alt, scheme })}</div>`;
+return `<div class="pilot-avatar-placeholder kart sigav-host ${cls}">${signatureAvatarHTML(kart, { title: alt, scheme, teamId })}</div>`;
 }
-return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${genAvatarSVG(kart, { title: alt, scheme })}</div>`;
+return `<div class="pilot-avatar-placeholder kart ${cls}" role="img" aria-label="${alt}">${genAvatarSVG(kart, { title: alt, scheme, teamId })}</div>`;
 }
-function rankAvatarHTML(src, kart, scheme) {
+function rankAvatarHTML(src, kart, scheme, teamId) {
 const p = pdfxLikeValidSrc(src);
 if (p) {
-const fallback = genAvatarDataURL(kart, { scheme });
+const fallback = genAvatarDataURL(kart, { scheme, teamId });
 return `<img src="${p}" alt="" loading="lazy" crossorigin="anonymous" width="57" height="57" onerror="this.onerror=null;this.src='${fallback}'">`;
 }
 if (signatureAvatarsActive()) {
-return `<div class="rank-avatar-placeholder kart sigav-host">${signatureAvatarHTML(kart, { small: true, scheme })}</div>`;
+return `<div class="rank-avatar-placeholder kart sigav-host">${signatureAvatarHTML(kart, { small: true, scheme, teamId })}</div>`;
 }
-return `<div class="rank-avatar-placeholder kart">${genAvatarSVG(kart, { scheme })}</div>`;
+return `<div class="rank-avatar-placeholder kart">${genAvatarSVG(kart, { scheme, teamId })}</div>`;
 }
 
 /* Temps stockés en SECONDES dans Supabase (colonne laps.lap_time_seconds) */
@@ -270,13 +279,28 @@ const posClass = ['', 'p1', 'p2', 'p3'];
 wrap.innerHTML = items.map(d => {
 const cls = posClass[d.pos] || '';
 const gapTxt = gapBadge(d);
-return `<article class="podium-card ${cls}" aria-label="P${d.pos} — ${d.name}">
+// Mode Écurie : le podium reçoit les deux mêmes marqueurs que les lignes de
+// classement — la pastille d'écurie sur l'avatar et le badge de points en
+// contour. Rien d'autre : cette carte est déjà contrainte en hauteur sur
+// mobile (podium-wrap est dimensionné en dvh), une ligne de plus la casserait.
+const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+const teamAttr = team ? ` style="--tc:${team.color}"` : '';
+const teamCls = team ? ' has-team' : '';
+// Sur le podium on a la place : c'est le badge COMPLET qui est posé, pas le
+// pictogramme. Il déborde du cadre de la carte et mord son bord.
+const teamDot = team ? `<span class="podium-team-badge" title="${escapeHTML(team.name)}">${teamBadgeHTML(team, 64)}</span>` : '';
+const ptsChip = teamMode
+  ? `<span class="pilot-pts ${d.points ? '' : 'zero'}" aria-label="${d.points} points"><b>${d.points}</b>PTS</span>`
+  : '';
+return `<article class="podium-card ${cls}${teamCls}"${teamAttr} aria-label="P${d.pos} — ${d.name}">
 <div class="pos-badge" aria-hidden="true">${d.pos}</div>
-<div class="pilot-photo-wrap">${avatarHTML(d.photo, d.kart, `Photo de ${d.name}`, '', d.scheme)}</div>
+${teamDot}
+<div class="pilot-photo-wrap">${avatarHTML(d.photo, d.kart, `Photo de ${d.name}`, '', d.scheme, d.teamId)}</div>
 <div class="pilot-name-band">
 <div class="pilot-name ${d.isUnknown ? 'unknown' : ''}"><span class="pilot-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
 <div class="pilot-info-bar">
 <span class="pilot-kart">KART&nbsp;<strong>${d.kart ?? '-'}</strong></span>
+${ptsChip}
 <span class="pilot-gap ${d.pos === 1 ? 'leader' : ''} ${!d.hasTime ? 'no-data' : ''}" aria-label="Écart : ${gapTxt}">${gapTxt}</span>
 </div>
 </div>
@@ -288,16 +312,50 @@ return `<article class="podium-card ${cls}" aria-label="P${d.pos} — ${d.name}"
 RENDER — une ligne de classement, réutilisée par le Top 10 (page 1)
 et le Classement complet (page 2, avec le nombre de tours en plus)
 ------------------------------------------------------------------ */
+/* Ligne de classement — l'écurie occupe sa propre colonne.
+
+   Structure inspirée des habillages de classement F1 : position, pilote,
+   écurie, points, écart. Elle se lit mieux qu'une mention noyée en fin de
+   ligne — l'oeil descend la colonne des écuries d'un seul mouvement.
+
+   RÈGLE DE COULEUR : sur le classement PILOTE, la couleur de l'écurie ne
+   teinte QUE le nom de l'écurie. Rang, points, écart et fond restent neutres.
+   La couleur reprend tous ses droits sur la page Championnat écuries, où elle
+   sert à distinguer les écuries entre elles.
+
+   Le logo n'est PAS répété à côté de l'avatar : il est déjà dans la colonne.
+
+   SOUS 640 px la colonne ne tient plus. Le nom d'écurie est donc AUSSI émis
+   dans la ligne kart, et le CSS n'en montre qu'un seul selon la largeur. Deux
+   émissions plutôt qu'une bascule JavaScript au redimensionnement : une
+   grille CSS ne sait pas déplacer un enfant d'une cellule vers une autre, et
+   vingt caractères invisibles coûtent moins cher qu'un écouteur de resize. */
+
 function rankRowHTML(d, extraLine) {
 const gapTxt = gapBadge(d);
 const isLdr = d.hasTime && d.gap === 0;
-return `<article class="top10-row" role="listitem" aria-label="P${d.pos} — ${d.name}">
+const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+const styleAttr = team ? ` style="--tc:${team.color}"` : '';
+const teamCls = teamMode ? ' has-team' : '';
+const teamName = team ? escapeHTML(team.name) : '';
+
+const teamCell = teamMode
+  ? `<div class="rank-team">${team ? teamLogoHTML(team, 26) : ''}<span class="rank-team-name">${teamName}</span></div>`
+  : '';
+const teamTag = team ? `<span class="team-sep"> · </span><span class="team-tag">${teamName}</span>` : '';
+const ptsBadge = teamMode
+  ? `<span class="rank-pts ${d.points ? '' : 'zero'}" aria-label="${d.points} points"><b>${d.points}</b>PTS</span>`
+  : '';
+
+return `<article class="top10-row${teamCls}"${styleAttr} role="listitem" aria-label="P${d.pos} — ${d.name}">
 <span class="rank-pos" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>
+<div class="rank-avatar" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme, d.teamId)}</div>
 <div class="rank-main">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
-<div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span>${extraLine ? ' · ' + extraLine : ''}</div>
+<div class="rank-kartline"><span class="kl-kart">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span></span>${extraLine ? `<span class="kl-extra"> · ${extraLine}</span>` : ''}${teamTag}</div>
 </div>
+${teamCell}
+${ptsBadge}
 <span class="rank-gap ${isLdr ? 'leader' : ''} ${!d.hasTime ? 'no-data' : ''}" aria-label="Écart : ${gapTxt}">${gapTxt}</span>
 </article>`;
 }
@@ -341,13 +399,21 @@ const chips = d.lapsArr.map(l => {
 const isBest = d.bestLap != null && l.time === d.bestLap;
 return `<div class="lap-chip ${isBest ? 'best' : ''}"><div class="lc-idx">Tour ${l.idx}</div><div class="lc-time">${fmtTime(l.time)}</div></div>`;
 }).join('') || `<div class="lap-chip-empty">Aucun tour enregistré.</div>`;
-return `<article class="acc-item">
+// Mode Écurie : la page Détail reçoit exactement les mêmes marqueurs que les
+// autres pages — liseré, pastille sur l'avatar, écurie dans la ligne kart.
+// Pas de badge de points ici : cette page parle de chronos, et les deux
+// boutons d'action de droite occupent déjà la place.
+const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+const teamAttr = team ? ` style="--tc:${team.color}"` : '';
+const teamCls = team ? ' has-team' : '';
+const teamTag = team ? `<span class="team-sep"> · </span><span class="team-tag">${escapeHTML(team.name)}</span>` : '';
+return `<article class="acc-item${teamCls}"${teamAttr}>
 <div class="acc-head">
 <span class="rank-pos acc-toggle" aria-hidden="true">${d.pos}</span>
-<div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme)}</div>
+<div class="rank-avatar acc-toggle" aria-hidden="true">${rankAvatarHTML(d.photo, d.kart, d.scheme, d.teamId)}</div>
 <div class="rank-main acc-toggle">
 <div class="rank-name ${d.isUnknown ? 'unknown' : ''}"><span class="rank-flag" aria-hidden="true">${flagOf(d.nat)}</span>${d.name}</div>
-<div class="rank-kartline">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span></div>
+<div class="rank-kartline"><span class="kl-kart">KART&nbsp;<span class="kart-num">${d.kart ?? '-'}</span></span>${teamTag}</div>
 </div>
 <span class="rank-gap leader" aria-label="Meilleur tour">${d.bestLap != null ? fmtTime(d.bestLap) : '--'}</span>
 <button type="button" class="acc-icon-btn acc-pdf-btn" title="Télécharger la fiche pilote" aria-label="Télécharger la fiche pilote">${PDF_ICON}</button>
@@ -646,6 +712,12 @@ document.title = 'Resultats — ' + circuitName();
 document.getElementById('session-label').textContent = session.title || '--';
 document.getElementById('session-date').textContent = fmtSessionDate(session.session_date);
 
+// Mode Écurie : lu avant le calcul du classement, les points en dépendent.
+teamMode = !!(session && session.team_mode);
+teamsById = indexTeams(bundle.teams || []);
+pointsScale = (session && Array.isArray(session.points_scale) && session.points_scale.length)
+  ? session.points_scale : DEFAULT_POINTS_SCALE;
+
 const lapsRes = { data: bundle.laps || [], error: null };
 const regsRes = { data: bundle.registrations || [], error: null };
 const driversRes = { data: bundle.drivers || [], error: null };
@@ -693,6 +765,7 @@ lapsCount: lapCounts.get(r.id) || 0,
 lapsArr, bestLap,
 isUnknown: !!r.is_unknown,
 hasTime,
+teamId: r.team_id || null,
 });
 if (r.kart_number != null) usedKarts.add(Number(r.kart_number));
 });
@@ -712,11 +785,32 @@ results.forEach((r, i) => {
   r.pos = i + 1;
 });
 
+// Points et championnat constructeur. Calcules ici, une seule fois, sur le
+// classement DEJA trie et positionne : la page, la carte et le PDF lisent le
+// meme objet plutot que de refaire le tri chacun de leur cote.
+//
+// Un pilote sans chrono ne marque pas : sa position vient de la sentinelle de
+// tri (NO_TIME), pas d'un resultat en piste. Lui donner des points
+// recompenserait un abandon.
+if (teamMode) {
+  results.forEach(r => { r.points = r.hasTime ? pointsForPosition(r.pos, pointsScale) : 0; });
+  teamStandings = computeTeamStandings(
+    results.filter(r => r.teamId && r.hasTime).map(r => ({
+      registration_id: r.regId, team_id: r.teamId, position: r.pos,
+      name: r.name, kart: r.kart, bestLap: r.bestLap, nat: r.nat,
+      photo: r.photo, scheme: r.scheme,
+    })), pointsScale);
+} else {
+  results.forEach(r => { r.points = 0; });
+  teamStandings = [];
+}
+
 allResults = results;
 renderPodium(results.slice(0, 3));
 renderTop10(results.slice(3, PAGE1MAX));
 renderPage2(results);
 renderAccordion(results.filter(r => r.hasTime));
+renderTeamPage();
 
 document.getElementById('page-nav').style.display = 'flex';
 goToPage(1);
@@ -738,12 +832,106 @@ if (el) el.innerHTML = msg;
 /* ------------------------------------------------------------------
 NAVIGATION — Précédent / points / Suivant
 ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------
+   PAGE 4 — CHAMPIONNAT CONSTRUCTEUR (mode Écurie uniquement)
+
+   La page n'existe pas hors mode Écurie : elle est retirée de la
+   navigation plutôt que d'être affichée vide. C'est pageCount() qui
+   fait autorité, pas une constante 3 en dur.
+   ------------------------------------------------------------------ */
+function pageCount() { return (teamMode && teamStandings.length) ? 4 : 3; }
+
+/* La page 4 reprend EXACTEMENT la composition du PDF championnat : un bloc
+   champion pleine largeur, puis le reste du classement. Une seule lecture à
+   apprendre pour le pilote, qu'il regarde l'écran ou le PDF. */
+function teamHeroHTML(champ, runnerUp) {
+  const team = teamsById[champ.team_id];
+  if (!team) return '';
+  const lead = runnerUp ? champ.points - runnerUp.points : null;
+  const members = champ.members.map(m => `
+<div class="th-member">
+<div class="th-av">${rankAvatarHTML(m.photo, m.kart, m.scheme, m.team_id)}</div>
+<div class="th-mtxt"><span class="nm">${escapeHTML(m.name)}</span>
+<span class="meta">P${m.position} · ${m.bestLap != null ? fmtTime(m.bestLap) : '--'}</span></div>
+<span class="th-mpts">${m.points}<i>pts</i></span>
+</div>`).join('');
+  return `<section class="team-hero" style="--tc:${team.color}" aria-label="Champion constructeur : ${escapeHTML(team.name)}">
+<div class="th-badge">${teamBadgeHTML(team, 132)}</div>
+<div class="th-main">
+<div class="th-kicker">Champion constructeur</div>
+<div class="th-name">${escapeHTML(team.name)}</div>
+<div class="th-figs">
+<div class="fig"><b>${champ.points}</b><span>points</span></div>
+${lead != null ? `<div class="fig"><b>+${lead}</b><span>d'avance</span></div>` : ''}
+<div class="fig"><b>${champ.members.length}</b><span>pilote${champ.members.length > 1 ? 's' : ''}</span></div>
+</div>
+<div class="th-members">${members}</div>
+</div>
+</section>`;
+}
+
+function teamRowHTML(t) {
+  const team = teamsById[t.team_id];
+  if (!team) return '';
+  const members = t.members.map(m => `
+<span class="tm-member"><b>P${m.position}</b> ${escapeHTML(m.name)} <i>${m.points}</i></span>`
+  ).join('');
+  return `<article class="team-row${t.rank <= 3 ? ' top3' : ''}" style="--tc:${team.color}" role="listitem"
+ aria-label="${t.rank}e — ${escapeHTML(team.name)}, ${t.points} points">
+<span class="rank-pos" aria-hidden="true">${t.rank}</span>
+<div class="team-badge-cell" aria-hidden="true">${teamBadgeHTML(team, 56)}</div>
+<div class="team-main">
+<div class="team-name">${escapeHTML(team.name)}</div>
+<div class="team-members">${members}</div>
+</div>
+<span class="rank-pts"><b>${t.points}</b>PTS</span>
+</article>`;
+}
+
+function renderTeamPage() {
+  const wrap = document.getElementById('page4-teams');
+  const heroWrap = document.getElementById('page4-hero');
+  const screen = document.getElementById('page-screen-4');
+  const dot = document.querySelector('.nav-dot[data-dot="4"]');
+  const show = teamMode && teamStandings.length > 0;
+  if (screen) screen.style.display = show ? '' : 'none';
+  if (dot) dot.style.display = show ? '' : 'none';
+  if (!wrap || !show) { if (heroWrap) heroWrap.innerHTML = ''; return; }
+
+  if (heroWrap) heroWrap.innerHTML = teamHeroHTML(teamStandings[0], teamStandings[1]);
+  // Le tableau reprend le classement COMPLET, champion inclus — comme le PDF,
+  // et comme le font les habillages F1 : le bloc du haut met en avant, le
+  // tableau fait foi. Deux lectures différentes du même écran seraient pires
+  // qu'une répétition assumée.
+  const rest = teamStandings;
+  wrap.innerHTML = rest.map(teamRowHTML).join('');
+
+  // Même principe que renderPage2() : la page occupe toute la hauteur et se
+  // densifie selon le nombre d'écuries. À 5 écuries les lignes respirent et
+  // les badges sont posés en grand ; à 12 elles se resserrent au lieu de
+  // déborder du viewport. Sans ça, une session à 5 écuries laissait la moitié
+  // de l'écran vide.
+  const density = Math.max(.52, Math.min(1, 6 / Math.max(rest.length, 1)));
+  wrap.style.setProperty('--page4-density', String(density));
+  wrap.classList.toggle('is-dense', rest.length > 8);
+
+  // Le barème n'est plus rappelé : il n'apprend rien au pilote et prenait une
+  // ligne. Seul le départage à la moyenne des positions est signalé, et
+  // uniquement quand il a réellement servi.
+  const sub = document.getElementById('page4-sub');
+  if (sub) {
+    const tie = teamStandings.some(t => t.tiebroken);
+    sub.textContent = tie ? 'Égalité départagée à la moyenne des positions' : '';
+    sub.style.display = tie ? '' : 'none';
+  }
+}
+
 export function goToPage(n) {
-if (n < 1 || n > 3) return;
+if (n < 1 || n > pageCount()) return;
 currentPage = n;
 document.querySelectorAll('.page-screen').forEach(el => el.classList.toggle('active', el.id === `page-screen-${n}`));
 document.body.classList.toggle('podium-page-active', n === 1);
-document.body.classList.toggle('compact-results-page', n === 1 || n === 2);
+document.body.classList.toggle('compact-results-page', n === 1 || n === 2 || n === 4);
 document.querySelectorAll('.nav-dot').forEach(d => d.classList.toggle('active', Number(d.dataset.dot) === n));
 // 31/07 : sur la page 1, "Precedent" n'est plus grise sans rien faire — s'il
 // y a un jeton de circuit (?v=) dans l'URL, il ramene vers l'accueil resultats
@@ -754,8 +942,9 @@ const prevBtn = document.getElementById('nav-prev');
 prevBtn.disabled = (n === 1 && !venueTok0);
 const prevLabel = prevBtn.querySelector('span');
 if (prevLabel) prevLabel.textContent = (n === 1 && venueTok0) ? 'Résultats' : 'Précédent';
-document.getElementById('nav-next').disabled = (n === 3);
-document.getElementById('nav-next-label').textContent = (n === 1 ? 'Classement' : 'Détails');
+document.getElementById('nav-next').disabled = (n === pageCount());
+document.getElementById('nav-next-label').textContent =
+  (n === 1 ? 'Classement' : (n === 2 ? 'Détails' : 'Écuries'));
 window.scrollTo(0, 0);
 }
 
@@ -1046,6 +1235,7 @@ function ensurePdfStyles() {
    line-height normal (~1.2) la boite fait pile la hauteur de la ligne et les
    jambages (p, g, j) se font raboter au rendu canvas. */
 .pdfx-av{display:block;width:100%;height:100%;background-size:cover;background-position:center;background-repeat:no-repeat}
+.pdfx-av-img{object-fit:cover}
 .pdfx-page.portrait{width:595px}
 .pdfx-page.landscape{width:842px}
 .pdfx-sheet{display:flex;flex-direction:column;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;overflow:hidden}
@@ -1142,6 +1332,24 @@ function ensurePdfStyles() {
    tombait sous ~95pt en portrait et les noms longs (« Emma BERNARD ») étaient coupés
    en plein glyphe — html2canvas ne dessine pas les « … » de text-overflow. */
 .pdfx-rank-head.with-sec,.pdfx-rank-row.with-sec{grid-template-columns:22px 24px minmax(92px,1fr) 30px 30px 62px 50px 42px 42px 42px;gap:3px}
+/* --- Mode Ecurie : colonne Points, et colonne Ecurie quand la place le
+   permet. Les couleurs restent neutres, comme a l'ecran : seul le nom
+   d'ecurie porte la couleur. --- */
+.pdfx-rank-head.with-team.team-col,.pdfx-rank-row.with-team.team-col{
+  grid-template-columns:24px 26px minmax(76px,1.15fr) minmax(64px,.9fr) 34px 34px 66px 56px 40px;gap:4px}
+.pdfx-rank-head.with-team:not(.team-col),.pdfx-rank-row.with-team:not(.team-col){
+  grid-template-columns:26px 28px 1.5fr 46px 44px 74px 66px 40px}
+.pdfx-rank-head.with-sec.with-team,.pdfx-rank-row.with-sec.with-team{
+  grid-template-columns:22px 24px minmax(84px,1fr) 28px 28px 58px 46px 38px 38px 38px 34px;gap:3px}
+.pdfx-rank-row .team{display:flex;align-items:center;gap:5px;font-weight:700;font-size:10px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pdfx-rank-row .team i{width:7px;height:7px;border-radius:2px;flex-shrink:0;display:block}
+.pdfx-rank-head.team-col span:nth-child(4){text-align:left}
+.pdfx-rank-row .name .team-sub{display:block;font-size:8px;font-weight:800;letter-spacing:.06em;
+  text-transform:uppercase;line-height:1.3;margin-top:-1px}
+.pdfx-rank-row .pts{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:13px;
+  text-align:center;color:var(--c-text);font-variant-numeric:tabular-nums}
+.pdfx-rank-row .pts:empty::after{content:'0'}
 /* Libellés d'en-tête resserrés en mode secteurs : « TOURS » débordait de sa
    colonne de 30px et se collait à « MEILL. TOUR ». */
 .pdfx-rank-head.with-sec{font-size:8px;letter-spacing:.02em}
@@ -1266,6 +1474,89 @@ function ensurePdfStyles() {
 .pdfx-page.landscape .pdfx-tbl-row,.pdfx-page.landscape .pdfx-tbl-head{padding-left:14px;padding-right:14px}
 .pdfx-page.landscape .pdfx-tbl-row{padding-top:4.5px;padding-bottom:4.5px;font-size:11.5px}
 .pdfx-page.landscape .pdfx-tbl-head{padding-bottom:5px}
+
+/* --- Championnat constructeur (mode Ecurie) ---------------------------------
+   Meme grammaire visuelle que le classement pilote : memes jetons de theme,
+   meme podium 2-1-3, meme alternance de fond sur les lignes. La seule chose
+   qui change est la couleur d'accent, portee par --tc (couleur de l'ecurie)
+   au lieu de --c-accent : sur cette page c'est l'ecurie qu'on doit
+   reconnaitre d'un coup d'oeil.
+
+   Aucune couleur en dur : les 8 themes suivent sans une seule branche. */
+/* --- Bloc champion ---------------------------------------------------------
+   Pleine largeur : le badge est pose a 168 px, sa vraie echelle. Toutes les
+   couleurs viennent des jetons de theme (--c-*) sauf l'accent, qui est celui
+   de l'ecurie (--tc) : la page suit donc les 8 themes sans une seule branche,
+   clairs compris. */
+.tpdf-hero{display:flex;align-items:center;gap:20px;margin:16px 24px 4px;padding:16px 20px;
+  border:2px solid var(--tc);border-radius:16px;background-color:var(--c-surface-2);
+  background-repeat:no-repeat}
+.tpdf-hero-badge{flex-shrink:0}
+.tpdf-hero-badge img{display:block}
+.tpdf-hero-main{flex:1;min-width:0}
+.tpdf-hero-kicker{font-size:10px;font-weight:800;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--tc);margin-bottom:2px}
+.tpdf-hero-name{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:40px;
+  line-height:1;text-transform:uppercase;letter-spacing:.01em;color:var(--c-text)}
+.tpdf-hero-figs{display:flex;gap:22px;margin:9px 0 10px;padding-bottom:9px;
+  border-bottom:1px solid var(--c-border)}
+.tpdf-hero-figs .fig{display:flex;align-items:baseline;gap:5px}
+.tpdf-hero-figs .fig b{font-family:var(--font-display);font-weight:700;font-style:italic;
+  font-size:26px;line-height:1;color:var(--tc)}
+.tpdf-hero-figs .fig span{font-size:8.5px;font-weight:800;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--c-muted)}
+.tpdf-hero-members{display:flex;gap:16px;flex-wrap:wrap}
+.tpdf-hm{display:flex;align-items:center;gap:6px;min-width:0}
+.tpdf-hm .av{width:26px;height:26px;border-radius:50%;overflow:hidden;background:var(--c-bg);
+  border:1.5px solid var(--tc);flex-shrink:0}
+.tpdf-hm .av .pdfx-av{width:100%;height:100%}
+.tpdf-hm .nm{font-size:11px;font-weight:800;white-space:nowrap;line-height:1.5;color:var(--c-text)}
+.tpdf-hm .pp{font-size:9px;font-weight:800;letter-spacing:.05em;color:var(--c-muted)}
+.tpdf-hm .bl{font-size:9.5px;font-weight:700;color:var(--c-muted);font-variant-numeric:tabular-nums}
+.tpdf-hm .pt{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:15px;color:var(--tc)}
+.tpdf-hm .pt i{font-family:var(--font-body);font-style:normal;font-size:7.5px;font-weight:800;
+  letter-spacing:.1em;color:var(--c-muted);margin-left:2px}
+
+.tpdf-head{display:grid;grid-template-columns:26px 30px 1fr 2.1fr 62px;gap:6px;
+  padding:0 8px 6px;font-size:8.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--c-muted);border-bottom:1px solid var(--c-border)}
+.tpdf-head span.num{text-align:center}
+.tpdf-head span{white-space:nowrap}
+.tpdf-body{margin-top:2px;flex:1;display:flex;flex-direction:column}
+.tpdf-row{flex:1 1 auto}
+.tpdf-row{display:grid;grid-template-columns:26px 30px 1fr 2.1fr 62px;gap:6px;align-items:center;
+  padding:9px 8px;font-size:11px;color:var(--c-text);border-bottom:1px solid var(--c-border);
+  position:relative}
+.tpdf-row:nth-child(even){background:var(--c-surface-2)}
+.tpdf-row:last-child{border-bottom:none}
+/* Lisere de couleur a gauche, comme sur la page publique : c'est le meme
+   signal visuel a l'ecran et sur le papier. */
+.tpdf-row::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--tc)}
+.tpdf-row .pos{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:14px;
+  color:var(--c-muted);text-align:center;font-variant-numeric:tabular-nums}
+.tpdf-row.top3 .pos{color:var(--tc)}
+.tpdf-row .badge img,.tpdf-row .badge svg{display:block;width:28px;height:28px;margin:0 auto}
+.tpdf-row .team{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:14.5px;
+  text-transform:uppercase;letter-spacing:.02em;line-height:1.4;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tpdf-row .members{display:flex;gap:10px;min-width:0;overflow:hidden}
+.tpdf-m{display:flex;align-items:center;gap:4px;min-width:0}
+.tpdf-m .av{width:20px;height:20px;border-radius:50%;overflow:hidden;background:var(--c-bg);
+  border:1px solid var(--tc);flex-shrink:0}
+.tpdf-m .av .pdfx-av{width:100%;height:100%}
+.tpdf-m .nm{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5}
+.tpdf-m .pp{font-size:8.5px;font-weight:800;letter-spacing:.04em;color:var(--c-muted)}
+.tpdf-m .pt{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:12px;color:var(--tc)}
+/* Le total : une pastille en CONTOUR, jamais en aplat — exactement la regle
+   retenue sur la page publique, pour que le chiffre se lise sans que la ligne
+   devienne un patchwork de blocs colores. */
+.tpdf-row .pts{display:flex;align-items:baseline;justify-content:flex-end;gap:2px;
+  border:1.5px solid var(--tc);border-radius:7px;padding:2px 6px}
+.tpdf-row .pts b{font-family:var(--font-display);font-weight:700;font-style:italic;font-size:17px;
+  line-height:1;color:var(--tc)}
+.tpdf-row .pts i{font-style:normal;font-size:7px;font-weight:800;letter-spacing:.1em;color:var(--c-muted)}
+.tpdf-legend{margin-top:11px;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--c-muted);border-top:1px solid var(--c-border);padding-top:7px}
 `;
   document.head.appendChild(style);
   PDF_STYLES_INJECTED = true;
@@ -1328,13 +1619,28 @@ function pdfxCssUrl(u) { return `url('${String(u).replace(/['\\]/g, '\\$&')}')`;
    Partagees entre le prechauffage et le rendu : la cle de cache inclut la forme
    et la taille, les deux appels doivent donc etre strictement identiques. */
 const PILOT_SHEET_AV_OPTS = { shape: 'square', size: 1024 };
+/* CAUSE DU FLOU DES AVATARS DANS TOUS LES PDF (et les cartes partageables).
+
+   html2canvas rasterise une `background-image` a la taille CSS de la boite,
+   PUIS applique `scale`. Un avatar de 20 a 26 px etait donc grave a 20-26 px
+   avant d'etre agrandi 2,5 a 3,5 fois : flou garanti, quel que soit le mode
+   d'avatar et quelle que soit la densite de rendu. Augmenter la taille
+   intrinseque du SVG (fait par ailleurs, 100 -> 1024) ne suffit pas : ce
+   n'est pas la source qui limite, c'est l'etape intermediaire.
+
+   Une balise <img>, elle, est dessinee directement a l'echelle finale. On
+   bascule donc sur <img> pour les avatars GENERES, qui sont carres et n'ont
+   besoin d'aucun recadrage. La background-image reste pour les VRAIES photos :
+   elles ne sont pas carrees et ont besoin d'un `cover`, que html2canvas ne
+   sait pas faire avec object-fit. */
 function pdfxAvatarImg(photo, kart, opts) {
   const real = pdfxValidPhoto(photo);
   const fallback = genAvatarDataURL(kart, opts);
-  const layers = real
-    ? `${pdfxCssUrl(real)},${pdfxCssUrl(fallback)}`
-    : pdfxCssUrl(fallback);
-  return `<div class="pdfx-av" style="background-image:${layers}"></div>`;
+  if (real) {
+    const layers = `${pdfxCssUrl(real)},${pdfxCssUrl(fallback)}`;
+    return `<div class="pdfx-av" style="background-image:${layers}"></div>`;
+  }
+  return `<img class="pdfx-av pdfx-av-img" src="${fallback}" alt="">`;
 }
 
 function pdfxPodiumHTML(field) {
@@ -1343,12 +1649,14 @@ function pdfxPodiumHTML(field) {
   return `<div class="pdfx-podium">${order.map(d => `
 <div class="pdfx-p-card ${cls[d.pos] || ''}">
 <div class="pdfx-p-rank">${d.pos}</div>
-<div class="pdfx-p-avatar">${pdfxAvatarImg(d.photo, d.kart, { scheme: d.scheme })}</div>
+<div class="pdfx-p-avatar">${pdfxAvatarImg(d.photo, d.kart, { scheme: d.scheme, teamId: d.teamId })}</div>
 <div class="pdfx-p-name">${escapeHTML(d.name)}</div>
-<div class="pdfx-p-kart">Kart ${d.kart ?? '-'}</div>
+<div class="pdfx-p-kart">Kart ${d.kart ?? '-'}${(teamMode && d.teamId && teamsById[d.teamId])
+  ? ` · <span style="color:${teamsById[d.teamId].color}">${escapeHTML(teamsById[d.teamId].name)}</span>` : ''}</div>
 <div class="pdfx-p-stats">
 <div class="pdfx-p-stat"><span class="k">Meill. tour</span><span class="v best">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span></div>
 <div class="pdfx-p-stat"><span class="k">Tours</span><span class="v">${d.hasTime ? d.lapsCount : '--'}</span></div>
+${teamMode ? `<div class="pdfx-p-stat"><span class="k">Points</span><span class="v">${d.points || 0}</span></div>` : ''}
 </div>
 </div>`).join('')}</div>`;
 }
@@ -1361,7 +1669,7 @@ function pdfxPodiumColHTML(field) {
 ${order.map(d => `
 <div class="pdfx-pv-card ${cls[d.pos] || ''}">
 <div class="pdfx-pv-rank">${d.pos}</div>
-<div class="pdfx-pv-avatar">${pdfxAvatarImg(d.photo, d.kart, { scheme: d.scheme })}</div>
+<div class="pdfx-pv-avatar">${pdfxAvatarImg(d.photo, d.kart, { scheme: d.scheme, teamId: d.teamId })}</div>
 <div class="pdfx-pv-info">
 <div class="pdfx-pv-name">${escapeHTML(d.name)}</div>
 <div class="pdfx-pv-meta"><span>Kart <b>${d.kart ?? '-'}</b></span><span>Tours <b>${d.hasTime ? d.lapsCount : '--'}</b></span><span>Meill. <b>${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</b></span></div>
@@ -1372,7 +1680,13 @@ ${order.map(d => `
 
 function pdfxRankHeadHTML(showSec) {
   const secCols = showSec ? '<span class="num">S1</span><span class="num">S2</span><span class="num">S3</span>' : '';
-  return `<div class="pdfx-rank-head${showSec ? ' with-sec' : ''}"><span class="num"></span><span></span><span>Pilote</span><span class="num">Kart</span><span class="num">Tours</span><span class="num">Meill. tour</span><span class="num">Écart</span>${secCols}</div>`;
+  // Mode Écurie : deux colonnes de plus. L'écurie n'a la sienne QUE si les
+  // secteurs sont éteints — avec les secteurs, dix colonnes se partagent déjà
+  // 503 px de large, une onzième rendrait le nom du pilote illisible. Dans ce
+  // cas l'écurie passe sous le nom, sans perte d'information.
+  const teamCol = (teamMode && !showSec) ? '<span>Écurie</span>' : '';
+  const ptsCol = teamMode ? '<span class="num">Pts</span>' : '';
+  return `<div class="pdfx-rank-head${showSec ? ' with-sec' : ''}${teamMode ? ' with-team' : ''}${(teamMode && !showSec) ? ' team-col' : ''}"><span class="num"></span><span></span><span>Pilote</span>${teamCol}<span class="num">Kart</span><span class="num">Tours</span><span class="num">Meill. tour</span><span class="num">Écart</span>${secCols}${ptsCol}</div>`;
 }
 
 function pdfxBestSec(d, si) {
@@ -1388,17 +1702,31 @@ function pdfxRankGap(d) {
 }
 
 function pdfxRankRowsHTML(chunk, showSec) {
-  return chunk.map(d => `
-<div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}">
+  const teamCol = teamMode && !showSec;
+  return chunk.map(d => {
+    const team = (teamMode && d.teamId) ? teamsById[d.teamId] : null;
+    // Nom d'écurie : dans sa colonne quand il y a la place, sinon sous le nom
+    // du pilote. Jamais les deux, jamais aucun.
+    const teamCell = teamCol
+      ? `<span class="team">${team ? `<i style="background:${team.color}"></i>${escapeHTML(team.name)}` : ''}</span>`
+      : '';
+    const teamUnder = (teamMode && !teamCol && team)
+      ? `<span class="team-sub" style="color:${team.color}">${escapeHTML(team.name)}</span>` : '';
+    const pts = teamMode ? `<span class="pts">${d.points || 0}</span>` : '';
+    return `
+<div class="pdfx-rank-row${d.pos <= 3 ? ' top3' : ''}${showSec ? ' with-sec' : ''}${teamMode ? ' with-team' : ''}${teamCol ? ' team-col' : ''}">
 <span class="pos">${d.pos}</span>
-<span class="av">${pdfxAvatarImg(d.photo, d.kart, { small: true, scheme: d.scheme })}</span>
-<span class="name">${escapeHTML(d.name)}</span>
+<span class="av">${pdfxAvatarImg(d.photo, d.kart, { small: true, scheme: d.scheme, teamId: d.teamId })}</span>
+<span class="name">${escapeHTML(d.name)}${teamUnder}</span>
+${teamCell}
 <span class="kart">#${d.kart ?? '-'}</span>
 <span class="laps">${d.hasTime ? d.lapsCount : '--'}</span>
 <span class="best">${d.bestLap != null ? fmtPdfTime(d.bestLap) : '--'}</span>
 <span class="gap">${pdfxRankGap(d)}</span>
 ${showSec ? [0, 1, 2].map(si => { const v = pdfxBestSec(d, si); return `<span class="sec">${v != null ? v.toFixed(3) : '--'}</span>`; }).join('') : ''}
-</div>`).join('');
+${pts}
+</div>`;
+  }).join('');
 }
 
 /* ---------- Fragments de markup — fiche pilote ---------- */
@@ -1507,6 +1835,14 @@ function pdfxPlace(pdf, canvas, g, isFirst, t, quality) {
   // JPEG plutôt que PNG : le fond est opaque (pas de transparence à préserver) et
   // le PNG produisait des fichiers de ~12 Mo par page — impossibles à partager.
   // À qualité 0.94 et scale 2.5, le texte reste net pour ~1/10e du poids.
+  //
+  // Exception : quality === 'png' force le sans-perte. Réservé aux documents
+  // d'UNE page (championnat constructeur), où le poids reste raisonnable et où
+  // les avatars et les logos souffraient visiblement de la compression.
+  if (quality === 'png') {
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (g.pageW - dw) / 2, 0, dw, dh);
+    return;
+  }
   pdf.addImage(canvas.toDataURL('image/jpeg', quality || 0.94), 'JPEG', (g.pageW - dw) / 2, 0, dw, dh);
 }
 
@@ -1540,7 +1876,10 @@ export async function buildFullPDF() {
       // { kart, scheme } et non de simples numéros de kart : certains inscrits
       // ont choisi leur avatar_scheme explicitement (nouveau parcours), et le
       // cache de préchauffage doit être clé sur ce couple, pas sur le seul kart.
-      const karts = (allResults || []).map(d => ({ kart: d.kart, scheme: d.scheme }));
+      const karts = (allResults || []).map(d => ({
+        kart: d.kart, scheme: d.scheme,
+        teamId: teamMode ? d.teamId : null,
+      }));
       await prewarmSignatureAvatarDataURLs(karts);
       await prewarmSignatureAvatarDataURLs(karts, { small: true });
     }
@@ -1778,7 +2117,7 @@ export async function buildPilotPDF(pilot) {
     /* Pack Signature : la vignette de la fiche pilote reprend exactement les
        réglages du podium (même type, même fond, même contour) mais en pastille
        CARRÉE, pour occuper tout le cadre arrondi de l'en-tête. */
-    const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart, { ...PILOT_SHEET_AV_OPTS, scheme: pilot.scheme });
+    const photoInner = pdfxAvatarImg(pilot.photo, pilot.kart, { ...PILOT_SHEET_AV_OPTS, scheme: pilot.scheme, teamId: pilot.teamId });
     const kartBadge = hasRealPhoto
       ? `<div class="pdfx-kart-badge"><div class="pdfx-av" style="background-image:${pdfxCssUrl(genAvatarDataURL(pilot.kart, { scheme: pilot.scheme }))}"></div></div>`
       : '';
@@ -1892,6 +2231,186 @@ export function initPdfFullButton() {
   if (!btn) return;
   btn.addEventListener('click', (e) => downloadFullPDF(e.currentTarget));
   initPdfOrientControl(btn);
+
+  const teamBtn = document.getElementById('btn-pdf-teams');
+  if (teamBtn) teamBtn.addEventListener('click', (e) => downloadTeamsPDF(e.currentTarget));
+}
+
+/* ==================================================================
+   PDF CHAMPIONNAT CONSTRUCTEUR (mode Écurie)
+
+   Une page, jamais plus : douze écuries au maximum tiennent largement
+   sur un A4. On réutilise volontairement le châssis existant
+   (pdxPageClass / pdfx-sheet / bandeau / pied de page) plutôt que
+   d'inventer une deuxième mise en page — le PDF suit ainsi le thème
+   actif exactement comme le classement complet, sans code de thème
+   dupliqué.
+
+   Toujours forcé en PORTRAIT : le tableau est étroit et haut, le
+   paysage laisserait deux tiers de page vides.
+   ================================================================== */
+export async function downloadTeamsPDF(btn) {
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `${SPIN_ICON} Génération…`;
+  try {
+    const pdf = await buildTeamsPDF();
+    if (pdf) pdf.save('championnat_ecuries.pdf');
+  } catch (e) {
+    alert('Erreur PDF : ' + e.message);
+  }
+  btn.disabled = false;
+  btn.innerHTML = original;
+}
+
+/* html2canvas ne sait pas rendre un box-shadow interieur (premier essai : les
+   cartes du podium sortaient en aplat de couleur pleine, et le nombre de
+   points, ecrit dans cette meme couleur, devenait invisible). On construit
+   donc le degrade explicitement, en rgba calcule ici : c'est un
+   background-image, que html2canvas rend correctement. */
+function teamGlow(hex, a1, a2) {
+  const h = String(hex || '#888').replace('#', '');
+  const n = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const r = parseInt(n.slice(0, 2), 16), g = parseInt(n.slice(2, 4), 16), b = parseInt(n.slice(4, 6), 16);
+  return `linear-gradient(180deg, rgba(${r},${g},${b},${a1}) 0%, rgba(${r},${g},${b},${a2}) 55%, rgba(${r},${g},${b},0) 100%)`;
+}
+
+export async function buildTeamsPDF() {
+  if (!teamMode || !teamStandings.length) return null;
+  ensurePdfStyles();
+
+  /* Pack Signature : html2canvas ne sait pas attendre. Même préchauffage que
+     buildFullPDF(), sinon les avatars des pilotes retombent sur le rendu
+     classique dans le PDF alors qu'ils sont corrects à l'écran. */
+  if (signatureAvatarsActive()) {
+    const karts = (allResults || []).map(d => ({
+      kart: d.kart, scheme: d.scheme,
+      teamId: teamMode ? d.teamId : null,
+    }));
+    await prewarmSignatureAvatarDataURLs(karts);
+    await prewarmSignatureAvatarDataURLs(karts, { small: true });
+  }
+
+  const { jsPDF } = window.jspdf;
+  const g = pdfxGeom('portrait');   // toujours portrait : tableau étroit et haut
+  const pdf = new jsPDF('p', 'mm', 'a4');
+  const t = themeColors();
+
+  const title = escapeHTML(circuitNamePdfHead());
+  const footName = escapeHTML(circuitNamePdfFoot());
+  const label = escapeHTML((sessionInfo && sessionInfo.title) || 'Session');
+  const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  const dateShort = escapeHTML(sessionInfo && sessionInfo.session_date
+    ? new Date(sessionInfo.session_date + 'T12:00:00').toLocaleDateString('fr-FR')
+    : '--');
+  const headLogo = PDF_LOGO_URL
+    ? `<img class="pdfx-head-logo" src="${PDF_LOGO_URL}" alt="Logo du circuit" crossorigin="anonymous">`
+    : '';
+
+  const headBand = `
+<div class="pdfx-head-band">
+${headLogo}
+<div class="pdfx-head-left">
+<div class="pdfx-circuit-name">${title}</div>
+<div class="pdfx-session-lbl">Championnat écuries — ${label}</div>
+</div>
+<div class="pdfx-head-right">
+<div class="pdfx-date">${dateShort}</div>
+<div class="pdfx-count">${teamStandings.length} écuries</div>
+</div>
+</div>`;
+
+  /* BLOC CHAMPION — pas un podium.
+
+     Un podium à trois cartes oblige à réduire chaque logo pour les faire
+     tenir côte à côte. Ici une seule écurie occupe toute la largeur : le
+     badge peut être posé en grand, à sa vraie valeur, et le reste du
+     championnat se lit dessous sans concurrence visuelle.
+
+     Le rang 2 et le rang 3 ne sont pas perdus pour autant : ils gardent leur
+     accent de couleur dans le tableau, et l'écart au champion est rappelé sur
+     la ligne du champion lui-même. */
+  const champ = teamStandings[0];
+  const champTeam = teamsById[champ.team_id];
+  const runnerUp = teamStandings[1];
+  const lead = runnerUp ? champ.points - runnerUp.points : null;
+  const heroLine = champ.members.map(m => `
+<div class="tpdf-hm">
+<span class="av">${pdfxAvatarImg(m.photo, m.kart, { small: true, scheme: m.scheme, teamId: m.team_id })}</span>
+<span class="nm">${escapeHTML(m.name)}</span>
+<span class="pp">P${m.position}</span>
+<span class="bl">${m.bestLap != null ? fmtPdfTime(m.bestLap) : '--'}</span>
+<span class="pt">${m.points}<i>pts</i></span>
+</div>`).join('');
+
+  const hero = champTeam ? `
+<div class="tpdf-hero" style="--tc:${champTeam.color};background-image:${teamGlow(champTeam.color, .34, .07)}">
+<div class="tpdf-hero-badge">${teamBadgeHTML(champTeam, 168)}</div>
+<div class="tpdf-hero-main">
+<div class="tpdf-hero-kicker">Champion constructeur</div>
+<div class="tpdf-hero-name">${escapeHTML(champTeam.name)}</div>
+<div class="tpdf-hero-figs">
+<div class="fig"><b>${champ.points}</b><span>points</span></div>
+${lead != null ? `<div class="fig"><b>+${lead}</b><span>d'avance</span></div>` : ''}
+<div class="fig"><b>${champ.members.length}</b><span>pilote${champ.members.length > 1 ? 's' : ''}</span></div>
+</div>
+<div class="tpdf-hero-members">${heroLine}</div>
+</div>
+</div>` : '';
+
+  /* Lignes du classement — mêmes proportions, même alternance de fond et même
+     typographie que .pdfx-rank-row. Seules les colonnes changent. */
+  const rows = teamStandings.map((st) => {
+    const team = teamsById[st.team_id];
+    if (!team) return '';
+    const members = st.members.map(m => `
+<span class="tpdf-m">
+<span class="av">${pdfxAvatarImg(m.photo, m.kart, { small: true, scheme: m.scheme, teamId: m.team_id })}</span>
+<span class="nm">${escapeHTML(m.name)}</span>
+<span class="pp">P${m.position}</span>
+<span class="pt">${m.points}</span>
+</span>`).join('');
+    return `<div class="tpdf-row${st.rank <= 3 ? ' top3' : ''}" style="--tc:${team.color}">
+<span class="pos">${st.rank}</span>
+<span class="badge">${teamLogoHTML(team, 28)}</span>
+<span class="team">${escapeHTML(team.name)}</span>
+<span class="members">${members}</span>
+<span class="pts"><b>${st.points}</b><i>PTS</i></span>
+</div>`;
+  }).join('');
+
+  const tie = teamStandings.some(x => x.tiebroken);
+  const page = document.createElement('div');
+  page.className = pdxPageClass(false);
+  // Le classement complet remplit sa page en y versant des lignes jusqu'au
+  // budget ; ici le contenu est court et laisserait un tiers de page vide.
+  page.style.minHeight = g.sheetH + 'px';
+  page.style.display = 'flex';
+  page.style.flexDirection = 'column';
+  page.innerHTML = `<div class="pdfx-sheet" style="flex:1;display:flex;flex-direction:column">
+${headBand}
+${hero}
+<div class="pdfx-body-wrap" style="flex:1">
+<div class="pdfx-rank-wrap" style="display:flex;flex-direction:column">
+<div class="pdfx-rank-title">Classement constructeur</div>
+<div class="tpdf-head"><span class="num"></span><span></span><span>Écurie</span><span>Pilotes</span><span class="num">Points</span></div>
+<div class="tpdf-body">${rows}</div>
+${tie ? `<div class="tpdf-legend">Égalité départagée à la moyenne des positions</div>` : ''}
+</div>
+</div>
+<div class="pdfx-sheet-footer"><span>${footName}</span><span><b>${date}</b></span></div>
+</div>`;
+
+  // Pas de passe de mesure : le tableau tient sur une page par construction
+  // (12 écuries maximum). sectionToCanvas() monte le nœud et attend déjà le
+  // décodage des <img> — les badges d'écurie en font partie.
+  // Ce document fait UNE page : on peut se permettre plus de densite que le
+  // classement complet (3,5 au lieu de 2,5) et une qualite JPEG plus haute.
+  // Le PNG sans perte a ete essaye : 18 Mo, inpartageable. A 0,97 et scale 3,5
+  // les avatars et les logos sont nets au zoom pour un poids raisonnable.
+  const canvas = await sectionToCanvas(page, g.renderW, t.bg, 3.5);
+  pdfxPlace(pdf, canvas, g, true, t, 0.97);
+  return pdf;
 }
 
 /* ==================================================================
@@ -2108,6 +2627,15 @@ function cardBGLayers(t, cid) {
       push(`<polygon points="0,1538 1080,677 1080,681 0,1542" fill="${a(0.55)}"/>`);
       break;
     }
+    // Carte d'écurie championne (team-champion) : halo centré plus haut que
+    // 02-avatar-central (le badge d'écurie est posé plus haut dans le corps,
+    // au-dessus du kicker CHAMPION) — sinon copié du même principe d'anneaux.
+    case 'team-champion':
+      push(rings(540, 470, 130, 900, 76, 0.06));
+      push(`<radialGradient id="tch" cx="0.5" cy="0.26" r="0.4"><stop offset="0" stop-color="${a(0.15)}"/><stop offset="1" stop-color="${a(0)}"/></radialGradient>`);
+      push(`<rect width="1080" height="1920" fill="url(#tch)"/>`);
+      break;
+    // team-standing (écuries non championnes) : fond neutre, comme 03/06/08/09/10.
     // 03, 06, 08, 09, 10, 12r, 13r : fond neutre (references pixel 31/07).
     default:
       break;
@@ -2260,6 +2788,36 @@ function cardFooterHTML(t, pilot) {
     <div style="position:absolute;left:206px;top:1506px;right:74px;font:400 21px ${CARD_MONO};line-height:1.6;letter-spacing:.03em;color:${t.muted};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${meta}</div>`;
 }
 
+/* --- BANDEAU ÉCURIE (Mode Écurie, cartes de position uniquement) -----
+   Ajouté SOUS le pied de carte existant, dans la marge basse laissée libre
+   (le pied s'arrête vers y=1546, la zone sûre pour l'UI Stories va jusqu'à
+   ~1670) : aucune des 10 mises en page de POSITION_BODIES n'est retouchée,
+   le bandeau est un étage de plus, commun à toutes.
+   Règle de couleur reprise du classement (résultats) : SEUL le nom d'écurie
+   porte la couleur d'équipe — logo dans un cadre neutre, points en t.text,
+   pour que l'écurie se reconnaisse sans que la carte entière se reteinte. */
+function cardTeamStripHTML(t, pilot) {
+  if (!teamMode || !pilot || !pilot.teamId) return '';
+  const team = teamsById[pilot.teamId];
+  if (!team) return '';
+  const pts = pilot.hasTime ? (pilot.points || 0) : 0;
+  return `
+    <div style="position:absolute;left:74px;right:74px;top:1560px;height:1px;background:${t.border}"></div>
+    <div style="position:absolute;left:74px;right:74px;top:1590px;height:60px;display:flex;align-items:center;justify-content:space-between;gap:20px">
+      <div style="flex:1 1 auto;min-width:0;display:flex;align-items:center;gap:16px">
+        <div style="flex:0 0 auto;width:52px;height:52px;border-radius:14px;background:${t.surface};border:1px solid ${cardRGBA(team.color, .55)};display:flex;align-items:center;justify-content:center;overflow:hidden;box-sizing:border-box">${teamLogoHTML(team, 32)}</div>
+        <div style="min-width:0;overflow:hidden">
+          <div style="font:400 14px ${CARD_MONO};letter-spacing:.24em;color:${t.muted}">&Eacute;CURIE</div>
+          <div style="font:700 27px ${CARD_UI};letter-spacing:.015em;text-transform:uppercase;color:${team.color};margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(team.name)}</div>
+        </div>
+      </div>
+      <div style="flex:0 0 auto;text-align:right">
+        <div style="font:700 44px ${CARD_NUM};color:${t.text};line-height:1">+${pts}</div>
+        <div style="font:400 13px ${CARD_MONO};letter-spacing:.2em;color:${t.muted};margin-top:2px">POINTS</div>
+      </div>
+    </div>`;
+}
+
 
 /* Zone centrale : la SEULE partie qui change d'un concept a l'autre.
    Centree sur le milieu exact de la carte (y=960), comme les visuels de
@@ -2320,8 +2878,10 @@ async function prewarmCardAvatars(pilot) {
   } catch (e) { /* pack indisponible : repli standard-classic */ }
 }
 
-function cardShell(t, bodyInner, pilot, cid) {
-    return cardBackgroundHTML(t, cid) + cardHeaderHTML(t) + cardBodyWrap(bodyInner) + cardFooterHTML(t, pilot);
+function cardShell(t, bodyInner, pilot, cid, opts) {
+    const showTeam = !!(opts && opts.showTeam);
+    return cardBackgroundHTML(t, cid) + cardHeaderHTML(t) + cardBodyWrap(bodyInner) + cardFooterHTML(t, pilot) +
+      (showTeam ? cardTeamStripHTML(t, pilot) : '');
 }
 
 // --- Concepts POSITION -----------------------------------------------------
@@ -2510,7 +3070,181 @@ export async function positionCardPNGBytes(regId, conceptId) {
   const id = (conceptId && POSITION_BODIES[conceptId]) ? conceptId : pickPositionConcept();
   const build = POSITION_BODIES[id] || POSITION_BODIES[POSITION_FALLBACK];
   await prewarmCardAvatars(pilot);
-  return renderCardPNG(cardShell(t, build(t, pilot, positionCtx(pilot)), pilot, id));
+  return renderCardPNG(cardShell(t, build(t, pilot, positionCtx(pilot)), pilot, id, { showTeam: true }));
+}
+
+// --- Concept ÉQUIPE (championnat constructeur, mode Écurie uniquement) -----
+// Carte "vue d'écurie" : un visuel par équipe plutôt que par pilote. Le
+// champion (teamStandings[0]) reçoit un habillage dédié — kicker CHAMPION,
+// halo de la couleur d'équipe, aucun "P1" (il n'y a rien à départager, on
+// l'affirme). Les autres écuries reprennent la grammaire déjà connue des
+// cartes de position pilote — P<rang> puis points — pour rester lisibles sans
+// contexte, même hors mode Écurie où personne n'a vu le tableau complet.
+// Le pied de carte n'est pas cardFooterHTML (pensé pour UN pilote) : c'est le
+// roster de l'écurie, jusqu'à 4 pilotes affichés, le reste résumé en "+N".
+
+const CARD_AV_ROSTER = { shape: 'circle', size: 88 };
+const CARD_TEAM_ROSTER_MAX = 4;
+
+// Même schéma que prewarmCardAvatars, mais pour la liste de pilotes d'une
+// écurie plutôt qu'un seul : les avatars Signature sont préchauffés en un
+// seul lot, sinon seul le premier de la liste s'afficherait (cache froid pour
+// les suivants, la rasterisation html2canvas ne peut pas attendre).
+async function prewarmTeamCardAvatars(standing) {
+  if (!signatureAvatarsActive() || !standing) return;
+  const items = (standing.members || []).slice(0, CARD_TEAM_ROSTER_MAX).map((m) => ({ kart: m.kart, scheme: m.scheme }));
+  if (!items.length) return;
+  try { await prewarmSignatureAvatarDataURLs(items, CARD_AV_ROSTER); } catch (e) { /* repli standard-classic */ }
+}
+
+function teamCardCtx(standing) {
+  const leader = teamStandings[0];
+  const runnerUp = teamStandings[1];
+  const isChamp = standing.rank === 1;
+  return {
+    rank: standing.rank,
+    points: standing.points,
+    totalTeams: teamStandings.length,
+    gapToLeader: (!isChamp && leader) ? (leader.points - standing.points) : null,
+    leaderName: (!isChamp && leader && teamsById[leader.team_id]) ? teamsById[leader.team_id].name : '',
+    leadOverSecond: (isChamp && runnerUp) ? (standing.points - runnerUp.points) : null,
+  };
+}
+
+function teamCardBodyHTML(t, standing, ctx) {
+  const team = teamsById[standing.team_id];
+  if (!team) return '';
+  const isChamp = ctx.rank === 1;
+  if (isChamp) {
+    return `
+      <div style="font:400 20px ${CARD_MONO};letter-spacing:.32em;color:${t.muted}">CHAMPIONNAT CONSTRUCTEUR</div>
+      <div style="width:220px;height:220px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:3px solid ${team.color};box-shadow:0 0 70px ${cardRGBA(team.color, .4)};display:flex;align-items:center;justify-content:center;overflow:hidden;margin-top:30px;box-sizing:border-box">${teamBadgeHTML(team, 180)}</div>
+      <div style="font:700 24px ${CARD_MONO};letter-spacing:.34em;color:${t.accent};margin-top:32px">CHAMPION</div>
+      <div style="font:800 78px ${CARD_UI};letter-spacing:.015em;text-transform:uppercase;color:${team.color};margin-top:12px;max-width:920px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(team.name)}</div>
+      <div style="font:700 176px ${CARD_NUM};line-height:.85;color:${t.text};margin-top:30px">${ctx.points}<span style="font-size:.24em;color:${t.muted}"> PTS</span></div>
+      ${ctx.leadOverSecond != null ? `<div style="font:400 21px ${CARD_MONO};letter-spacing:.18em;color:${t.muted};margin-top:16px">+${ctx.leadOverSecond} SUR LE 2E</div>` : ''}`;
+  }
+  return `
+    <div style="font:400 20px ${CARD_MONO};letter-spacing:.32em;color:${t.muted}">CHAMPIONNAT CONSTRUCTEUR</div>
+    <div style="width:196px;height:196px;border-radius:50%;background:radial-gradient(circle, ${t.surface2} 0%, ${t.bg} 72%);border:2px solid ${team.color};display:flex;align-items:center;justify-content:center;overflow:hidden;margin-top:26px;box-sizing:border-box">${teamBadgeHTML(team, 156)}</div>
+    <div style="font:700 62px ${CARD_UI};letter-spacing:.015em;text-transform:uppercase;color:${team.color};margin-top:26px;max-width:920px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(team.name)}</div>
+    <div style="font:700 186px ${CARD_NUM};line-height:.85;color:${t.accent};margin-top:20px">P${ctx.rank}</div>
+    <div style="font:700 94px ${CARD_NUM};color:${t.text};margin-top:8px">${ctx.points}<span style="font-size:.36em;color:${t.muted}"> PTS</span></div>
+    ${ctx.gapToLeader != null ? `<div style="font:400 19px ${CARD_MONO};letter-spacing:.18em;color:${t.muted};margin-top:18px">&minus; ${ctx.gapToLeader} PTS DU LEADER${ctx.leaderName ? ' &middot; ' + escapeHTML(ctx.leaderName.toUpperCase()) : ''}</div>` : ''}`;
+}
+
+function teamCardRosterHTML(t, standing) {
+  const rows = standing.members.slice(0, CARD_TEAM_ROSTER_MAX).map((m) => `
+    <div style="display:flex;align-items:center;gap:20px;padding:12px 0">
+      <div style="flex:0 0 auto;width:72px;height:72px;border-radius:50%;overflow:hidden;background:${t.surface};border:2px solid ${cardRGBA(t.accent, .4)};box-sizing:border-box">${cardAvatarHTML(m, CARD_AV_ROSTER)}</div>
+      <div style="flex:1 1 auto;min-width:0">
+        <div style="font:700 30px ${CARD_UI};letter-spacing:.01em;text-transform:uppercase;color:${t.text};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(m.name)}</div>
+        <div style="font:400 17px ${CARD_MONO};letter-spacing:.06em;color:${t.muted};margin-top:2px">P${m.position} &middot; Kart ${m.kart ?? '-'}</div>
+      </div>
+      <div style="flex:0 0 auto;font:700 30px ${CARD_NUM};color:${t.accent}">${m.points}<span style="font-size:.5em;color:${t.muted}"> pts</span></div>
+    </div>`).join('');
+  const overflow = standing.members.length > CARD_TEAM_ROSTER_MAX
+    ? `<div style="margin-top:8px;font:400 16px ${CARD_MONO};letter-spacing:.14em;color:${t.muted}">+ ${standing.members.length - CARD_TEAM_ROSTER_MAX} autre(s) pilote(s)</div>` : '';
+  return rows + overflow;
+}
+
+function cardTeamFooterHTML(t, standing) {
+  return `
+    <div style="position:absolute;left:74px;right:74px;top:1402px;height:1px;background:${t.border}"></div>
+    <div style="position:absolute;left:74px;top:1428px;font:400 15px ${CARD_MONO};letter-spacing:.24em;color:${t.muted}">PILOTES DE L&rsquo;&Eacute;CURIE</div>
+    <div style="position:absolute;left:74px;right:74px;top:1462px">${teamCardRosterHTML(t, standing)}</div>`;
+}
+
+/** Carte d'écurie — vue par équipe du championnat constructeur (mode Écurie).
+    teamId doit exister dans le classement de la session courante (calculé
+    par load()) : cette carte se génère toujours APRÈS le classement, jamais
+    à partir d'une écurie hors-session. */
+export async function teamCardPNGBytes(teamId) {
+  if (!teamMode || !teamStandings.length) throw new Error('Le mode Écurie n\'est pas actif sur cette session.');
+  const standing = teamStandings.find((s) => s.team_id === teamId);
+  if (!standing) throw new Error('Écurie introuvable dans ce classement : ' + teamId);
+  const t = themeColors();
+  const ctx = teamCardCtx(standing);
+  const cid = ctx.rank === 1 ? 'team-champion' : 'team-standing';
+  await prewarmTeamCardAvatars(standing);
+  const shell = cardBackgroundHTML(t, cid) + cardHeaderHTML(t) +
+    cardBodyWrap(teamCardBodyHTML(t, standing, ctx)) + cardTeamFooterHTML(t, standing);
+  return renderCardPNG(shell);
+}
+
+/** Liste des écuries de la session courante, dans l'ordre du classement —
+    pour un écran d'export qui proposerait "une carte par écurie" comme
+    listExportPilots() le fait déjà pour les pilotes. */
+export function listExportTeams() {
+  return teamStandings.map((s) => ({
+    teamId: s.team_id,
+    name: (teamsById[s.team_id] && teamsById[s.team_id].name) || s.team_id,
+    rank: s.rank,
+    points: s.points,
+  }));
+}
+
+// --- Concept CLASSEMENT (tableau complet, mode Écurie uniquement) ----------
+// Troisième famille de carte, à côté de la carte de position pilote et de la
+// carte par écurie : ici le visuel EST le tableau — toutes les écuries,
+// classées, en une seule image. Sert quand on veut annoncer le championnat
+// dans son ensemble plutôt qu'une performance individuelle (post récap,
+// affichage circuit). Pas de roster ici — le podium pilote/écurie est déjà
+// couvert par les deux autres cartes, celle-ci ne montre QUE le classement.
+//
+// Densité : même principe que --page4-density sur la page 4 (renderTeamPage)
+// mais calculée ici en JS plutôt qu'en CSS custom property, parce que la
+// carte est rasterisée une seule fois par html2canvas — pas de redimensionnement
+// vivant à prévoir. 8 écuries à densité 1 remplissent confortablement la zone
+// (540-1380px, cf. cardBodyWrap) ; au-delà, les lignes se resserrent au lieu
+// de déborder du cadre 1080x1920.
+function teamStandingsRowHTML(t, s, density) {
+  const team = teamsById[s.team_id];
+  if (!team) return '';
+  const badgeSize = Math.round(60 * density);
+  const numSize = Math.round(40 * density);
+  const nameSize = Math.round(32 * density);
+  const ptsSize = Math.round(32 * density);
+  const padY = Math.round(14 * density);
+  const gap = Math.round(18 * density);
+  const top3 = s.rank <= 3;
+  return `
+    <div style="display:flex;align-items:center;gap:${gap}px;width:100%;padding:${padY}px 0;border-bottom:1px solid ${cardRGBA(t.border, .55)}${top3 ? `;background:${cardRGBA(t.accent, .05)}` : ''}">
+      <div style="flex:0 0 ${Math.round(52 * density)}px;font:700 ${numSize}px ${CARD_NUM};color:${top3 ? t.accent : t.muted};text-align:center">${s.rank}</div>
+      <div style="flex:0 0 ${badgeSize}px;width:${badgeSize}px;height:${badgeSize}px;border-radius:${Math.round(badgeSize * .22)}px;overflow:hidden;background:${t.surface};border:1px solid ${cardRGBA(team.color, .55)};display:flex;align-items:center;justify-content:center;box-sizing:border-box">${teamLogoHTML(team, Math.round(badgeSize * .64))}</div>
+      <div style="flex:1 1 auto;min-width:0;text-align:left;font:700 ${nameSize}px ${CARD_UI};letter-spacing:.01em;text-transform:uppercase;color:${team.color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHTML(team.name)}</div>
+      <div style="flex:0 0 auto;min-width:120px;text-align:right;font:700 ${ptsSize}px ${CARD_NUM};color:${t.text}">${s.points}<span style="font-size:.42em;color:${t.muted}"> pts</span></div>
+    </div>`;
+}
+
+function teamStandingsBodyHTML(t) {
+  const n = teamStandings.length;
+  const density = Math.max(.5, Math.min(1, 8 / Math.max(n, 1)));
+  const rows = teamStandings.map((s) => teamStandingsRowHTML(t, s, density)).join('');
+  const tie = teamStandings.some((s) => s.tiebroken);
+  return `
+    <div style="width:100%">
+      <div style="font:400 20px ${CARD_MONO};letter-spacing:.3em;color:${t.muted};text-align:center">CLASSEMENT CONSTRUCTEUR</div>
+      <div style="margin-top:22px;display:flex;flex-direction:column;width:100%">${rows}</div>
+      ${tie ? `<div style="margin-top:16px;text-align:center;font:400 15px ${CARD_MONO};letter-spacing:.1em;color:${t.muted}">&Eacute;galit&eacute; d&eacute;partag&eacute;e &agrave; la moyenne des positions</div>` : ''}
+    </div>`;
+}
+
+function cardStandingsFooterHTML(t) {
+  const type = escapeHTML((sessionInfo && sessionInfo.session_type) || '');
+  const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
+  const meta = [teamStandings.length + ' écuries', type, date].filter(Boolean).join(' &middot; ');
+  return `<div style="position:absolute;left:74px;right:74px;top:1780px;text-align:center;font:400 19px ${CARD_MONO};letter-spacing:.18em;color:${t.muted};text-transform:uppercase;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${meta}</div>`;
+}
+
+/** Carte classement — le tableau complet du championnat constructeur, en une
+    seule image (pas de pilote, pas d'écurie unique : la session entière). */
+export async function teamStandingsCardPNGBytes() {
+  if (!teamMode || !teamStandings.length) throw new Error('Le mode Écurie n\'est pas actif sur cette session.');
+  const t = themeColors();
+  const shell = cardBackgroundHTML(t, 'team-standings') + cardHeaderHTML(t) +
+    cardBodyWrap(teamStandingsBodyHTML(t)) + cardStandingsFooterHTML(t);
+  return renderCardPNG(shell);
 }
 
 // --- Concepts RECORD --------------------------------------------------------

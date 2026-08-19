@@ -1443,6 +1443,33 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     </div>
   </section>
 
+  <!-- PAGE 4 — Championnat constructeur. Masquee par defaut : renderTeamPage()
+       ne l'affiche (et n'ajoute son point de navigation) que si la session est
+       en mode Ecurie ET qu'au moins une ecurie a marque. -->
+  <section class="page-screen" id="page-screen-4" style="display:none">
+    <header class="circuit-header" aria-label="Championnat constructeur">
+      <div class="circuit-name">Championnat écuries</div>
+      <div class="circuit-meta">
+        <div class="circuit-meta-item"><span class="val">Classement constructeur</span></div>
+      </div>
+    </header>
+
+    <section aria-labelledby="page4-title">
+      <h2 id="page4-title" class="section-title">Championnat écuries</h2>
+      <p id="page4-sub" style="color:var(--c-muted);font-size:var(--label-size);margin:calc(-1 * var(--space-2)) 0 var(--space-4)"></p>
+      <!-- Bloc champion, puis le reste du classement — meme composition que le PDF. -->
+      <div id="page4-hero"></div>
+      <div class="top10-wrap"><div id="page4-teams" role="list" aria-label="Championnat constructeur"></div></div>
+    </section>
+
+    <div class="pdf-btn-wrap">
+      <button class="pdf-btn" id="btn-pdf-teams">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+        PDF championnat écuries
+      </button>
+    </div>
+  </section>
+
 </main>
 
 <nav class="page-nav" id="page-nav" style="display:none" aria-label="Navigation entre les pages de résultats">
@@ -1454,6 +1481,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
     <button type="button" class="nav-dot active" data-dot="1" aria-label="Page 1 — Podium"></button>
     <button type="button" class="nav-dot" data-dot="2" aria-label="Page 2 — Classement complet"></button>
     <button type="button" class="nav-dot" data-dot="3" aria-label="Page 3 — Détail tour par tour"></button>
+    <button type="button" class="nav-dot" data-dot="4" aria-label="Page 4 — Championnat écuries" style="display:none"></button>
   </div>
   <button class="nav-btn" id="nav-next">
     <span id="nav-next-label">Classement</span>
@@ -1467,6 +1495,234 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 .wm-badge{position:fixed;left:50%;bottom:calc(var(--nav-h, 0px) + 4px);transform:translateX(-50%);z-index:25;display:inline-flex;align-items:center;gap:.35rem;padding:.35rem .85rem;font-family:var(--font-body);font-size:.68rem;letter-spacing:.08em;text-transform:uppercase;color:var(--c-muted);text-decoration:none;opacity:.6;border:1px solid var(--c-border);border-radius:.6rem;background:var(--c-surface);transition:opacity var(--transition)}
 .wm-badge:hover{opacity:1}
 .wm-badge b{color:var(--c-text);font-weight:700}
+
+/* ============================================================
+   MODE ÉCURIE — CLASSEMENT PILOTE
+
+   L'écurie a sa propre colonne (structure inspirée des
+   habillages de classement F1). Le logo n'est donc PAS répété à
+   côté de l'avatar.
+
+   RÈGLE DE COULEUR : seul le nom de l'écurie est coloré. Rang,
+   points, écart, fond et bordures restent neutres — une ligne où
+   tout est coloré devient un patchwork. La couleur reprend tous
+   ses droits page 4 (Championnat écuries), où elle sert à
+   distinguer douze écuries d'un coup d'oeil.
+   ============================================================ */
+.top10-row.has-team { grid-template-columns: 2.5rem 3.2rem 1.35fr 1fr auto auto; }
+
+.rank-team { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+.rank-team img, .rank-team svg { width: 1.7rem; height: 1.7rem; object-fit: contain; flex-shrink: 0; }
+.rank-team-name {
+  font-family: var(--font-display); font-size: clamp(.9rem, 1.5vw, 1.15rem);
+  font-weight: 700; font-style: italic; text-transform: uppercase;
+  letter-spacing: .03em; color: var(--tc); transform: skewX(-7deg);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
+}
+/* Doublon volontaire : l'écurie est aussi écrite dans la ligne kart, pour les
+   largeurs où la colonne ne tient pas. Masquée par défaut. */
+.rank-kartline .team-tag, .rank-kartline .team-sep { display: none; }
+.rank-kartline .team-tag { color: var(--tc); font-weight: 700; }
+
+/* Points : même gabarit que le badge d'écart, mais en contour et NEUTRE.
+   L'écart reste le seul élément plein de la ligne. */
+.rank-pts {
+  font-family: var(--font-body); font-size: var(--gap-size); font-weight: 700;
+  letter-spacing: .05em; color: var(--c-text); background: transparent;
+  padding: .2rem .5rem; border-radius: var(--corner-radius);
+  border: 1px solid var(--c-border);
+  min-width: 3.4rem; text-align: center; white-space: nowrap; flex-shrink: 0;
+}
+.rank-pts b { font-family: var(--font-display); font-size: 1.25em; font-style: italic;
+  color: var(--c-text); margin-right: .15em; }
+.rank-pts.zero { opacity: .4; }
+
+/* Page 3 — pas de colonne ici (les deux boutons d'action prennent la place) :
+   l'écurie s'affiche dans la ligne kart, et il n'y a pas de badge de points,
+   cette page parlant de chronos. */
+.acc-head .rank-kartline .team-tag, .acc-head .rank-kartline .team-sep { display: inline; }
+
+/* ============================================================
+   PODIUM (page 1) — le badge COMPLET, posé à cheval sur le bord
+   de la carte. À cette taille le nom écrit dans le badge reste
+   lisible, ce qui n'est pas le cas dans une ligne de classement.
+   ============================================================ */
+.podium-card.has-team { overflow: visible; }
+.podium-team-badge {
+  position: absolute; top: -.7rem; right: -.7rem; z-index: 4;
+  width: 4rem; height: 4rem; display: grid; place-items: center;
+  filter: drop-shadow(0 3px 10px rgba(0,0,0,.75)) drop-shadow(0 0 3px rgba(0,0,0,.6));
+  pointer-events: none;
+}
+.podium-card.p1 .podium-team-badge { width: 4.8rem; height: 4.8rem; top: -.85rem; right: -.85rem; }
+.podium-team-badge img, .podium-team-badge svg { width: 100%; height: 100%; object-fit: contain; }
+.pilot-pts {
+  font-family: var(--font-body); font-size: var(--kart-size); font-weight: 700;
+  letter-spacing: .06em; color: var(--c-text); background: transparent;
+  padding: .05rem .4rem; border-radius: var(--corner-radius);
+  border: 1px solid var(--c-border); white-space: nowrap; flex-shrink: 0;
+}
+.pilot-pts b { font-family: var(--font-display); font-size: 1.2em; font-style: italic;
+  color: var(--c-text); margin-right: .15em; }
+.pilot-pts.zero { opacity: .45; }
+
+/* ============================================================
+   PAGE 4 — CHAMPIONNAT ÉCURIES
+   ============================================================ */
+/* La page occupe toute la hauteur et se densifie selon le nombre d'écuries
+   (--page4-density, posée par renderTeamPage()). Même principe que la page 2. */
+.team-row {
+  display: grid;
+  grid-template-columns: calc(2.5rem * var(--page4-density, 1)) calc(3.9rem * var(--page4-density, 1)) 1fr auto;
+  align-items: center; gap: calc(var(--space-3) * var(--page4-density, 1));
+  padding: calc(var(--space-3) * var(--page4-density, 1)) var(--space-4);
+  border-top: 1px solid rgba(255,255,255,.07); position: relative;
+}
+.team-row:first-child { border-top: none; }
+.team-badge-cell img, .team-badge-cell svg {
+  width: calc(3.5rem * var(--page4-density, 1)); height: calc(3.5rem * var(--page4-density, 1));
+  object-fit: contain;
+}
+.team-row .team-name { font-size: calc(clamp(1.1rem, 2.2vw, 1.65rem) * var(--page4-density, 1)); }
+.team-row .team-members { font-size: calc(var(--kart-size) * var(--page4-density, 1)); }
+.team-row .rank-pos { font-size: calc(clamp(1.5rem, 3.2vw, 2.5rem) * var(--page4-density, 1)); }
+.team-row::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--tc); }
+.team-badge-cell img, .team-badge-cell svg { display: block; }
+.team-main { min-width: 0; }
+.team-name {
+  font-family: var(--font-display); font-size: clamp(1.05rem, 2.1vw, 1.55rem);
+  font-weight: 700; font-style: italic; text-transform: uppercase;
+  letter-spacing: .03em; transform: skewX(-7deg); line-height: 1.05;
+}
+.team-members { font-size: var(--kart-size); color: var(--c-muted);
+  letter-spacing: .04em; text-transform: uppercase; margin-top: .1rem;
+  display: flex; flex-wrap: wrap; gap: .1rem .6rem; }
+.tm-member { white-space: nowrap; }
+.tm-member b { color: var(--c-text); font-weight: 700; }
+.tm-member i { font-style: normal; color: var(--tc); font-weight: 700; }
+.team-bar { height: 4px; border-radius: 99px; background: rgba(255,255,255,.08); margin-top: .4rem; overflow: hidden; }
+.team-bar i { display: block; height: 100%; background: var(--tc); border-radius: 99px; }
+.team-avg { font-size: var(--label-size); color: var(--c-muted); letter-spacing: .05em; white-space: nowrap; }
+.team-row .rank-pts { border-color: var(--tc); }
+.team-row .rank-pts b { color: var(--tc); }
+
+@media (max-width: 640px) {
+  /* Les grilles de lignes sont redéfinies par des sélecteurs à spécificité
+     d'ID (#page-screen-1 / #page2-ranking) : une règle de classe ne peut pas
+     les battre. Chaque variante est donc reprise nommément. */
+  #page-screen-1 .top10-row.has-team { grid-template-columns: 1.45rem 1.8rem minmax(0, 1fr) auto auto; }
+  #page2-ranking .top10-row.has-team {
+    grid-template-columns: calc(1.55rem * var(--page2-density, 1)) calc(2rem * var(--page2-density, 1)) minmax(0, 1fr) auto auto;
+  }
+  #page2-ranking.is-ultra-dense .top10-row.has-team {
+    grid-template-columns: calc(1.45rem * var(--page2-density, 1)) minmax(0, 1fr) auto auto;
+  }
+  .top10-row.has-team { grid-template-columns: 2rem 2.4rem 1fr auto auto; gap: .45rem; }
+
+  /* Sous 640 px la colonne d'écurie ne tient plus : on la masque et on
+     réaffiche la mention dans la ligne kart. */
+  .rank-team { display: none; }
+  .rank-kartline .team-tag, .rank-kartline .team-sep { display: inline; }
+
+  /* Page 1 : la ligne kart y est masquée d'origine (le numéro de kart aussi).
+     On la rouvre pour le SEUL nom d'écurie — sans lui, la page héros ne
+     donnerait plus aucun signal d'appartenance. */
+  #page-screen-1 .top10-row.has-team .rank-kartline { display: block; }
+  #page-screen-1 .rank-kartline .kl-kart,
+  #page-screen-1 .rank-kartline .kl-extra,
+  #page-screen-1 .rank-kartline .team-sep { display: none; }
+
+  .rank-pts { min-width: 2.6rem; padding: .08rem .3rem; font-size: .62rem; }
+  #page-screen-1 .rank-pts, #page2-ranking .rank-pts { min-width: 0; padding: .06rem .28rem; font-size: .6rem; }
+  .podium-team-badge { width: 2.6rem; height: 2.6rem; top: -.45rem; right: -.45rem; }
+  .podium-card.p1 .podium-team-badge { width: 3rem; height: 3rem; top: -.55rem; right: -.55rem; }
+  .pilot-pts { padding: 0 .25rem; font-size: .62rem; letter-spacing: 0; }
+
+  .team-row { grid-template-columns: 1.9rem 2.6rem 1fr auto; gap: .5rem; padding: .6rem .7rem; }
+  .team-avg { display: none; }
+  .team-members { font-size: .65rem; gap: .05rem .5rem; }
+}
+
+/* --- Bloc champion (page 4) — même composition que le PDF championnat --- */
+.team-hero {
+  display: flex; align-items: center; gap: var(--space-6);
+  padding: var(--space-6); margin-bottom: var(--space-4);
+  border: 2px solid var(--tc); border-radius: var(--radius-xl);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tc) 26%, transparent) 0%,
+                    color-mix(in srgb, var(--tc) 6%, transparent) 55%, transparent 100%),
+    var(--c-surface);
+}
+.th-badge { flex-shrink: 0; }
+.th-badge img, .th-badge svg { display: block; width: 8.25rem; height: 8.25rem; object-fit: contain; }
+.th-main { min-width: 0; flex: 1; }
+.th-kicker { font-size: .68rem; font-weight: 800; letter-spacing: .28em; text-transform: uppercase; color: var(--tc); }
+.th-name {
+  font-family: var(--font-display); font-size: clamp(2.1rem, 6vw, 3.4rem);
+  font-weight: 700; font-style: italic; text-transform: uppercase;
+  line-height: 1; color: var(--c-text); transform: skewX(-7deg); margin-top: .1rem;
+}
+.th-figs { display: flex; gap: var(--space-6); margin: var(--space-3) 0;
+  padding-bottom: var(--space-3); border-bottom: 1px solid var(--c-border); flex-wrap: wrap; }
+.th-figs .fig { display: flex; align-items: baseline; gap: .35rem; }
+.th-figs .fig b { font-family: var(--font-display); font-size: clamp(1.5rem, 3.4vw, 2.1rem);
+  font-style: italic; line-height: 1; color: var(--tc); }
+.th-figs .fig span { font-size: .6rem; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--c-muted); }
+.th-members { display: flex; gap: var(--space-6); flex-wrap: wrap; }
+.th-member { display: flex; align-items: center; gap: .55rem; min-width: 0; }
+.th-av { width: 2.6rem; height: 2.6rem; border-radius: 50%; overflow: hidden;
+  border: 2px solid var(--tc); background: var(--c-faint); flex-shrink: 0; }
+.th-av img, .th-av svg { width: 100%; height: 100%; object-fit: cover; }
+.th-mtxt { display: flex; flex-direction: column; min-width: 0; }
+.th-mtxt .nm { font-family: var(--font-display); font-size: 1.15rem; font-style: italic;
+  line-height: 1.1; color: var(--c-text); }
+.th-mtxt .meta { font-size: .68rem; font-weight: 700; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--c-muted); }
+.th-mpts { font-family: var(--font-display); font-size: 1.5rem; font-style: italic; color: var(--tc); }
+.th-mpts i { font-family: var(--font-body); font-style: normal; font-size: .55rem;
+  font-weight: 800; letter-spacing: .12em; color: var(--c-muted); margin-left: .15rem; }
+
+@media (max-width: 640px) {
+  /* Le bloc garde la MÊME composition qu'en large — badge à gauche, infos à
+     droite. Une version empilée et centrée doublait sa hauteur et poussait le
+     classement hors de l'écran : sur cette page le pilote doit voir le
+     champion ET les premières écuries d'un seul coup d'oeil. */
+  .team-hero { gap: var(--space-3); padding: var(--space-3); border-radius: var(--radius-lg); }
+  .th-badge img, .th-badge svg { width: 3.9rem; height: 3.9rem; }
+  .th-kicker { font-size: .54rem; letter-spacing: .2em; }
+  .th-name { font-size: clamp(1.5rem, 7.5vw, 2.1rem); }
+  .th-figs { gap: var(--space-3); margin: var(--space-2) 0; padding-bottom: var(--space-2);
+    flex-wrap: nowrap; }
+  .th-figs .fig b { font-size: 1.2rem; }
+  .th-figs .fig span { font-size: .48rem; letter-spacing: .08em; }
+  /* « 2 pilotes » saute : c'est le chiffre le moins utile, et le retirer suffit
+     à garder les deux autres sur une seule ligne. L'information reste juste
+     en dessous, dans la liste des pilotes. */
+  .th-figs .fig:last-child { display: none; }
+  .th-members { gap: .35rem var(--space-3); flex-direction: column; align-items: flex-start; }
+  .th-member { width: 100%; }
+  .th-av { width: 1.65rem; height: 1.65rem; border-width: 1.5px; }
+  .th-mtxt { flex: 1; }
+  .th-mtxt .nm { font-size: .88rem; }
+  .th-mtxt .meta { font-size: .55rem; }
+  .th-mpts { font-size: 1rem; margin-left: auto; }
+}
+
+/* --- Page 4 : plein écran, comme les pages 1 et 2 --- */
+#page-screen-4.active { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-2); }
+#page-screen-4 > section { min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+#page-screen-4 > section .section-title { flex-shrink: 0; }
+#page-screen-4 #page4-hero { flex-shrink: 0; }
+#page-screen-4 .top10-wrap { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+/* Les lignes s'étirent pour occuper toute la hauteur disponible : à 5 écuries
+   elles respirent, à 11 elles reviennent à leur hauteur naturelle et la liste
+   défile. C'est ce qui supprime le grand vide sous le tableau. */
+#page4-teams { display: flex; flex-direction: column; min-height: 100%; }
+#page4-teams .team-row { flex: 1 1 auto; }
+#page-screen-4 .top10-wrap { display: flex; flex-direction: column; }
+#page4-teams.is-dense .team-members { display: none; }
+#page-screen-4 .pdf-btn-wrap { flex-shrink: 0; }
 </style>
 
 <!-- ============================================================
