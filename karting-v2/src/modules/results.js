@@ -1223,7 +1223,7 @@ export async function buildSessionPDF(s) {
     page.innerHTML =
       '<div style="border-bottom:3px solid #7c74ff;padding-bottom:10px;margin-bottom:16px">' +
       '<div style="font-size:22px;font-weight:900">' + (s.title || 'Session') + '</div>' +
-      '<div style="font-size:12px;color:#666;margin-top:4px">' + (s.session_date ? formatDate(s.session_date) : '') + (s.session_type ? ' · ' + sessionTypeLabel(s.session_type) : '') + '</div>' +
+      '<div style="font-size:12px;color:#666;margin-top:4px">' + (s.session_date ? formatDate(s.session_date) : '') + (s.team_mode ? ' · Écurie' : (s.session_type ? ' · ' + sessionTypeLabel(s.session_type) : '')) + '</div>' +
       '</div>' +
       '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
       '<thead><tr style="text-align:left;border-bottom:2px solid #111"><th style="padding:6px 8px">Pos.</th><th style="padding:6px 8px">Kart</th><th style="padding:6px 8px">Nom</th><th style="padding:6px 8px">Temps</th></tr></thead>' +

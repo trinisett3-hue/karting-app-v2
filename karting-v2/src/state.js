@@ -125,8 +125,19 @@ export function sessionTypeLabel(v) {
   return found ? found.l : fallbackLabel(v);
 }
 
-// Pastille utilisee dans les listes de sessions et d'archives (rendu inchange).
-export function sessionTypeBadgeHTML(v) {
+// Pastille utilisee dans les listes de sessions et d'archives.
+//
+// 20/08 (client) : une session Ecurie doit se reperer d'un coup d'oeil dans
+// les listes, sinon rien ne distingue une session Loisir classique d'une
+// session avec championnat constructeur — confusion vecue en direct. Le
+// deuxieme parametre, quand true, REMPLACE le type (Loisir/Compet/...) par
+// une pastille ECURIE plutot que de l'ajouter a cote : la session garde son
+// session_type en base (utile pour les filtres/exports), mais l'admin n'a
+// besoin de voir qu'une seule information ici.
+export function sessionTypeBadgeHTML(v, teamMode) {
+  if (teamMode) {
+    return '<span class="sc-badge" style="background:rgba(255,122,42,.18);color:var(--org,#ff7a2a)">&#127937; &Eacute;curie</span>';
+  }
   const label = sessionTypeLabel(v);
   if (!label) return '';
   return '<span class="sc-badge" style="background:rgba(236,234,42,.15);color:var(--yel)">' + escapeTypeHTML(label) + '</span>';
