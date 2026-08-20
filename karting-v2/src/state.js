@@ -136,7 +136,7 @@ export function sessionTypeLabel(v) {
 // besoin de voir qu'une seule information ici.
 export function sessionTypeBadgeHTML(v, teamMode) {
   if (teamMode) {
-    return '<span class="sc-badge" style="background:rgba(255,122,42,.18);color:var(--org,#ff7a2a)">&#127937; &Eacute;curie</span>';
+    return '<span class="sc-badge" style="background:rgba(255,122,42,.18);color:var(--org,#ff7a2a)">&Eacute;curie</span>';
   }
   const label = sessionTypeLabel(v);
   if (!label) return '';
