@@ -26,6 +26,12 @@ let chartInstance = null;
 // le filtre en cours, sans requete DB supplementaire.
 let lastKpis = { sessions: 0, pilotsUniques: 0, chronos: 0 };
 let lastHofKarts = [];
+// 19/08 (K-16) : records actuels du circuit (piste/semaine/mois), memes
+// donnees que la page publique Hall of Fame (my_hall_of_fame(), migration-v28).
+// Le staff voit toujours les 3 a l'ecran ; `plan` sert uniquement a decider,
+// a l'export XLSX, si les colonnes semaine/mois sont incluses dans le fichier
+// (meme regle que ce que les pilotes voient publiquement).
+let lastHofCurrent = { plan: 'starter', piste: null, semaine: null, mois: null };
 let lastExploitation = { avgFill: null, minFill: null, maxFill: null, utilizationRate: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
 
 // --- Exploitation piste (Basique, MVP) --------------------------------------------------
@@ -396,6 +402,31 @@ document.querySelectorAll('.info-ico.open').forEach((el) => el.classList.remove(
 });
 }
 
+// --- Records actuels (piste/semaine/mois) — K-16, 19/08 ----------------------------------
+function hofRecordRow(label, rec) {
+  if (!rec) return '<tr><td>' + label + '</td><td colspan="2" class="mut">--</td></tr>';
+  const when = rec.achieved_at ? formatDate(rec.achieved_at) : '--';
+  return '<tr><td>' + label + '</td><td>' + formatTime(rec.lap_time_s) + '</td><td>' + (rec.pilot || '--') + ' <span class="mut" style="font-size:11px">(' + when + ')</span></td></tr>';
+}
+
+async function loadHofCurrent() {
+  const el = document.getElementById('stats-hof-current');
+  if (!el) return;
+  const { data, error } = await db.rpc('my_hall_of_fame');
+  if (error || !data) {
+    lastHofCurrent = { plan: 'starter', piste: null, semaine: null, mois: null };
+    el.innerHTML = '<div class="empty">Aucun record enregistre pour l\'instant.</div>';
+    return;
+  }
+  lastHofCurrent = { plan: data.plan || 'starter', piste: data.piste || null, semaine: data.semaine || null, mois: data.mois || null };
+  el.innerHTML =
+    '<table class="rank-tbl"><thead><tr><th>Scope</th><th>Temps</th><th>Pilote</th></tr></thead><tbody>' +
+    hofRecordRow('All-time (piste)', lastHofCurrent.piste) +
+    hofRecordRow('Ce mois-ci', lastHofCurrent.mois) +
+    hofRecordRow('Cette semaine', lastHofCurrent.semaine) +
+    '</tbody></table>';
+}
+
 export async function loadStatsTab(range) {
   currentRange = range || currentRange || { key: 'all', from: null, to: null };
   const kpiGrid = document.getElementById('stats-kpi-grid');
@@ -539,6 +570,12 @@ export async function loadStatsTab(range) {
         '</tbody></table>'
       : '<div class="empty">Aucun tour enregistre.</div>';
   }
+
+  // --- Records actuels (piste/semaine/mois) — memes donnees que la page --------------------
+  // publique Hall of Fame (K-16, 19/08). Independant du filtre de plage en haut de
+  // page : ce sont TOUJOURS les records "en cours", pas une reconstitution sur la
+  // periode selectionnee. Staff = toujours les 3, quel que soit le plan.
+  await loadHofCurrent();
 
   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
   // Fait partie du meme verrou 'session_occupancy' que l'exploitation piste ci-dessus.
@@ -1178,6 +1215,32 @@ export function exportStatsXLSX() {
     ...lastHofKarts.map((r) => [r.kart, formatTime(r.time), r.name || '']),
   ]);
   XLSX.utils.book_append_sheet(wb, hofKartsSheet, 'HOF karts');
+
+  // 19/08 (K-16) : feuille "Records circuit" — memes donnees que la page publique
+  // Hall of Fame. IMPORTANT, meme regle que l'affichage public : les colonnes
+  // semaine/mois ne sont incluses dans le fichier QUE si le plan resolu est
+  // pro/business, meme si le staff les voit deja a l'ecran (voir loadHofCurrent()).
+  // Ce n'est pas une nouvelle verification de securite (la donnee est deja
+  // legitimement arrivee jusqu'a l'admin authentifie via my_hall_of_fame()) : il
+  // s'agit seulement de ne pas mettre dans le fichier telechargeable plus que ce
+  // que le plan du circuit donne droit d'exploiter.
+  const hofPlan = lastHofCurrent.plan;
+  const hofPlanIsPro = hofPlan === 'pro' || hofPlan === 'business';
+  const recRow = (label, rec) => [label, rec ? formatTime(rec.lap_time_s) : '', rec ? (rec.pilot || '') : '', rec && rec.achieved_at ? fmtRangeDate(rec.achieved_at) : ''];
+  const recordsAOA = [
+    ['Records circuit (Hall of Fame public) — plan ' + hofPlan],
+    [],
+    ['Scope', 'Temps', 'Pilote', 'Date'],
+    recRow('All-time (piste)', lastHofCurrent.piste),
+  ];
+  if (hofPlanIsPro) {
+    recordsAOA.push(recRow('Ce mois-ci', lastHofCurrent.mois));
+    recordsAOA.push(recRow('Cette semaine', lastHofCurrent.semaine));
+  } else {
+    recordsAOA.push([], ['Records mois/semaine reserves aux plans Pro et Business.']);
+  }
+  const recordsSheet = XLSX.utils.aoa_to_sheet(recordsAOA);
+  XLSX.utils.book_append_sheet(wb, recordsSheet, 'Records circuit');
 
   const e = lastExploitation;
   const exploitationSheet = XLSX.utils.aoa_to_sheet([
