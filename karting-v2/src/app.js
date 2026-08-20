@@ -97,7 +97,7 @@ dayList
 '<div class="arch-item" onclick="openArchiveDetail(\'' + s.id + '\')">' +
 '<div><div class="arch-title">' + s.title +
 (s.internal_notes ? ' <span title="Note interne presente" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--yel);margin-left:4px"></span>' : '') +
-'</div><div class="arch-meta flex" style="gap:6px;margin-top:2px">' + s.max_karts + ' karts' + (sessionTypeBadge(s.session_type) ? ' ' + sessionTypeBadge(s.session_type) : '') + '</div></div>' +
+'</div><div class="arch-meta flex" style="gap:6px;margin-top:2px">' + s.max_karts + ' karts' + (sessionTypeBadge(s.session_type, s.team_mode) ? ' ' + sessionTypeBadge(s.session_type, s.team_mode) : '') + '</div></div>' +
 '<div class="flex">' +
 '<button class="btn btn-ghost btn-sm icon-btn" title="Voir" onclick="event.stopPropagation();openArchiveDetail(\'' + s.id + '\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg></button>' +
 '<button class="btn btn-red btn-sm icon-btn" title="Supprimer" onclick="event.stopPropagation();deleteSession(\'' + s.id + '\').then(loadArchives)"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg></button>' +

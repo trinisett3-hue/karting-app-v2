@@ -2860,7 +2860,11 @@ function cardHeaderHTML(t) {
    les 15 concepts. */
 function cardFooterHTML(t, pilot) {
   const laps = pilot.hasTime ? String(pilot.lapsCount) + ' tours' : '';
-  const type = escapeHTML((sessionInfo && sessionInfo.session_type) || '');
+  // 20/08 (client) : en Mode Écurie, le type de session (Loisir/Compet/...)
+  // n'a plus d'intérêt visuel prioritaire — c'est l'appartenance à une
+  // écurie qui identifie la session, sinon confusion avec une session
+  // classique. Remplacé, pas ajouté à côté.
+  const type = teamMode ? 'Écurie' : escapeHTML((sessionInfo && sessionInfo.session_type) || '');
   const date = escapeHTML(fmtSessionDate(sessionInfo && sessionInfo.session_date));
   const meta = ['Kart ' + (pilot.kart ?? '-'), laps, type, date].filter(Boolean).join(' &middot; ');
   return `
@@ -3155,7 +3159,10 @@ function positionCtx(pilot) {
     time: pilot.bestLap != null ? fmtCardTime(pilot.bestLap) : '--',
     laps: pilot.hasTime ? pilot.lapsCount : '--',
     totalPilots: list.length,
-    sessionType: (sessionInfo && sessionInfo.session_type) || '--',
+    // 20/08 (client) : Mode Écurie affiché à la place du type de session
+    // (Loisir/Compet/...) sur les cartes de position — même raison que
+    // cardFooterHTML ci-dessus.
+    sessionType: teamMode ? 'Écurie' : ((sessionInfo && sessionInfo.session_type) || '--'),
     dateTxt: fmtSessionDate(sessionInfo && sessionInfo.session_date),
     gapPrev,
   };

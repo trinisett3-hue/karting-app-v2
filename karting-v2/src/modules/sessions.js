@@ -66,7 +66,7 @@ export async function renderActivesGrid() {
       const occ = (regs || []).filter((r) => r.kart_number != null).length;
       const pub = isSessionPublished(s) ? '<span class="sc-badge pub">Publie</span>' : '<span class="sc-badge">En cours</span>';
       // 02/08 (client) : libelles configures dans Parametres > Sessions, plus en dur ici.
-      const typeBadge = sessionTypeBadgeHTML(s.session_type);
+      const typeBadge = sessionTypeBadgeHTML(s.session_type, s.team_mode);
       const notesDot = s.internal_notes
         ? '<span title="Note interne presente" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--yel);margin-left:6px"></span>'
         : '';

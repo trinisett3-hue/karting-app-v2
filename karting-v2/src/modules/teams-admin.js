@@ -52,13 +52,27 @@ export async function mountTeamBlock(prefix, { session = null, onChange = null }
   blocks[prefix] = { entitled: true };
 
   const on = !!(session && session.team_mode);
+  // 20/08 (client) : cocher Mode Écurie sur une session DÉJÀ créée ne fait
+  // rien de plus que mettre le champ à true en base — les pilotes déjà
+  // inscrits n'ont jamais vu de sélecteur d'écurie, aucune écurie ne leur a
+  // été proposée, donc rien ne se "met en mode écurie" après coup. Résultat
+  // vécu : un admin cochait la case en pensant activer le championnat sur
+  // une session en cours, et se retrouvait avec des pilotes sans écurie.
+  // Le réglage n'est donc modifiable qu'à LA CRÉATION (session === null) ;
+  // dans le détail d'une session existante, la case reflète simplement
+  // l'état figé depuis le départ.
+  const locked = !!session;
   root.innerHTML =
     '<div class="flex" style="align-items:center;gap:10px;margin-bottom:2px">' +
-      '<label class="team-switch">' +
-        '<input type="checkbox" id="' + prefix + '-team-mode"' + (on ? ' checked' : '') + '>' +
+      '<label class="team-switch"' + (locked ? ' style="opacity:.6;cursor:not-allowed"' : '') + '>' +
+        '<input type="checkbox" id="' + prefix + '-team-mode"' + (on ? ' checked' : '') + (locked ? ' disabled' : '') + '>' +
         '<span>Mode Écurie</span>' +
       '</label>' +
-      '<span style="font-size:11px;color:var(--mut)">Championnat constructeur en plus du classement pilote — les pilotes choisissent leur écurie à l\'inscription.</span>' +
+      '<span style="font-size:11px;color:var(--mut)">' +
+        (locked
+          ? 'Défini à la création de la session, non modifiable ensuite.'
+          : 'Championnat constructeur en plus du classement pilote — les pilotes choisissent leur écurie à l\'inscription.') +
+      '</span>' +
     '</div>';
 
   document.getElementById(prefix + '-team-mode').addEventListener('change', () => {
