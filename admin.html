@@ -686,14 +686,15 @@ updateThemeToggleUI();
 <div class="subtab-btn" data-stab-val="qualite" onclick="switchStatsSubtab('qualite')">📶 Usage avance</div>
 </div>
 
-<!-- 1) VUE D'ENSEMBLE — KPIs globaux, exploitation piste, frequentation (Basique) -->
+<!-- 1) VUE D'ENSEMBLE — KPIs globaux (Basique), exploitation piste + frequentation (Pro) -->
 <div class="subtab-panel active" id="stats-subtab-overview">
 <div class="ctitle" style="margin-bottom:10px">KPIs globaux</div>
 <div class="g3 kpi-row" id="stats-kpi-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
 
 <div class="ctitle" style="margin-bottom:10px">Exploitation piste</div>
-<div class="g4 kpi-row" id="stats-exploitation-grid" style="margin-bottom:8px"><div class="empty">Chargement...</div></div>
-<div style="font-size:11px;color:var(--mut);margin-bottom:20px">Taux d'utilisation piste : estimation simple basee sur une duree moyenne de session et des horaires d'ouverture par defaut (reglage fin a venir).</div>
+<!-- 20/08 : tuile "Utilisation piste (estimee)" retiree (constantes codees en dur, non
+     fiable en demo) -- voir stats.js. Les 3 tuiles restantes sont de vrais calculs. -->
+<div class="g3 kpi-row" id="stats-exploitation-grid" style="margin-bottom:20px"><div class="empty">Chargement...</div></div>
 
 <div class="card" id="stats-freq-card">
 <div class="ctitle" id="stats-freq-title">Frequentation (8 dernieres semaines)</div>

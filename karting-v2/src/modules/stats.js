@@ -32,20 +32,15 @@ let lastHofKarts = [];
 // a l'export XLSX, si les colonnes semaine/mois sont incluses dans le fichier
 // (meme regle que ce que les pilotes voient publiquement).
 let lastHofCurrent = { plan: 'starter', piste: null, semaine: null, mois: null };
-let lastExploitation = { avgFill: null, minFill: null, maxFill: null, utilizationRate: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
+let lastExploitation = { avgFill: null, minFill: null, maxFill: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
 
-// --- Exploitation piste (Basique, MVP) --------------------------------------------------
-// Ni la table `sessions` ni les Parametres n'ont aujourd'hui de champ "duree
-// de session" ou "horaires d'ouverture" — ajouter un vrai reglage sort du
-// perimetre de cette tache (Basique = pack leger, pas de nouvelle UI de
-// configuration). En attendant, on utilise deux constantes simples et
-// documentees : une duree moyenne de session estimee, et un nombre d'heures
-// d'ouverture par jour par defaut. Le "taux d'utilisation piste" qui en
-// decoule est donc une ESTIMATION volontairement simple (demandee telle
-// quelle dans le cahier des charges), pas une mesure exacte — a affiner plus
-// tard avec un vrai reglage d'horaires cote Parametres si besoin.
-const DEFAULT_AVG_SESSION_MINUTES = 15;
-const DEFAULT_OPENING_HOURS_PER_DAY = 8;
+// --- Exploitation piste (Pro) ------------------------------------------------------------
+// 20/08 : la tuile "Utilisation piste (estimee)" a ete retiree (voir git history si besoin
+// de la reprendre). Elle reposait sur deux constantes codees en dur (duree moyenne de
+// session, heures d'ouverture) faute d'un vrai reglage d'horaires cote Parametres -- un
+// chiffre invendable en demo des qu'il ne colle pas aux horaires reels du prospect. Les
+// indicateurs restants (remplissage, sessions/jour, sessions/semaine) sont de vrais calculs
+// sur des donnees existantes, pas des estimations : rien a affiner de ce cote.
 
 function pct(v) {
   return v == null ? '--' : Math.round(v * 100) + '%';
@@ -69,11 +64,11 @@ function daysInRangeCount(range, allSessions) {
   return Math.max(1, Math.round((to - from) / 86400000) + 1);
 }
 
-// KPIs "Exploitation piste" (Basique) : taux de remplissage moyen des
-// sessions (pilotes inscrits / capacite max), taux d'utilisation piste
-// (estimation simple, voir constantes ci-dessus) et sessions par jour/semaine.
-// `regsCountBySession` : Map(session_id -> nb d'inscrits), deja disponible
-// dans loadStatsTab() a partir de `allRegs` — aucune requete DB de plus.
+// KPIs "Exploitation piste" (Pro) : taux de remplissage moyen des sessions (pilotes
+// inscrits / capacite max) et sessions par jour/semaine -- trois vrais calculs, pas
+// d'estimation (voir suppression de l'ancien "taux d'utilisation piste" ci-dessus).
+// `regsCountBySession` : Map(session_id -> nb d'inscrits), deja disponible dans
+// loadStatsTab() a partir de `allRegs` — aucune requete DB de plus.
 function computeExploitationKpis(allSessions, regsCountBySession, range) {
   const fillRates = [];
   allSessions.forEach((s) => {
@@ -87,14 +82,10 @@ function computeExploitationKpis(allSessions, regsCountBySession, range) {
   const maxFill = fillRates.length ? Math.max(...fillRates) : null;
 
   const days = daysInRangeCount(range, allSessions);
-  const totalSessionMinutes = allSessions.length * DEFAULT_AVG_SESSION_MINUTES;
-  const theoreticalMinutes = days > 0 ? days * DEFAULT_OPENING_HOURS_PER_DAY * 60 : 0;
-  const utilizationRate = theoreticalMinutes > 0 ? Math.min(1, totalSessionMinutes / theoreticalMinutes) : null;
-
   const sessionsPerDay = days > 0 ? allSessions.length / days : null;
   const sessionsPerWeek = sessionsPerDay != null ? sessionsPerDay * 7 : null;
 
-  return { avgFill, minFill, maxFill, utilizationRate, sessionsPerDay, sessionsPerWeek, days };
+  return { avgFill, minFill, maxFill, sessionsPerDay, sessionsPerWeek, days };
 }
 
 // Filtre de plage de dates courant — { key, from, to } ; from/to sont des
@@ -516,7 +507,7 @@ export async function loadStatsTab(range) {
   // fuite de donnees dans le DOM.
   const occupancyAllowed = await hasFeature('session_occupancy');
   if (!occupancyAllowed) {
-    lastExploitation = { avgFill: null, minFill: null, maxFill: null, utilizationRate: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
+    lastExploitation = { avgFill: null, minFill: null, maxFill: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
     renderPremiumLock('stats-exploitation-grid');
     renderPremiumLock('stats-freq-card');
     if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
@@ -534,12 +525,6 @@ export async function loadStatsTab(range) {
           pct(exploitation.avgFill),
           exploitation.avgFill != null ? 'min ' + pct(exploitation.minFill) + ' · max ' + pct(exploitation.maxFill) : 'Aucune session avec capacite connue',
           '🪑', 'Moyenne du taux de remplissage (inscrits / places max) des sessions ayant une capacite renseignee. Les sessions sans capacite definie sont ignorees dans ce calcul.'
-        ) +
-        kpiBox(
-          'Utilisation piste (estimee)',
-          pct(exploitation.utilizationRate),
-          'Base : ' + DEFAULT_OPENING_HOURS_PER_DAY + 'h/jour, session ≈' + DEFAULT_AVG_SESSION_MINUTES + 'min',
-          '📈', 'Estimation simple : (nb sessions x 15 min) / (nb jours de la periode x 8h d\'ouverture). Basee sur des valeurs par defaut, pas sur de vrais horaires configures -- a affiner si besoin.'
         ) +
         kpiBox(
           'Sessions / jour',
@@ -1282,7 +1267,6 @@ export function exportStatsXLSX() {
     [],
     ['Indicateur', 'Valeur', 'Detail'],
     ['Remplissage moyen des sessions', pct(e.avgFill), e.avgFill != null ? 'min ' + pct(e.minFill) + ' / max ' + pct(e.maxFill) : 'Aucune session avec capacite connue'],
-    ['Utilisation piste (estimee)', pct(e.utilizationRate), 'Base : ' + DEFAULT_OPENING_HOURS_PER_DAY + 'h/jour, session ~' + DEFAULT_AVG_SESSION_MINUTES + ' min (estimation)'],
     ['Sessions par jour (moyenne)', e.sessionsPerDay != null ? e.sessionsPerDay.toFixed(1) : '--', e.days ? 'sur ' + e.days + ' jour(s)' : ''],
     ['Sessions par semaine (moyenne)', e.sessionsPerWeek != null ? e.sessionsPerWeek.toFixed(1) : '--', ''],
   ]);
