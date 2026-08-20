@@ -702,6 +702,15 @@ updateThemeToggleUI();
 
 <!-- 2) HALL OF FAME — chronos de base (Basique) -->
 <div class="subtab-panel" id="stats-subtab-hof">
+<!-- 19/08 (K-16) : records actuels (piste/semaine/mois) tels qu'exposes
+     publiquement sur la page circuit (?v=<venue_token>&hof=1). Staff =
+     toujours les 3, quel que soit le plan (voir my_hall_of_fame(),
+     migration-v28) ; seul l'export XLSX plus bas filtre par plan. -->
+<div class="card" style="margin-bottom:16px">
+<div class="ctitle">Records actuels du circuit (page publique Hall of Fame)</div>
+<div style="font-size:11px;color:var(--mut);margin-bottom:10px">All-time, mois et semaine en cours — issus des memes donnees que le QR permanent. Les pilotes voient all-time uniquement en Starter ; mois et semaine s'affichent en plus a partir du plan Pro. Toi, en tant que staff, tu vois toujours les trois.</div>
+<div id="stats-hof-current"><div class="empty">Chargement...</div></div>
+</div>
 <div class="g2">
 <div class="card">
 <div class="ctitle">Top 10 meilleurs temps absolus</div>

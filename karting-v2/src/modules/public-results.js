@@ -519,14 +519,20 @@ function venueRow(href, tag, title, meta, hot) {
 
 // Onglets en pilule centree. Volontairement AUTONOMES : ils ne sont plus
 // greffes dans l'entete de la page resultats (voir renderVenuePicker).
-function venueTabs(active, otherHref) {
+// 19/08 (K-16) : 3e onglet Hall of Fame ajoute a cote de Inscription/
+// Résultats. `hrefs` = { register, results, hof } — seul le lien de
+// l'onglet NON actif est utilise (l'actif reste un <span>, comme avant).
+function venueTabs(active, hrefs) {
   const reg = active === 'register'
     ? '<span>Inscription</span>'
-    : '<a href="' + otherHref + '">Inscription</a>';
+    : '<a href="' + hrefs.register + '">Inscription</a>';
   const res = active === 'results'
     ? '<span>Résultats</span>'
-    : '<a href="' + otherHref + '">Résultats</a>';
-  return '<nav class="venue-tabs" aria-label="Navigation">' + reg + res + '</nav>';
+    : '<a href="' + hrefs.results + '">Résultats</a>';
+  const hof = active === 'hof'
+    ? '<span>Hall of Fame</span>'
+    : '<a href="' + hrefs.hof + '">Hall of Fame</a>';
+  return '<nav class="venue-tabs" aria-label="Navigation">' + reg + res + hof + '</nav>';
 }
 
 function venueHero(logoUrl, circuit, title, sub) {
@@ -662,11 +668,83 @@ export async function renderVenuePicker(venueToken) {
     : '<div class="venue-empty">Aucun résultat publié pour l’instant.<br>Reviens juste après ta session.</div>';
 
   mountVenue(
-    venueTabs('results', 'register?v=' + encodeURIComponent(venueToken)) +
+    venueTabs('results', {
+      register: 'register?v=' + encodeURIComponent(venueToken),
+      hof: '?v=' + encodeURIComponent(venueToken) + '&hof=1'
+    }) +
     venueHero(data.logo_url, venueName, 'Choisis ta session',
               'Sélectionne la session que tu viens de courir pour voir le classement.') +
     rows +
     '<p class="venue-note">Les résultats restent affichés ici pendant 3 heures.<br>Le lien reçu par e-mail, lui, reste valable.</p>'
+  );
+  return true;
+}
+
+// 19/08 (K-16) : page Hall of Fame du circuit, accessible depuis l'onglet
+// ci-dessus ET depuis le meme QR permanent que renderVenuePicker (le lien
+// imprime pointe toujours vers results.html?v=<venue_token> ; ?hof=1
+// bascule simplement sur cet ecran — voir load()).
+function venueRecordRow(tag, label, rec) {
+  if (!rec) return '';
+  const when = venueTime(rec.achieved_at);
+  const meta = [fmtTime(rec.lap_time_s), when ? 'le ' + new Date(rec.achieved_at).toLocaleDateString('fr-FR') : '']
+    .filter(Boolean).join(' · ');
+  return '<div class="venue-row hot" style="cursor:default">' +
+    '<span class="venue-tag">' + escapeHTML(tag) + '</span>' +
+    '<span class="venue-txt"><b>' + escapeHTML(rec.pilot || 'Pilote') + '</b><i>' + escapeHTML(label + ' — ' + meta) + '</i></span>' +
+    '</div>';
+}
+
+export async function renderVenueHallOfFame(venueToken) {
+  ['podium-title', 'page-screen-2', 'page-screen-3'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+  const t10 = document.getElementById('top10-title');
+  const t10s = t10 ? t10.closest('section') : null;
+  if (t10s) t10s.style.display = 'none';
+  ['.circuit-header', '.pdf-btn-wrap', '.page-nav', '.results-nav'].forEach(sel => {
+    document.querySelectorAll(sel).forEach(el => { el.style.display = 'none'; });
+  });
+  const floatSwitch = document.querySelector('.page-switch');
+  if (floatSwitch) floatSwitch.remove();
+
+  mountVenue('<div class="venue-empty">Chargement…</div>');
+
+  const { data, error } = await db.rpc('public_venue_hall_of_fame', { _venue_token: venueToken });
+  if (error || !data) {
+    mountVenue('<div class="venue-empty">Lien invalide ou circuit introuvable.</div>');
+    return false;
+  }
+
+  const theme = String(data.results_theme || '').trim();
+  if (theme) document.documentElement.setAttribute('data-theme', theme);
+
+  const venueName = String(data.venue_name || '').trim();
+  if (venueName) document.title = venueName + ' — Hall of Fame';
+
+  const rows = [
+    venueRecordRow('All-time', 'Record du circuit', data.piste),
+    venueRecordRow('Ce mois-ci', 'Meilleur temps du mois', data.mois),
+    venueRecordRow('Cette semaine', 'Meilleur temps de la semaine', data.semaine)
+  ].filter(Boolean).join('');
+
+  // Starter/Free : ni erreur ni donnee vide qui inquieterait le pilote --
+  // juste une invitation neutre, sans jamais laisser deviner la valeur
+  // des records semaine/mois (ils ne sont meme pas dans la reponse serveur,
+  // voir migration-v28 > public_venue_hall_of_fame()).
+  const upsell = (data.plan !== 'pro' && data.plan !== 'business')
+    ? '<p class="venue-note">Les records de la semaine et du mois sont disponibles sur les plans Pro et Business.</p>'
+    : '';
+
+  mountVenue(
+    venueTabs('hof', {
+      register: 'register?v=' + encodeURIComponent(venueToken),
+      results: '?v=' + encodeURIComponent(venueToken)
+    }) +
+    venueHero(data.logo_url, venueName, 'Hall of Fame', 'Les meilleurs chronos jamais réalisés sur ce circuit.') +
+    (rows || '<div class="venue-empty">Aucun record enregistré pour l’instant.<br>Sois le premier à en établir un !</div>') +
+    upsell
   );
   return true;
 }
@@ -679,7 +757,12 @@ const token = params0.get('result');
 // de sessions (QR unique permanent). Sinon seulement, message d'erreur.
 if (!token) {
   const venueToken = params0.get('v') || params0.get('venue');
-  if (venueToken) { await renderVenuePicker(venueToken); return false; }
+  if (venueToken) {
+    // 19/08 (K-16) : ?hof=1 bascule sur l'ecran Hall of Fame, meme QR
+    // permanent que le selecteur de sessions (renderVenuePicker).
+    if (params0.get('hof') === '1') { await renderVenueHallOfFame(venueToken); return false; }
+    await renderVenuePicker(venueToken); return false;
+  }
   return fail();
 }
 resultsToken = token;
