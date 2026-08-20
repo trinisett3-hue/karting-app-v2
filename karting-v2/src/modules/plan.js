@@ -37,7 +37,14 @@ import { db } from '../lib/supabase.js';
 //                          re-verifie cote serveur par private.tenant_has_team_mode() : les
 //                          RPC publiques redescendent team_mode:false pour un plan Basique,
 //                          meme si la colonne sessions.team_mode vaut true.
-const PREMIUM_FEATURES = ['advanced_stats', 'session_occupancy', 'archive_detail', 'registry_export', 'archive_export', 'team_mode'];
+//  - 'full_history'      : dans l'onglet Statistiques, l'acces aux plages Mois / Annee /
+//                          Personnalise / Depuis le debut du filtre de periode (voir
+//                          stats.js > applyHistoryPlanLimits()). Le Basique reste borne aux
+//                          plages courtes (Jour / Semaine / 30 derniers jours) -- decision
+//                          du 19/08 : donner un declencheur d'achat simple ("tu veux
+//                          comparer sur l'annee ? il te faut Pro") plutot que de laisser le
+//                          Basique consulter tout l'historique comme avant.
+const PREMIUM_FEATURES = ['advanced_stats', 'session_occupancy', 'archive_detail', 'registry_export', 'archive_export', 'team_mode', 'full_history'];
 
 let cachedPlanCode = null;
 

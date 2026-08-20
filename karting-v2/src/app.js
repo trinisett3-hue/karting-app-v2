@@ -495,4 +495,7 @@ withdrawPromoConsent: registry.withdrawPromoConsent,
 startEditRegistry: registry.startEditRegistry,
 cancelRegistryEdit: registry.cancelRegistryEdit,
 saveRegistryEdit: registry.saveRegistryEdit,
+// Fiche pilote (Basique) — 20/08
+openPilotCard: registry.openPilotCard,
+closePilotCard: registry.closePilotCard,
 });

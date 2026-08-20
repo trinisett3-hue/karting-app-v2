@@ -112,6 +112,7 @@ let rangeExtra = { month: null, year: null, from: null, to: null };
 const RANGE_LABELS = {
   jour: 'Jour',
   semaine: 'Semaine',
+  '30j': '30 derniers jours',
   mois: 'Mois',
   annee: 'Annee',
   personnalise: 'Personnalise',
@@ -144,6 +145,11 @@ export function computeRangeBounds(key, opts) {
     const sunday = new Date(monday);
     sunday.setDate(sunday.getDate() + 6);
     return { key, from: toDateStr(monday), to: toDateStr(sunday) };
+  }
+  if (key === '30j') {
+    const from = new Date(today);
+    from.setDate(from.getDate() - 29); // fenetre glissante de 30 jours, aujourd'hui inclus
+    return { key, from: toDateStr(from), to: toDateStr(today) };
   }
   if (key === 'mois') {
     const year = opts.year != null ? Number(opts.year) : today.getFullYear();
@@ -427,8 +433,36 @@ async function loadHofCurrent() {
     '</tbody></table>';
 }
 
+// --- Plafond d'historique du plan Basique (decision du 19/08) -----------------------------
+// Le Basique n'a acces qu'aux plages courtes (Jour / Semaine / 30 derniers jours). Mois /
+// Annee / Personnalise / Depuis le debut restent reserves au Pro (flag 'full_history', voir
+// plan.js) -- ca donne un declencheur d'achat simple a expliquer en demo ("tu veux comparer
+// sur l'annee ? il te faut Pro"), la ou avant le Basique pouvait deja tout consulter.
+// Volontairement cote client uniquement, sans verrou serveur : ce n'est pas un perimetre de
+// securite (les donnees appartiennent deja au tenant, RLS les protege comme le reste), donc
+// pas besoin du meme traitement que advanced_stats/session_occupancy qui eux debloquent des
+// CALCULS entiers -- ici on ne fait que restreindre la fenetre de temps sur les memes donnees.
+const FULL_HISTORY_RANGE_KEYS = ['mois', 'annee', 'personnalise', 'all'];
+
+async function applyHistoryPlanLimits() {
+  const limited = !(await hasFeature('full_history'));
+  document.querySelectorAll('.stats-range-btn').forEach((b) => {
+    const restricted = FULL_HISTORY_RANGE_KEYS.includes(b.dataset.rangeVal);
+    b.style.display = restricted && limited ? 'none' : '';
+  });
+  // Retrogradation d'abonnement, ou etat initial sur une plage desormais interdite : on
+  // retombe sur 30 derniers jours plutot que de laisser affichee une plage inaccessible.
+  if (limited && FULL_HISTORY_RANGE_KEYS.includes(currentRange.key)) {
+    currentRange = computeRangeBounds('30j');
+    document.querySelectorAll('.stats-range-btn').forEach((b) => {
+      b.classList.toggle('selected', b.dataset.rangeVal === currentRange.key);
+    });
+  }
+}
+
 export async function loadStatsTab(range) {
   currentRange = range || currentRange || { key: 'all', from: null, to: null };
+  await applyHistoryPlanLimits();
   const kpiGrid = document.getElementById('stats-kpi-grid');
   const exploitationGrid = document.getElementById('stats-exploitation-grid');
   const topTimesEl = document.getElementById('stats-top-times');

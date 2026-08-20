@@ -7,7 +7,7 @@
 // RPC SECURITY DEFINER qui fait elle-même l'agrégation par tenant_users côté serveur (voir
 // la migration) — le front ne fait que consommer ce qu'elle renvoie.
 import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
-import { formatDate, formatDateNumeric, showMsg, confirmModal } from './ui.js';
+import { formatDate, formatDateNumeric, formatTime, showMsg, confirmModal } from './ui.js';
 import { NATS } from './countries.js';
 import { hasFeature } from './plan.js';
 
@@ -165,7 +165,13 @@ function promoBadgeHTML(r) {
 
 function displayRowHTML(r) {
   const key = rowKey(r);
-  const pseudo = r.legacy ? '<span style="color:var(--mut)">(pre-v14)</span>' : escapeHTML(r.pseudo);
+  // 🆕 20/08 : pseudo cliquable -> fiche pilote (Basique, teaser gratuit -- voir
+  // openPilotCard() plus bas). Non disponible sur les lignes legacy (pas de pseudo fiable
+  // pré-v14, juste un email agrégé) : on garde le texte simple pour elles.
+  const pseudo = r.legacy
+    ? '<span style="color:var(--mut)">(pre-v14)</span>'
+    : '<button type="button" class="btn btn-ghost btn-sm" style="padding:2px 8px;font-weight:700" onclick="openPilotCard(\'' +
+      escapeHTML(r.pseudo).replace(/'/g, "\\'") + '\',\'' + (r.last_seen || '') + '\')">' + escapeHTML(r.pseudo) + '</button>';
   const deleteBtn = r.legacy
     ? '<button class="btn btn-red btn-sm" onclick="confirmDeleteLegacy(\'' + r._registrationId + '\',\'' + escapeHTML(r.email).replace(/'/g, "\\'") + '\')">Supprimer</button>'
     : '<button class="btn btn-red btn-sm" onclick="confirmDeletePilot(\'' + r.pilot_id + '\',\'' + escapeHTML(r.pseudo).replace(/'/g, "\\'") + '\')">Supprimer</button>';
@@ -553,4 +559,100 @@ export async function exportRegistryCSV() {
   a.remove();
   URL.revokeObjectURL(url);
   showMsg('msg-registre', source.length + ' client(s) exporte(s) en CSV.', 'ok');
+}
+
+// =========================================================================================
+// FICHE PILOTE (Basique) — teaser gratuit, 20/08/2026
+// =========================================================================================
+// Contenu volontairement limite a 3 chiffres, cf. claude/Fiche-pilote-contenu-Basique-Pro-
+// 2026-08-20.md : meilleur tour et sessions sur les 30 derniers jours (coherent avec le
+// plafond d'historique du Basique, voir stats.js > applyHistoryPlanLimits()), derniere
+// visite en clair. La version Pro enrichie (historique complet, courbe de progression,
+// comparaison a la moyenne du circuit) attend K-25 et n'est PAS construite ici -- ne pas
+// la lancer en parallele (decision du 19/08).
+//
+// Identite pilote = pseudo normalise (meme convention que pilotKey() dans stats.js) : pas
+// d'identifiant stable disponible cote client pour un pilote "Unknown"/sur-place.
+
+function kpiCardHTML(lbl, val, sub) {
+  return (
+    '<div class="card kpi-card">' +
+    '<div class="kpi-lbl">' + lbl + '</div>' +
+    '<div class="kpi-val">' + val + '</div>' +
+    (sub ? '<div class="kpi-sub">' + sub + '</div>' : '') +
+    '</div>'
+  );
+}
+
+// "il y a X jours (dd/mm/aaaa)" — le relatif donne le sens d'un coup d'oeil, la date
+// exacte entre parentheses leve toute ambiguite (demande explicite du 20/08).
+function daysAgoLabel(dateStr) {
+  if (!dateStr) return null;
+  const clean = String(dateStr).slice(0, 10);
+  const date = new Date(clean + 'T12:00:00');
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+  const diff = Math.max(0, Math.round((today - date) / 86400000));
+  const rel = diff === 0 ? "Aujourd'hui" : diff === 1 ? 'Hier' : 'il y a ' + diff + ' jours';
+  return rel + ' (' + formatDateNumeric(clean) + ')';
+}
+
+export function closePilotCard() {
+  const overlay = document.getElementById('pilot-card-overlay');
+  if (overlay) overlay.remove();
+}
+
+export async function openPilotCard(pseudo, lastSeen) {
+  const key = (pseudo || '').trim().toLowerCase();
+  if (!key) return;
+  closePilotCard(); // au cas ou une fiche serait deja ouverte
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pilot-card-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,8,14,.62);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+  const box = document.createElement('div');
+  box.style.cssText = 'background:var(--surf,#181818);border:1px solid var(--bord,#333);border-radius:16px;padding:22px;max-width:440px;width:100%;color:var(--txt,#eee);box-shadow:0 26px 70px -18px rgba(0,0,0,.55);';
+  box.innerHTML =
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;gap:10px">' +
+    '<div style="font-weight:800;font-size:17px;overflow-wrap:anywhere">' + escapeHTML(pseudo) + '</div>' +
+    '<button type="button" class="btn btn-ghost btn-sm" onclick="closePilotCard()">Fermer</button>' +
+    '</div>' +
+    '<div id="pilot-card-body" class="g3 kpi-row"><div class="empty">Chargement...</div></div>';
+  overlay.appendChild(box);
+  overlay.addEventListener('click', (e) => { if (e.target === overlay) closePilotCard(); });
+  document.body.appendChild(overlay);
+  document.addEventListener('keydown', function onKey(e) {
+    if (e.key === 'Escape') { document.removeEventListener('keydown', onKey); closePilotCard(); }
+  });
+
+  const since = new Date();
+  since.setDate(since.getDate() - 29); // fenetre glissante de 30 jours, aujourd'hui inclus
+  const sinceStr = since.getFullYear() + '-' + String(since.getMonth() + 1).padStart(2, '0') + '-' + String(since.getDate()).padStart(2, '0');
+
+  let bestLap = null;
+  let sessionsCount = 0;
+  try {
+    const { data: recentSessions } = await fetchAll(() => db.from('sessions').select('id').gte('session_date', sinceStr));
+    const sessionIds = (recentSessions || []).map((s) => s.id);
+    const { data: regs } = sessionIds.length
+      ? await fetchAllIn(() => db.from('session_registrations').select('id,display_name'), 'session_id', sessionIds)
+      : { data: [] };
+    const myRegs = (regs || []).filter((r) => (r.display_name || '').trim().toLowerCase() === key);
+    sessionsCount = myRegs.length;
+    const regIds = myRegs.map((r) => r.id);
+    const { data: laps } = regIds.length
+      ? await fetchAllIn(() => db.from('laps').select('lap_time_seconds'), 'registration_id', regIds)
+      : { data: [] };
+    if (laps && laps.length) bestLap = Math.min(...laps.map((l) => Number(l.lap_time_seconds)));
+  } catch (e) {
+    console.warn('[registry] fiche pilote indisponible.', e);
+  }
+
+  // La fiche a pu etre fermee pendant le chargement (clic hors zone, Echap...).
+  const body = document.getElementById('pilot-card-body');
+  if (!body) return;
+  body.innerHTML =
+    kpiCardHTML('Meilleur tour', bestLap != null ? formatTime(bestLap) : '--', 'sur les 30 derniers jours') +
+    kpiCardHTML('Sessions', String(sessionsCount), 'sur les 30 derniers jours') +
+    kpiCardHTML('Derniere visite', lastSeen ? daysAgoLabel(lastSeen) : '--', null);
 }
