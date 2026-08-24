@@ -520,6 +520,7 @@ updateThemeToggleUI();
 <label id="chrono-format-label">Temps (format : Nom;Kart;NumTour;Temps — une ligne par tour)</label>
 <textarea class="chrono-area" id="chrono-raw" placeholder="Pilote1;1;1;45.210&#10;Pilote1;1;2;44.980&#10;Pilote2;2;1;47.382"></textarea>
 <div id="chrono-format-help" style="font-size:11px;color:var(--mut);margin-top:6px">Sans secteurs : Nom;Kart;NumTour;Temps</div>
+<div style="font-size:11px;color:var(--mut);margin-top:2px">Fichier d'un autre système de chronométrage ? Pas besoin de le reformater — importe-le tel quel, le format est reconnu automatiquement.</div>
 </div>
 <div class="flex">
 <button class="btn btn-primary" onclick="importChrono()" id="btn-import-chrono">Importer le texte</button>
@@ -988,16 +989,16 @@ sans secteurs <code>Nom;Kart;NumTour;Temps</code>, avec secteurs <code>Nom;Kart;
 <input type="checkbox" id="pref-chrono-custom" style="width:auto" onchange="toggleChronoCustomFormat();markPrefsDirty()"/>
 <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Personnaliser le format d'import (fichier d'un autre système de chronométrage)</span>
 </label>
-<div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Laisse décoché si tes fichiers respectent déjà le format ci-dessus. Sinon, indique ici où se trouve chaque information dans TON fichier — ou colle un exemple ci-dessous pour le détecter automatiquement.</div>
+<div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Normalement rien à faire ici : si tu importes un fichier qui n'est pas au format habituel (onglet Sessions actives), le format est détecté et enregistré automatiquement tout seul. Ouvre cette section seulement pour vérifier ou corriger le mapping détecté, ou pour le pré-configurer avant une première session.</div>
 </div>
 <div id="pref-chrono-custom-wrap" style="display:none">
 <div class="field" style="background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:12px">
-<label>Détection automatique — colle un extrait de ton fichier chrono (quelques lignes suffisent)</label>
+<label>Forcer une nouvelle détection — colle un extrait de ton fichier chrono (quelques lignes suffisent)</label>
 <textarea id="pref-chrono-detect-sample" style="width:100%;min-height:70px;margin-top:6px;font-family:monospace;font-size:12px" placeholder="Colle ici quelques lignes telles quelles, avec ou sans en-tête" oninput="renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"></textarea>
 <div class="flex" style="margin-top:8px">
 <button class="btn btn-ghost btn-sm" onclick="detectAndSaveChronoFormat('pref-chrono-detect-sample')">Détecter le format automatiquement</button>
 </div>
-<div style="font-size:11px;color:var(--mut);margin-top:6px">Remplit et enregistre le mapping ci-dessous à partir de cet exemple — vérifie-le avant de cliquer sur « Enregistrer les paramètres ». Sert surtout au moment où tu configures un nouveau circuit ou changes de système de chronométrage ; une fois le format validé ici, il n'y a plus besoin d'y revenir à chaque import.</div>
+<div style="font-size:11px;color:var(--mut);margin-top:6px">Optionnel — utile pour pré-configurer un nouveau circuit avant sa première session, ou pour forcer une nouvelle détection. Au quotidien, il n'y a rien à faire ici : importer un fichier suffit, le format est détecté à ce moment-là. Si le résultat est incorrect, corrige le mapping ci-dessous à la main (colonnes ou séparateur) puis clique « Enregistrer les paramètres ».</div>
 </div>
 <div class="g2" style="gap:10px;margin-top:14px">
 <div class="field"><label>Séparateur</label>
