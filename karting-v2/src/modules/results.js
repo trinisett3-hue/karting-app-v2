@@ -1032,6 +1032,34 @@ export async function importChrono() {
   return importChronoSimple(autoDetected);
 }
 
+// Bouton "Corriger le format" — toujours visible sur l'ecran d'import, meme quand le
+// format actuel produit deja des lignes "valides". Utile quand la detection s'est trompee
+// de colonne sans que ca saute aux yeux (ex: Position confondue avec Kart) : les lignes
+// passent les controles de validite (kart numerique + temps analysable) mais le
+// rapprochement est faux. Ouvre la fenetre de mapping sur le texte actuellement dans la
+// zone, quel que soit son etat de validite.
+export async function correctChronoFormat() {
+  const area = document.getElementById('chrono-raw');
+  const raw = area?.value || '';
+  if (!raw.trim()) {
+    showMsg('msg-chrono', 'Colle ou importe des temps d’abord.', 'err');
+    return;
+  }
+  const lines = raw.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+  const res = await openChronoMappingModal({ lines, suggested: computeDetectedFormat(lines) });
+  if (!res) return;
+  if (res.persist) {
+    await saveChronoImportFormat(res.fmt);
+    reflectChronoFormatInSettingsForm(res.fmt);
+  }
+  const { text } = normalizeChronoText(raw, res.fmt);
+  if (area && text) {
+    area.value = text;
+    area.dataset.canonical = '1';
+  }
+  showMsg('msg-chrono', 'Mapping appliqué' + (res.persist ? ' et enregistré dans les Paramètres' : ' pour cet import') + ' — clique « Importer le texte » pour lancer l’import.', 'ok');
+}
+
 // 🆕 v19 : le texte brut de CHAQUE import (celui réellement traité, donc déjà
 // normalisé même s'il vient d'un fichier Excel/CSV — voir handleChronoFile())
 // est conservé dans chrono_imports, consultable/téléchargeable depuis les
