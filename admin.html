@@ -518,7 +518,7 @@ updateThemeToggleUI();
 <div class="ctitle">Import des chronos</div>
 <div class="field">
 <label id="chrono-format-label">Temps (format : Nom;Kart;NumTour;Temps — une ligne par tour)</label>
-<textarea class="chrono-area" id="chrono-raw" placeholder="Pilote1;1;1;45.210&#10;Pilote1;1;2;44.980&#10;Pilote2;2;1;47.382"></textarea>
+<textarea class="chrono-area" id="chrono-raw" oninput="this.dataset.canonical=''" placeholder="Pilote1;1;1;45.210&#10;Pilote1;1;2;44.980&#10;Pilote2;2;1;47.382"></textarea>
 <div id="chrono-format-help" style="font-size:11px;color:var(--mut);margin-top:6px">Sans secteurs : Nom;Kart;NumTour;Temps</div>
 <div style="font-size:11px;color:var(--mut);margin-top:2px">Fichier d'un autre système de chronométrage ? Pas besoin de le reformater — importe-le tel quel, le format est reconnu automatiquement.</div>
 </div>
@@ -1381,6 +1381,6 @@ perimetre de cette refonte visuelle.
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260824c"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260824d"></script>
 </body>
 </html>
