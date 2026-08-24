@@ -30,7 +30,11 @@ function escapeHTML(s) {
 // Accepte "44.980" (secondes) ou "1:14.900" (minutes:secondes) — cette fonction
 // n'existait pas dans l'original alors qu'elle était appelée (bug corrigé, cf. plus haut).
 export function parseTime(str) {
-  const s = String(str).trim();
+  // 24/08 : beaucoup de systemes de chronometrage europeens ecrivent la decimale avec une
+  // virgule ("45,320", "1:23,456"). Sans cette normalisation parseFloat("45,320") renvoyait
+  // 45 — un temps FAUX importe silencieusement — et "1:23,456" renvoyait NaN. La virgule ne
+  // peut pas etre un separateur de colonnes ici : la valeur recue est deja une cellule isolee.
+  const s = String(str).trim().replace(',', '.');
   if (s.includes(':')) {
     const [m, rest] = s.split(':');
     const minutes = Number(m);
@@ -344,8 +348,12 @@ function resolvedDelimiter(fmt, firstLine) {
 // Quand le format n'est pas personnalise, reproduit fidelement la logique historique
 // (tolerance 3 ou 4 colonnes) plutot que d'imposer un mapping fixe, pour que l'apercu
 // et le comportement reel restent identiques dans ce cas.
-export function normalizeChronoText(rawText) {
-  const fmt = getChronoImportFormat();
+// explicitFmt (optionnel) : evalue le texte avec CE format-la au lieu du format enregistre.
+// Sert a tester un format devine avant de l'enregistrer, et a convertir le texte une fois
+// que l'organisateur a corrige le mapping dans la fenetre de correction, sans avoir a
+// toucher aux preferences.
+export function normalizeChronoText(rawText, explicitFmt) {
+  const fmt = explicitFmt || getChronoImportFormat();
   const sectorsOn = !!state.prefs.sectors_enabled;
   const n = Number(state.prefs.sector_count || 3);
   const lines = String(rawText || '').split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
@@ -364,7 +372,7 @@ export function normalizeChronoText(rawText) {
       const kart = parts[1] || '';
       const lap = isMultiLap ? parts[2] : '1';
       const time = isMultiLap ? parts[3] : parts[2];
-      const valid = parts.length >= 3 && !!name && Number.isFinite(Number(kart)) && Number.isFinite(Number(lap)) && Number.isFinite(Number(time));
+      const valid = parts.length >= 3 && !!name && Number.isFinite(Number(kart)) && Number.isFinite(Number(lap)) && Number.isFinite(parseTime(time));
       return { raw: line, canonical: line, name, kart, lap, sectorVals: [], time: time || '', valid };
     });
     return { text: rows.map((r) => r.canonical).join('\n'), rows };
@@ -547,6 +555,196 @@ function reflectChronoFormatInSettingsForm(fmt) {
   if (wrap) wrap.style.display = 'block';
 }
 
+// Fenetre de correction du mapping — ouverte UNIQUEMENT quand un import echoue faute de
+// format reconnu (voir importChrono() et handleChronoFile()). A gauche ce qui a ete trouve
+// dans le fichier (colonnes, en-tetes, exemples de valeurs), a droite l'attribution :
+// quelle colonne du fichier alimente chaque champ dont l'app a besoin pour calculer.
+// L'organisateur corrige, voit l'apercu se mettre a jour en direct, puis choisit d'appliquer
+// le mapping pour ce seul import ou de l'enregistrer definitivement dans les Parametres.
+// Resout {fmt, persist} ou null si annule. N'ecrit jamais en base elle-meme.
+function openChronoMappingModal(opts) {
+  const isText = !!(opts && opts.lines && opts.lines.length);
+  const lines = (opts && opts.lines) || [];
+  const fileRows = (opts && opts.rawRows) || [];
+  const suggested = (opts && opts.suggested) || null;
+  const sectorsOn = !!state.prefs.sectors_enabled;
+  const nSectors = Number(state.prefs.sector_count || 3);
+
+  let delim = suggested && suggested.delimiter ? suggested.delimiter : (isText ? (detectDelimiter(lines[0]) === '\t' ? 'tab' : detectDelimiter(lines[0])) : ';');
+  let hasHeader = suggested ? !!suggested.has_header : false;
+  let colName = (suggested && suggested.col_name) || 1;
+  let colKart = (suggested && suggested.col_kart) || 2;
+  let colLap = (suggested && suggested.col_lap) || 3;
+  let colTime = (suggested && suggested.col_time) || 4;
+  let colSectors = ((suggested && suggested.col_sectors) || identityChronoFormat().col_sectors).slice(0, nSectors);
+
+  const splitRows = () => {
+    if (!isText) return fileRows.filter((r) => r && r.length).map((r) => r.map((v) => (v == null ? '' : String(v))));
+    const d = delim === 'tab' ? '\t' : delim;
+    return lines.map((l) => l.split(d));
+  };
+  const currentFmt = () => ({
+    customized: true,
+    delimiter: isText ? delim : ';',
+    has_header: hasHeader,
+    col_name: colName,
+    col_kart: colKart,
+    col_lap: colLap,
+    col_time: colTime,
+    col_sectors: colSectors.slice(0, nSectors),
+  });
+  const columns = () => {
+    const rows = splitRows();
+    const count = Math.max(1, ...rows.map((r) => r.length));
+    const header = hasHeader ? (rows[0] || []) : [];
+    const out = [];
+    for (let c = 1; c <= count; c++) {
+      const h = hasHeader && header[c - 1] != null && String(header[c - 1]).trim() ? String(header[c - 1]).trim() : '';
+      out.push({ c, head: h, label: h ? c + ' — ' + h : 'Colonne ' + c });
+    }
+    return out;
+  };
+  // Memes regles de validite que la branche "format personnalise" de normalizeChronoText(),
+  // mais appliquees a des lignes deja decoupees en colonnes (texte ET fichier tableur).
+  const evaluate = () => {
+    const rows = splitRows();
+    const data = hasHeader ? rows.slice(1) : rows;
+    const f = currentFmt();
+    const get = (parts, c) => (parts[c - 1] != null ? String(parts[c - 1]).trim() : '');
+    return data.map((parts) => {
+      const name = get(parts, f.col_name);
+      const kart = get(parts, f.col_kart);
+      const lap = get(parts, f.col_lap) || '1';
+      const sv = sectorsOn ? f.col_sectors.map((c) => get(parts, c)) : [];
+      const time = get(parts, f.col_time);
+      const valid = !!name && Number.isFinite(Number(kart)) && Number.isFinite(parseTime(time)) &&
+        (!sectorsOn || sv.every((v) => Number.isFinite(parseTime(v))));
+      return { name, kart, lap, sectorVals: sv, time, valid };
+    });
+  };
+
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'cm-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(6,8,14,.62);backdrop-filter:blur(6px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+    const box = document.createElement('div');
+    box.className = 'cm-box';
+    box.style.cssText = 'background:var(--surf,#181818);border:1px solid var(--bord,#333);border-radius:16px;padding:22px;max-width:820px;width:100%;max-height:88vh;overflow:auto;color:var(--txt,#eee);font-family:inherit;box-shadow:0 26px 70px -18px rgba(0,0,0,.55);';
+    overlay.appendChild(box);
+
+    function close(result) {
+      document.removeEventListener('keydown', onKey);
+      if (overlay.parentNode) document.body.removeChild(overlay);
+      resolve(result);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(null); }
+
+    function render() {
+      const cols = columns();
+      const rowsEval = evaluate();
+      const validCount = rowsEval.filter((r) => r.valid).length;
+      const sample = rowsEval.slice(0, 5);
+      const dataRows = (hasHeader ? splitRows().slice(1) : splitRows()).slice(0, 3);
+
+      const colSelect = (id, current) =>
+        '<select data-col="' + id + '" style="width:100%;padding:7px 8px;border-radius:8px;border:1px solid var(--bord,#444);background:var(--surf2,#111);color:var(--txt,#eee);font-size:12px">' +
+        cols.map((c) => '<option value="' + c.c + '"' + (Number(current) === c.c ? ' selected' : '') + '>' + escapeHTML(c.label) + '</option>').join('') +
+        '</select>';
+
+      const detectedTable =
+        '<table class="tbl" style="font-size:11px;width:100%"><thead><tr><th>Colonne</th><th>En-tête</th><th>Exemples</th></tr></thead><tbody>' +
+        cols.map((c) => {
+          const ex = dataRows.map((r) => (r[c.c - 1] != null ? String(r[c.c - 1]).trim() : '')).filter(Boolean).slice(0, 3).join(' · ');
+          return '<tr><td style="white-space:nowrap">' + c.c + '</td><td>' + escapeHTML(c.head || '—') + '</td><td style="color:var(--mut,#aaa)">' + escapeHTML(ex) + '</td></tr>';
+        }).join('') +
+        '</tbody></table>';
+
+      const attribution =
+        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Nom du pilote</label>' + colSelect('name', colName) + '</div>' +
+        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">N° de kart</label>' + colSelect('kart', colKart) + '</div>' +
+        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">N° de tour</label>' + colSelect('lap', colLap) + '</div>' +
+        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Temps au tour</label>' + colSelect('time', colTime) + '</div>' +
+        (sectorsOn ? colSectors.map((sc, i) =>
+          '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Secteur ' + (i + 1) + '</label>' + colSelect('sector' + i, sc) + '</div>').join('') : '');
+
+      const head = sectorsOn
+        ? '<tr><th>Nom</th><th>Kart</th><th>Tour</th><th>Secteurs</th><th>Temps</th><th></th></tr>'
+        : '<tr><th>Nom</th><th>Kart</th><th>Tour</th><th>Temps</th><th></th></tr>';
+      const previewBody = sample.map((r) => {
+        const badge = r.valid ? '<span style="color:#3ddc97;font-weight:700">OK</span>' : '<span style="color:#ff6767;font-weight:700">Ignorée</span>';
+        return sectorsOn
+          ? '<tr><td>' + escapeHTML(r.name) + '</td><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + r.sectorVals.map(escapeHTML).join(' / ') + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>'
+          : '<tr><td>' + escapeHTML(r.name) + '</td><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>';
+      }).join('');
+
+      box.innerHTML =
+        '<div style="font-weight:800;font-size:16px;margin-bottom:6px">Format d’import non reconnu</div>' +
+        '<div style="font-size:13px;color:var(--mut,#ccc);margin-bottom:16px;line-height:1.5">Ton fichier a bien été lu, mais aucune ligne n’a pu être interprétée avec le format enregistré. Vérifie ci-dessous ce qui a été trouvé, et indique quelle colonne correspond à quoi. L’aperçu se met à jour au fur et à mesure.</div>' +
+        '<div style="display:flex;gap:16px;flex-wrap:wrap">' +
+        '<div style="flex:1 1 340px;min-width:280px">' +
+        '<div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Format détecté</div>' +
+        (isText
+          ? '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Séparateur</label>' +
+            '<select data-ctl="delim" style="width:100%;padding:7px 8px;border-radius:8px;border:1px solid var(--bord,#444);background:var(--surf2,#111);color:var(--txt,#eee);font-size:12px">' +
+            [[';', 'Point-virgule ( ; )'], [',', 'Virgule ( , )'], ['tab', 'Tabulation']].map((o) =>
+              '<option value="' + o[0] + '"' + (delim === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
+            '</select></div>'
+          : '<div style="font-size:11px;color:var(--mut,#aaa);margin-bottom:8px">Colonnes lues directement depuis le fichier (pas de séparateur à choisir).</div>') +
+        '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;margin-bottom:10px">' +
+        '<input type="checkbox" data-ctl="header" style="width:auto"' + (hasHeader ? ' checked' : '') + '/>' +
+        '<span>La 1ère ligne est un en-tête</span></label>' +
+        detectedTable +
+        '</div>' +
+        '<div style="flex:1 1 260px;min-width:230px">' +
+        '<div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Attribution</div>' +
+        '<div style="font-size:11px;color:var(--mut,#aaa);margin-bottom:10px">Ce dont l’application a besoin pour calculer le classement.</div>' +
+        attribution +
+        '</div>' +
+        '</div>' +
+        '<div style="margin-top:16px">' +
+        '<div style="font-size:11px;color:var(--mut,#aaa);margin-bottom:6px">Aperçu (' + sample.length + ' sur ' + rowsEval.length + ' lignes) — ' +
+        '<span style="color:' + (validCount ? '#3ddc97' : '#ff6767') + '">' + validCount + ' valides</span>' +
+        (rowsEval.length - validCount ? ', <span style="color:#ff6767">' + (rowsEval.length - validCount) + ' ignorées</span>' : '') + '</div>' +
+        '<table class="tbl" style="font-size:12px;width:100%"><thead>' + head + '</thead><tbody>' + previewBody + '</tbody></table>' +
+        '</div>' +
+        (validCount ? '' : '<div style="margin-top:10px;font-size:12px;color:#ff6767">Aucune ligne valide avec cette attribution — ajuste les colonnes ci-dessus.</div>') +
+        '<div style="display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap;margin-top:18px">' +
+        '<button type="button" data-act="cancel" style="padding:9px 16px;border-radius:9px;border:1px solid var(--bord,#444);background:var(--surf2,transparent);color:var(--txt,#eee);cursor:pointer;font-weight:600">Annuler</button>' +
+        '<button type="button" data-act="once"' + (validCount ? '' : ' disabled') + ' style="padding:9px 16px;border-radius:9px;border:1px solid var(--bord,#444);background:var(--surf2,transparent);color:var(--txt,#eee);font-weight:700;cursor:' + (validCount ? 'pointer' : 'not-allowed') + ';opacity:' + (validCount ? '1' : '.5') + '">Utiliser pour cet import</button>' +
+        '<button type="button" data-act="always"' + (validCount ? '' : ' disabled') + ' style="padding:9px 16px;border-radius:9px;border:none;background:#2563eb;color:#fff;font-weight:700;cursor:' + (validCount ? 'pointer' : 'not-allowed') + ';opacity:' + (validCount ? '1' : '.5') + '">Enregistrer définitivement</button>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--mut,#aaa);margin-top:8px;text-align:right">« Définitivement » enregistre ce mapping dans Paramètres : les prochains fichiers du même système passeront tout seuls.</div>';
+
+      box.querySelectorAll('[data-col]').forEach((sel) => {
+        sel.addEventListener('change', () => {
+          const v = parseInt(sel.value, 10);
+          const which = sel.getAttribute('data-col');
+          if (which === 'name') colName = v;
+          else if (which === 'kart') colKart = v;
+          else if (which === 'lap') colLap = v;
+          else if (which === 'time') colTime = v;
+          else if (which.startsWith('sector')) colSectors[parseInt(which.slice(6), 10)] = v;
+          render();
+        });
+      });
+      const delimSel = box.querySelector('[data-ctl="delim"]');
+      if (delimSel) delimSel.addEventListener('change', () => { delim = delimSel.value; render(); });
+      const headerCb = box.querySelector('[data-ctl="header"]');
+      if (headerCb) headerCb.addEventListener('change', () => { hasHeader = headerCb.checked; render(); });
+      box.querySelector('[data-act="cancel"]').addEventListener('click', () => close(null));
+      const onceBtn = box.querySelector('[data-act="once"]');
+      const alwaysBtn = box.querySelector('[data-act="always"]');
+      if (onceBtn && !onceBtn.disabled) onceBtn.addEventListener('click', () => close({ fmt: currentFmt(), persist: false }));
+      if (alwaysBtn && !alwaysBtn.disabled) alwaysBtn.addEventListener('click', () => close({ fmt: currentFmt(), persist: true }));
+    }
+
+    render();
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(null); });
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 // Outil manuel (Parametres) : devine le format a partir d'un echantillon colle a la main
 // et l'enregistre. Reste disponible pour pre-configurer un circuit avant sa premiere
 // session ou pour forcer une nouvelle detection, mais n'est PLUS le chemin principal —
@@ -590,6 +788,11 @@ async function autoDetectChronoTextIfNeeded(rawText) {
   if (rows.some((r) => r.valid)) return false;
   const fmt = computeDetectedFormat(lines);
   if (!fmt) return false;
+  // Le format devine doit REELLEMENT reconnaitre des lignes avant d'etre enregistre —
+  // sinon on n'ecrase pas les preferences pour rien et on laisse la main a la fenetre de
+  // correction du mapping (voir importChrono()).
+  const trial = normalizeChronoText(lines.join('\n'), fmt).rows;
+  if (!trial.some((r) => r.valid)) return false;
   await saveChronoImportFormat(fmt);
   reflectChronoFormatInSettingsForm(fmt);
   return true;
@@ -631,7 +834,7 @@ export function handleChronoFile(inputEl) {
               time = String(row[2]).trim();
             }
             if (!name || !kart || !time) return;
-            if (isNaN(parseInt(kart)) || isNaN(parseFloat(time))) return;
+            if (isNaN(parseInt(kart)) || isNaN(parseTime(time))) return;
             out.push(name + ';' + kart + ';' + lapIdx + ';' + time);
             return;
           }
@@ -643,7 +846,7 @@ export function handleChronoFile(inputEl) {
           const time = get(f.col_time);
           const sectorVals = sectorsOn ? (f.col_sectors || []).slice(0, n).map(get) : [];
           if (!name || !kart || !time) return;
-          if (isNaN(parseInt(kart)) || isNaN(parseFloat(String(time).replace(',', '.')))) return;
+          if (isNaN(parseInt(kart)) || isNaN(parseTime(time))) return;
           const parts = sectorsOn ? [name, kart, lap, ...sectorVals, time] : [name, kart, lap, time];
           out.push(parts.join(';'));
         });
@@ -671,6 +874,25 @@ export function handleChronoFile(inputEl) {
         }
       }
 
+      // Toujours rien de reconnu, meme apres la detection auto : fenetre de correction du
+      // mapping, alimentee par les colonnes reelles du fichier.
+      if (!lines.length && rawRows.some((r) => r && r.length)) {
+        const res = await openChronoMappingModal({ rawRows, suggested: computeDetectedFormatFromRows(rawRows) });
+        if (!res) {
+          document.getElementById('chrono-raw').value = '';
+          showMsg('msg-chrono', 'Import annulé — le format du fichier n’a pas été reconnu.', 'err');
+          return;
+        }
+        if (res.persist) {
+          await saveChronoImportFormat(res.fmt);
+          reflectChronoFormatInSettingsForm(res.fmt);
+        }
+        lines = extract(res.fmt);
+        autoNote = res.persist
+          ? ' — mapping corrigé et enregistré dans les Paramètres'
+          : ' — mapping corrigé pour cet import';
+      }
+
       document.getElementById('chrono-raw').value = lines.join('\n');
       renderChronoPreview();
       if (lines.length) {
@@ -690,8 +912,36 @@ export function handleChronoFile(inputEl) {
 // resultant (no-op si le format n'est pas personnalisé), puis bascule automatiquement
 // selon state.prefs.sectors_enabled, comme l'original.
 export async function importChrono() {
-  const raw = document.getElementById('chrono-raw')?.value || '';
+  const area = document.getElementById('chrono-raw');
+  const raw = area?.value || '';
+  if (!raw.trim()) {
+    showMsg('msg-chrono', 'Colle les temps.', 'err');
+    return;
+  }
   const autoDetected = await autoDetectChronoTextIfNeeded(raw);
+
+  // Toujours aucune ligne exploitable apres la detection auto : on ne lance pas un import
+  // voue a l'echec, on ouvre la fenetre de correction du mapping. L'organisateur corrige,
+  // le texte est converti au format canonique, et il relance l'import depuis cet ecran.
+  if (!normalizeChronoText(raw).rows.some((r) => r.valid)) {
+    const lines = raw.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+    const res = await openChronoMappingModal({ lines, suggested: computeDetectedFormat(lines) });
+    if (!res) {
+      showMsg('msg-chrono', 'Import annulé — le format du fichier n’a pas été reconnu.', 'err');
+      return;
+    }
+    if (res.persist) {
+      await saveChronoImportFormat(res.fmt);
+      reflectChronoFormatInSettingsForm(res.fmt);
+    }
+    // Conversion au format canonique avec le mapping choisi : le texte devient lisible par
+    // l'import standard, que le mapping ait ete enregistre durablement ou non.
+    const { text } = normalizeChronoText(raw, res.fmt);
+    if (area && text) area.value = text;
+    showMsg('msg-chrono', 'Mapping appliqué' + (res.persist ? ' et enregistré dans les Paramètres' : ' pour cet import') + ' — clique « Importer le texte » pour lancer l’import.', 'ok');
+    return;
+  }
+
   normalizeChronoRawTextarea();
   if (state.prefs.sectors_enabled) return importChronoWithSectors(autoDetected);
   return importChronoSimple(autoDetected);
@@ -757,7 +1007,9 @@ export async function importChronoSimple(autoDetected) {
     const timeStr = isMultiLap ? parts[3] : parts[2];
     const kart = parseInt(kartStr);
     const lapIdx = parseInt(lapIdxStr);
-    const time = parseFloat(timeStr);
+    // parseTime (et non parseFloat) : gere la decimale virgule et le format mm:ss.mmm,
+    // comme la branche "secteurs activés" le faisait deja.
+    const time = parseTime(timeStr);
     if (isNaN(kart) || isNaN(time) || isNaN(lapIdx)) {
       errors.push(line);
       continue;
