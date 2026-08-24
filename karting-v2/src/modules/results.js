@@ -339,6 +339,11 @@ export function detectDelimiter(sampleLine) {
 function resolvedDelimiter(fmt, firstLine) {
   if (fmt.delimiter === 'auto') return detectDelimiter(firstLine);
   if (fmt.delimiter === 'tab') return '\t';
+  // 'space' : exports en colonnes alignees (largeur fixe) — on decoupe sur toute suite
+  // d'espaces, sinon chaque espace de remplissage creerait une colonne vide. Volontairement
+  // absent de la detection automatique (detectDelimiter), qui couperait les noms composes ;
+  // ce choix n'est proposé que dans la fenetre de correction manuelle du mapping.
+  if (fmt.delimiter === 'space') return /\s+/;
   return fmt.delimiter;
 }
 
@@ -580,7 +585,7 @@ function openChronoMappingModal(opts) {
 
   const splitRows = () => {
     if (!isText) return fileRows.filter((r) => r && r.length).map((r) => r.map((v) => (v == null ? '' : String(v))));
-    const d = delim === 'tab' ? '\t' : delim;
+    const d = resolvedDelimiter({ delimiter: delim }, lines[0]);
     return lines.map((l) => l.split(d));
   };
   const currentFmt = () => ({
@@ -686,7 +691,7 @@ function openChronoMappingModal(opts) {
         (isText
           ? '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Séparateur</label>' +
             '<select data-ctl="delim" style="width:100%;padding:7px 8px;border-radius:8px;border:1px solid var(--bord,#444);background:var(--surf2,#111);color:var(--txt,#eee);font-size:12px">' +
-            [[';', 'Point-virgule ( ; )'], [',', 'Virgule ( , )'], ['tab', 'Tabulation']].map((o) =>
+            [[';', 'Point-virgule ( ; )'], [',', 'Virgule ( , )'], ['tab', 'Tabulation'], ['|', 'Barre verticale ( | )'], ['space', 'Espaces (colonnes alignées)']].map((o) =>
               '<option value="' + o[0] + '"' + (delim === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('') +
             '</select></div>'
           : '<div style="font-size:11px;color:var(--mut,#aaa);margin-bottom:8px">Colonnes lues directement depuis le fichier (pas de séparateur à choisir).</div>') +
