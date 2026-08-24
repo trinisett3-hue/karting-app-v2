@@ -963,7 +963,13 @@ export function handleChronoFile(inputEl) {
           : ' — mapping corrigé pour cet import';
       }
 
-      document.getElementById('chrono-raw').value = lines.join('\n');
+      const rawArea = document.getElementById('chrono-raw');
+      rawArea.value = lines.join('\n');
+      // Marque le contenu comme DEJA converti au format canonique : sans ce drapeau,
+      // importChrono() reappliquerait le mapping du fichier source a ce texte-la et lirait
+      // les mauvaises colonnes (bug du 24/08 : les temps devenaient les n° de tour).
+      // Le drapeau est efface des que l'organisateur retouche la zone (oninput dans admin.html).
+      rawArea.dataset.canonical = '1';
       renderChronoPreview();
       if (lines.length) {
         showMsg('msg-chrono', 'Fichier chargé' + autoNote + '. Vérifie l’aperçu ci-dessous puis clique Importer.', 'ok');
@@ -988,6 +994,12 @@ export async function importChrono() {
     showMsg('msg-chrono', 'Colle les temps.', 'err');
     return;
   }
+  // Texte deja converti (chargement de fichier ou correction via la fenetre de mapping) :
+  // il est au format canonique, toute nouvelle normalisation le corromprait.
+  if (area && area.dataset.canonical === '1') {
+    if (state.prefs.sectors_enabled) return importChronoWithSectors(false);
+    return importChronoSimple(false);
+  }
   const autoDetected = await autoDetectChronoTextIfNeeded(raw);
 
   // Toujours aucune ligne exploitable apres la detection auto : on ne lance pas un import
@@ -1007,7 +1019,10 @@ export async function importChrono() {
     // Conversion au format canonique avec le mapping choisi : le texte devient lisible par
     // l'import standard, que le mapping ait ete enregistre durablement ou non.
     const { text } = normalizeChronoText(raw, res.fmt);
-    if (area && text) area.value = text;
+    if (area && text) {
+      area.value = text;
+      area.dataset.canonical = '1';
+    }
     showMsg('msg-chrono', 'Mapping appliqué' + (res.persist ? ' et enregistré dans les Paramètres' : ' pour cet import') + ' — clique « Importer le texte » pour lancer l’import.', 'ok');
     return;
   }
@@ -1206,7 +1221,8 @@ async function importChronoWithSectors(autoDetected) {
     await db.from('sessions').update({ status: 'chrono_imported' }).eq('id', sid);
     await saveChronoImportHistory(sid, raw, lines.length, rows.length);
     showMsg('msg-chrono', rows.length + ' tours importés' + (errors.length ? ' — ' + errors.length + ' lignes ignorées' : '') + (autoDetected ? ' — format d’import détecté et enregistré automatiquement (vérifie/corrige dans Paramètres si besoin)' : ''), 'ok');
-    document.getElementById('chrono-raw').value = '';
+    const clearArea = document.getElementById('chrono-raw');
+    if (clearArea) { clearArea.value = ''; delete clearArea.dataset.canonical; }
     await loadDetailSession(sid);
   } catch (e) {
     showMsg('msg-chrono', e.message || 'Erreur import', 'err');
