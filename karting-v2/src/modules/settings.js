@@ -208,6 +208,29 @@ const n = document.getElementById('pref-sector-count');
 if (on) on.checked = state.prefs.sectors_enabled;
 if (n) n.value = String(state.prefs.sector_count);
 toggleSectorsField();
+
+// Format d'import personnalisable (24/08) — voir results.js > getChronoImportFormat().
+const ci = state.prefs.chrono_import;
+const customized = !!(ci && ci.customized);
+setC('pref-chrono-custom', customized);
+if (customized) {
+setV('pref-chrono-delim', ci.delimiter || 'auto');
+setC('pref-chrono-header', !!ci.has_header);
+setV('pref-chrono-col-name', ci.col_name || 1);
+setV('pref-chrono-col-kart', ci.col_kart || 2);
+setV('pref-chrono-col-lap', ci.col_lap || 3);
+setV('pref-chrono-col-time', ci.col_time || 4);
+setV('pref-chrono-col-sectors', (ci.col_sectors || []).join(','));
+}
+toggleChronoCustomFormat();
+}
+
+// Affiche/masque le mapping de colonnes personnalisé — appelé au chargement des
+// Paramètres et au clic sur la case "Personnaliser le format d'import".
+export function toggleChronoCustomFormat() {
+const on = document.getElementById('pref-chrono-custom')?.checked;
+const wrap = document.getElementById('pref-chrono-custom-wrap');
+if (wrap) wrap.style.display = on ? 'block' : 'none';
 }
 
 export function renderKartNumbersList() {
@@ -844,6 +867,17 @@ karts_locked: kartsLocked,
 kart_numbers: state.prefs.kart_numbers || [],
 sectors_enabled: !!document.getElementById('pref-sectors-enabled')?.checked,
 sector_count: Number(document.getElementById('pref-sector-count')?.value || 3),
+chrono_import: document.getElementById('pref-chrono-custom')?.checked ? {
+customized: true,
+delimiter: document.getElementById('pref-chrono-delim')?.value || 'auto',
+has_header: !!document.getElementById('pref-chrono-header')?.checked,
+col_name: parseInt(document.getElementById('pref-chrono-col-name')?.value) || 1,
+col_kart: parseInt(document.getElementById('pref-chrono-col-kart')?.value) || 2,
+col_lap: parseInt(document.getElementById('pref-chrono-col-lap')?.value) || 3,
+col_time: parseInt(document.getElementById('pref-chrono-col-time')?.value) || 4,
+col_sectors: String(document.getElementById('pref-chrono-col-sectors')?.value || '')
+.split(',').map((s) => parseInt(s.trim())).filter((v) => Number.isFinite(v)),
+} : null,
 results_theme: document.getElementById('pref-results-theme')?.value || 'classic',
 avatar_mode: document.getElementById('pref-avatar-mode')?.value || 'kart',
 avatar_pack: currentPack(),
