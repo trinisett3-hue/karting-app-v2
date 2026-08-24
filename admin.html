@@ -527,6 +527,7 @@ updateThemeToggleUI();
 <label class="btn btn-ghost" style="cursor:pointer;margin:0">Importer CSV / Excel
 <input type="file" id="chrono-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleChronoFile(this)"/>
 </label>
+<button class="btn btn-ghost" onclick="correctChronoFormat()" id="btn-correct-chrono-format" title="Le format detecte automatiquement te semble faux (colonnes inversees, etc.) ? Corrige-le manuellement ici, meme si l'import ne signale pas d'erreur.">Corriger le format</button>
 </div>
 <div class="msg" id="msg-chrono"></div>
 </div>
@@ -1381,6 +1382,6 @@ perimetre de cette refonte visuelle.
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260824d"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260824e"></script>
 </body>
 </html>
