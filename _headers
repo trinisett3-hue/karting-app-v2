@@ -49,3 +49,16 @@
 
 /admin.html
   X-Robots-Tag: noindex, nofollow, noarchive
+
+# Modules ES — ajoute le 24/08/2026.
+#
+# Seul app.js porte un marqueur de version dans son URL (?v=... dans admin.html) ; les
+# modules qu'il importe (modules/results.js, settings.js, state.js...) sont charges a URL
+# fixe. Avec le cache par defaut de Cloudflare Pages, un correctif deploye dans un de ces
+# modules n'arrivait pas au navigateur avant expiration, meme apres un rechargement normal
+# — seul un rechargement force (Cmd+Maj+R) le faisait apparaitre. En demandant une
+# revalidation systematique, le navigateur garde le fichier en cache mais verifie a chaque
+# chargement s'il a change : une reponse 304 (quelques octets) quand rien n'a bouge, le
+# nouveau fichier des qu'un deploiement a eu lieu.
+/karting-v2/src/*
+  Cache-Control: public, max-age=0, must-revalidate
