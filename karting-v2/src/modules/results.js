@@ -400,12 +400,16 @@ function normalizeChronoRawTextarea() {
   if (text) area.value = text;
 }
 
-// Apercu live des lignes telles qu'elles seront interpretees — appele a la saisie
-// (oninput sur #chrono-raw), apres chargement d'un fichier, et apres detection auto.
-// N'ecrit jamais en base : lecture seule, purement informative pour l'organisateur.
-export function renderChronoPreview() {
-  const area = document.getElementById('chrono-raw');
-  const el = document.getElementById('chrono-preview');
+// Apercu live des lignes telles qu'elles seront interpretees — vit desormais dans
+// Parametres (echantillon colle + mapping), appele a la saisie de l'echantillon et a
+// chaque changement de colonne/separateur/en-tete, pour que l'organisateur valide son
+// format une fois pour toutes. sourceId/targetId restent parametrables (repli sur
+// 'chrono-raw'/'chrono-preview', l'ancien emplacement sur Sessions actives, au cas ou
+// un appelant plus ancien — cache navigateur non purge — invoquerait la fonction sans
+// argument). N'ecrit jamais en base : lecture seule, purement informative.
+export function renderChronoPreview(sourceId, targetId) {
+  const area = document.getElementById(sourceId || 'chrono-raw');
+  const el = document.getElementById(targetId || 'chrono-preview');
   if (!area || !el) return;
   const raw = area.value.trim();
   if (!raw) { el.innerHTML = ''; return; }
@@ -444,11 +448,15 @@ async function saveChronoImportFormat(fmt) {
 // Devine le separateur et le role de chaque colonne (nom / kart-tour / temps) a partir
 // du texte actuellement colle ou charge, enregistre le resultat comme format personnalise
 // et rafraichit l'apercu. Le circuit peut toujours affiner le mapping dans Parametres.
-export async function detectAndSaveChronoFormat() {
-  const area = document.getElementById('chrono-raw');
+export async function detectAndSaveChronoFormat(sourceId) {
+  // Vit dans Parametres (echantillon colle ad hoc, id 'pref-chrono-detect-sample') —
+  // sourceId reste parametrable, avec repli sur l'ancien emplacement 'chrono-raw' au cas
+  // ou un appelant plus ancien (cache navigateur non purge) l'invoquerait sans argument.
+  const area = document.getElementById(sourceId || 'chrono-raw');
+  const msgId = document.getElementById('pref-chrono-detect-sample') ? 'msg-prefs' : 'msg-chrono';
   const raw = area?.value.trim();
   if (!raw) {
-    showMsg('msg-chrono', 'Colle ou charge un fichier avant de détecter le format.', 'err');
+    showMsg(msgId, 'Colle un extrait de ton fichier avant de détecter le format.', 'err');
     return;
   }
   const lines = raw.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
@@ -462,7 +470,7 @@ export async function detectAndSaveChronoFormat() {
     dataLines = lines.slice(1);
   }
   if (!dataLines.length) {
-    showMsg('msg-chrono', 'Impossible de détecter un format sur ce contenu.', 'err');
+    showMsg(msgId, 'Impossible de détecter un format sur ce contenu.', 'err');
     return;
   }
   const sample = dataLines.slice(0, Math.min(10, dataLines.length)).map((l) => l.split(delim));
@@ -497,8 +505,30 @@ export async function detectAndSaveChronoFormat() {
     col_sectors: (state.prefs.chrono_import && state.prefs.chrono_import.col_sectors) || identityChronoFormat().col_sectors,
   };
   await saveChronoImportFormat(fmt);
-  renderChronoPreview();
-  showMsg('msg-chrono', 'Format détecté et enregistré — vérifie l’aperçu ci-dessous avant d’importer (modifiable dans Paramètres).', 'ok');
+
+  // Reflete le mapping detecte dans le formulaire de Parametres (memes ids que ceux
+  // peuples par settings.loadPrefs()) pour que l'organisateur le voie et puisse
+  // l'affiner avant de cliquer sur "Enregistrer les parametres". Sans effet si ces
+  // champs ne sont pas montes (ex. appel depuis un ancien emplacement) — chaque set
+  // est garde par une verification d'existence.
+  const setV = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const setC = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+  setC('pref-chrono-custom', true);
+  setV('pref-chrono-delim', fmt.delimiter);
+  setC('pref-chrono-header', fmt.has_header);
+  setV('pref-chrono-col-name', fmt.col_name);
+  setV('pref-chrono-col-kart', fmt.col_kart);
+  setV('pref-chrono-col-lap', fmt.col_lap);
+  setV('pref-chrono-col-time', fmt.col_time);
+  setV('pref-chrono-col-sectors', (fmt.col_sectors || []).join(','));
+  const wrap = document.getElementById('pref-chrono-custom-wrap');
+  if (wrap) wrap.style.display = 'block';
+
+  // Apercu directement dans Parametres (id 'pref-chrono-preview') quand on detecte depuis
+  // l'echantillon colle ici ; repli sur l'ancien emplacement Sessions actives sinon.
+  const previewTargetId = sourceId === 'pref-chrono-detect-sample' ? 'pref-chrono-preview' : 'chrono-preview';
+  renderChronoPreview(sourceId, previewTargetId);
+  showMsg(msgId, 'Format détecté et enregistré — vérifie le mapping et l’aperçu ci-dessus avant de sauvegarder.', 'ok');
 }
 
 // --- Import des chronos (fichier Excel/CSV → texte) --------------------------------------
