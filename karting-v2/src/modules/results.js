@@ -445,21 +445,40 @@ async function saveChronoImportFormat(fmt) {
   }
 }
 
-// Devine le separateur et le role de chaque colonne (nom / kart-tour / temps) a partir
-// du texte actuellement colle ou charge, enregistre le resultat comme format personnalise
-// et rafraichit l'apercu. Le circuit peut toujours affiner le mapping dans Parametres.
-export async function detectAndSaveChronoFormat(sourceId) {
-  // Vit dans Parametres (echantillon colle ad hoc, id 'pref-chrono-detect-sample') —
-  // sourceId reste parametrable, avec repli sur l'ancien emplacement 'chrono-raw' au cas
-  // ou un appelant plus ancien (cache navigateur non purge) l'invoquerait sans argument.
-  const area = document.getElementById(sourceId || 'chrono-raw');
-  const msgId = document.getElementById('pref-chrono-detect-sample') ? 'msg-prefs' : 'msg-chrono';
-  const raw = area?.value.trim();
-  if (!raw) {
-    showMsg(msgId, 'Colle un extrait de ton fichier avant de détecter le format.', 'err');
-    return;
+// Devine le role de chaque colonne (nom / kart / tour / temps) a partir d'un echantillon
+// de lignes DEJA decoupees en colonnes (independant du separateur ou du support texte vs
+// tableur — utilise a la fois par computeDetectedFormat (texte) et
+// computeDetectedFormatFromRows (Excel/CSV) ci-dessous).
+function inferColumnRoles(dataRows) {
+  if (!dataRows || !dataRows.length) return null;
+  const colCount = Math.max(...dataRows.map((p) => p.length));
+  const looksTime = (s) => /^\d{1,2}:\d{2}([.,]\d+)?$/.test(String(s).trim()) || /^\d+[.,]\d{1,3}$/.test(String(s).trim());
+  const looksSmallInt = (s) => /^\d{1,3}$/.test(String(s).trim());
+  const timeScores = [];
+  const intCols = [];
+  let colName = null;
+  for (let c = 0; c < colCount; c++) {
+    const vals = dataRows.map((p) => (p[c] != null ? String(p[c]).trim() : '')).filter(Boolean);
+    if (!vals.length) continue;
+    const timeRatio = vals.filter(looksTime).length / vals.length;
+    const intRatio = vals.filter(looksSmallInt).length / vals.length;
+    const textRatio = vals.filter((v) => isNaN(Number(String(v).replace(',', '.'))) && !looksTime(v)).length / vals.length;
+    timeScores.push({ c, timeRatio });
+    if (intRatio > 0.7) intCols.push(c);
+    if (textRatio > 0.7 && colName == null) colName = c + 1;
   }
-  const lines = raw.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+  timeScores.sort((a, b) => b.timeRatio - a.timeRatio);
+  const colTime = timeScores.length && timeScores[0].timeRatio > 0.5 ? timeScores[0].c + 1 : colCount;
+  const colKart = intCols.length ? intCols[0] + 1 : Math.min(2, colCount);
+  const colLap = intCols.length > 1 ? intCols[1] + 1 : colKart;
+  return { col_name: colName == null ? 1 : colName, col_kart: colKart, col_lap: colLap, col_time: colTime };
+}
+
+// Devine separateur + en-tete + mapping de colonnes a partir de LIGNES DE TEXTE brutes
+// (collage dans un textarea). Pure fonction, aucune ecriture DB. Retourne null si le
+// contenu est insuffisant pour deviner quoi que ce soit.
+function computeDetectedFormat(lines) {
+  if (!lines || !lines.length) return null;
   const delim = detectDelimiter(lines[0]);
   let dataLines = lines;
   let hasHeader = false;
@@ -469,48 +488,51 @@ export async function detectAndSaveChronoFormat(sourceId) {
     hasHeader = true;
     dataLines = lines.slice(1);
   }
-  if (!dataLines.length) {
-    showMsg(msgId, 'Impossible de détecter un format sur ce contenu.', 'err');
-    return;
-  }
+  if (!dataLines.length) return null;
   const sample = dataLines.slice(0, Math.min(10, dataLines.length)).map((l) => l.split(delim));
-  const colCount = Math.max(...sample.map((p) => p.length));
-  const looksTime = (s) => /^\d{1,2}:\d{2}([.,]\d+)?$/.test(String(s).trim()) || /^\d+[.,]\d{1,3}$/.test(String(s).trim());
-  const looksSmallInt = (s) => /^\d{1,3}$/.test(String(s).trim());
-  const timeScores = [];
-  const intCols = [];
-  let colName = null;
-  for (let c = 0; c < colCount; c++) {
-    const vals = sample.map((p) => (p[c] || '').trim()).filter(Boolean);
-    if (!vals.length) continue;
-    const timeRatio = vals.filter(looksTime).length / vals.length;
-    const intRatio = vals.filter(looksSmallInt).length / vals.length;
-    const textRatio = vals.filter((v) => isNaN(Number(v.replace(',', '.'))) && !looksTime(v)).length / vals.length;
-    timeScores.push({ c, timeRatio });
-    if (intRatio > 0.7) intCols.push(c);
-    if (textRatio > 0.7 && colName == null) colName = c + 1;
-  }
-  timeScores.sort((a, b) => b.timeRatio - a.timeRatio);
-  const colTime = timeScores.length && timeScores[0].timeRatio > 0.5 ? timeScores[0].c + 1 : colCount;
-  const colKart = intCols.length ? intCols[0] + 1 : Math.min(2, colCount);
-  const colLap = intCols.length > 1 ? intCols[1] + 1 : colKart;
-  const fmt = {
+  const roles = inferColumnRoles(sample);
+  if (!roles) return null;
+  return {
     customized: true,
     delimiter: delim === '\t' ? 'tab' : delim,
     has_header: hasHeader,
-    col_name: colName == null ? 1 : colName,
-    col_kart: colKart,
-    col_lap: colLap,
-    col_time: colTime,
+    ...roles,
     col_sectors: (state.prefs.chrono_import && state.prefs.chrono_import.col_sectors) || identityChronoFormat().col_sectors,
   };
-  await saveChronoImportFormat(fmt);
+}
 
-  // Reflete le mapping detecte dans le formulaire de Parametres (memes ids que ceux
-  // peuples par settings.loadPrefs()) pour que l'organisateur le voie et puisse
-  // l'affiner avant de cliquer sur "Enregistrer les parametres". Sans effet si ces
-  // champs ne sont pas montes (ex. appel depuis un ancien emplacement) — chaque set
-  // est garde par une verification d'existence.
+// Meme detection que computeDetectedFormat, mais a partir de LIGNES DEJA DECOUPEES EN
+// COLONNES par le lecteur Excel/CSV (XLSX.utils.sheet_to_json), donc pas de separateur a
+// deviner. Utilisee par handleChronoFile() ci-dessous pour la detection automatique sur
+// fichier importe.
+function computeDetectedFormatFromRows(rawRows) {
+  if (!rawRows || !rawRows.length) return null;
+  const looksNumeric = (s) => /^-?\d+([.,:]\d+)?$/.test(String(s ?? '').trim());
+  const firstRow = rawRows[0] || [];
+  let hasHeader = false;
+  let dataRows = rawRows;
+  if (firstRow.length >= 3 && !firstRow.some((v) => looksNumeric(v))) {
+    hasHeader = true;
+    dataRows = rawRows.slice(1);
+  }
+  if (!dataRows.length) return null;
+  const roles = inferColumnRoles(dataRows.slice(0, Math.min(10, dataRows.length)));
+  if (!roles) return null;
+  return {
+    customized: true,
+    delimiter: ';', // non pertinent ici (colonnes deja separees par la feuille) — garde pour coherence de forme avec le format texte
+    has_header: hasHeader,
+    ...roles,
+    col_sectors: (state.prefs.chrono_import && state.prefs.chrono_import.col_sectors) || identityChronoFormat().col_sectors,
+  };
+}
+
+// Reflete un format (detecte ou personnalise) dans le formulaire de Parametres (memes ids
+// que ceux peuples par settings.loadPrefs()), pour que l'organisateur le voie et puisse le
+// corriger avant de cliquer sur "Enregistrer les parametres". Sans effet si ces champs ne
+// sont pas montes (ex. Parametres pas encore ouvert) — chaque set est garde par une
+// verification d'existence.
+function reflectChronoFormatInSettingsForm(fmt) {
   const setV = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
   const setC = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
   setC('pref-chrono-custom', true);
@@ -523,6 +545,29 @@ export async function detectAndSaveChronoFormat(sourceId) {
   setV('pref-chrono-col-sectors', (fmt.col_sectors || []).join(','));
   const wrap = document.getElementById('pref-chrono-custom-wrap');
   if (wrap) wrap.style.display = 'block';
+}
+
+// Outil manuel (Parametres) : devine le format a partir d'un echantillon colle a la main
+// et l'enregistre. Reste disponible pour pre-configurer un circuit avant sa premiere
+// session ou pour forcer une nouvelle detection, mais n'est PLUS le chemin principal —
+// l'import reel (texte colle ou fichier charge sur Sessions actives) detecte desormais le
+// format tout seul, voir autoDetectChronoTextIfNeeded() et handleChronoFile() ci-dessous.
+export async function detectAndSaveChronoFormat(sourceId) {
+  const area = document.getElementById(sourceId || 'chrono-raw');
+  const msgId = document.getElementById('pref-chrono-detect-sample') ? 'msg-prefs' : 'msg-chrono';
+  const raw = area?.value.trim();
+  if (!raw) {
+    showMsg(msgId, 'Colle un extrait de ton fichier avant de détecter le format.', 'err');
+    return;
+  }
+  const lines = raw.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+  const fmt = computeDetectedFormat(lines);
+  if (!fmt) {
+    showMsg(msgId, 'Impossible de détecter un format sur ce contenu.', 'err');
+    return;
+  }
+  await saveChronoImportFormat(fmt);
+  reflectChronoFormatInSettingsForm(fmt);
 
   // Apercu directement dans Parametres (id 'pref-chrono-preview') quand on detecte depuis
   // l'echantillon colle ici ; repli sur l'ancien emplacement Sessions actives sinon.
@@ -531,57 +576,108 @@ export async function detectAndSaveChronoFormat(sourceId) {
   showMsg(msgId, 'Format détecté et enregistré — vérifie le mapping et l’aperçu ci-dessus avant de sauvegarder.', 'ok');
 }
 
+// Detection automatique SILENCIEUSE au moment d'un import de texte reel (voir
+// importChrono() plus bas) : si le format actuellement enregistre ne reconnait AUCUNE
+// ligne valide sur ce contenu (signal fort d'un format etranger au format habituel), on
+// devine et sauvegarde un nouveau mapping personnalise a la volee — l'organisateur n'a
+// plus besoin de le pre-configurer dans Parametres. Ne touche JAMAIS a un format qui
+// reconnait deja au moins une ligne, y compris un format corrige manuellement au prealable.
+// Retourne true si un nouveau format a ete detecte et applique.
+async function autoDetectChronoTextIfNeeded(rawText) {
+  const lines = String(rawText || '').split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+  if (!lines.length) return false;
+  const { rows } = normalizeChronoText(lines.join('\n'));
+  if (rows.some((r) => r.valid)) return false;
+  const fmt = computeDetectedFormat(lines);
+  if (!fmt) return false;
+  await saveChronoImportFormat(fmt);
+  reflectChronoFormatInSettingsForm(fmt);
+  return true;
+}
+
 // --- Import des chronos (fichier Excel/CSV → texte) --------------------------------------
 
 export function handleChronoFile(inputEl) {
   const file = inputEl.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = function (e) {
+  reader.onload = async function (e) {
     try {
       const data = new Uint8Array(e.target.result);
       const wb = XLSX.read(data, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true });
-      const fmt = getChronoImportFormat();
-      const sectorsOn = !!state.prefs.sectors_enabled;
-      const n = Number(state.prefs.sector_count || 3);
-      const rows = fmt.customized && fmt.has_header ? rawRows.slice(1) : rawRows;
-      const lines = [];
-      rows.forEach((row) => {
-        if (!row || !row.length) return;
-        if (!fmt.customized) {
-          // Comportement historique inchangé (tolerance 3 ou 4 colonnes).
-          if (row.length < 3) return;
-          const name = String(row[0]).trim();
-          const kart = String(row[1]).trim();
-          let lapIdx = '1', time;
-          if (row.length >= 4) {
-            lapIdx = String(row[2]).trim();
-            time = String(row[3]).trim();
-          } else {
-            time = String(row[2]).trim();
+
+      // Extraction des lignes canoniques ';'-separees pour un format donne — factorisee
+      // pour pouvoir etre rejouee une seconde fois si la detection automatique ci-dessous
+      // devine un meilleur mapping.
+      const extract = (f) => {
+        const sectorsOn = !!state.prefs.sectors_enabled;
+        const n = Number(state.prefs.sector_count || 3);
+        const rows = f.customized && f.has_header ? rawRows.slice(1) : rawRows;
+        const out = [];
+        rows.forEach((row) => {
+          if (!row || !row.length) return;
+          if (!f.customized) {
+            // Comportement historique inchangé (tolerance 3 ou 4 colonnes).
+            if (row.length < 3) return;
+            const name = String(row[0]).trim();
+            const kart = String(row[1]).trim();
+            let lapIdx = '1', time;
+            if (row.length >= 4) {
+              lapIdx = String(row[2]).trim();
+              time = String(row[3]).trim();
+            } else {
+              time = String(row[2]).trim();
+            }
+            if (!name || !kart || !time) return;
+            if (isNaN(parseInt(kart)) || isNaN(parseFloat(time))) return;
+            out.push(name + ';' + kart + ';' + lapIdx + ';' + time);
+            return;
           }
+          // Format personnalisé : mapping de colonnes explicite (Paramètres).
+          const get = (colNum) => (row[colNum - 1] != null ? String(row[colNum - 1]).trim() : '');
+          const name = get(f.col_name);
+          const kart = get(f.col_kart);
+          const lap = get(f.col_lap) || '1';
+          const time = get(f.col_time);
+          const sectorVals = sectorsOn ? (f.col_sectors || []).slice(0, n).map(get) : [];
           if (!name || !kart || !time) return;
-          if (isNaN(parseInt(kart)) || isNaN(parseFloat(time))) return;
-          lines.push(name + ';' + kart + ';' + lapIdx + ';' + time);
-          return;
+          if (isNaN(parseInt(kart)) || isNaN(parseFloat(String(time).replace(',', '.')))) return;
+          const parts = sectorsOn ? [name, kart, lap, ...sectorVals, time] : [name, kart, lap, time];
+          out.push(parts.join(';'));
+        });
+        return out;
+      };
+
+      let fmt = getChronoImportFormat();
+      let lines = extract(fmt);
+      let autoNote = '';
+      // Detection automatique SILENCIEUSE : le format actuellement enregistre ne reconnait
+      // AUCUNE ligne dans ce fichier (contenu non vide) — signal fort d'un format etranger.
+      // On devine un nouveau mapping a partir du fichier lui-meme et on reessaie une fois.
+      // Ne touche jamais a un format qui reconnait deja au moins une ligne.
+      if (!lines.length && rawRows.some((r) => r && r.length)) {
+        const detected = computeDetectedFormatFromRows(rawRows);
+        if (detected) {
+          const retryLines = extract(detected);
+          if (retryLines.length) {
+            await saveChronoImportFormat(detected);
+            reflectChronoFormatInSettingsForm(detected);
+            fmt = detected;
+            lines = retryLines;
+            autoNote = ' — format d’import différent détecté et enregistré automatiquement (vérifie/corrige le mapping dans Paramètres si besoin)';
+          }
         }
-        // Format personnalisé : mapping de colonnes explicite (Paramètres).
-        const get = (colNum) => (row[colNum - 1] != null ? String(row[colNum - 1]).trim() : '');
-        const name = get(fmt.col_name);
-        const kart = get(fmt.col_kart);
-        const lap = get(fmt.col_lap) || '1';
-        const time = get(fmt.col_time);
-        const sectorVals = sectorsOn ? (fmt.col_sectors || []).slice(0, n).map(get) : [];
-        if (!name || !kart || !time) return;
-        if (isNaN(parseInt(kart)) || isNaN(parseFloat(String(time).replace(',', '.')))) return;
-        const parts = sectorsOn ? [name, kart, lap, ...sectorVals, time] : [name, kart, lap, time];
-        lines.push(parts.join(';'));
-      });
+      }
+
       document.getElementById('chrono-raw').value = lines.join('\n');
       renderChronoPreview();
-      showMsg('msg-chrono', 'Fichier chargé, vérifie l’aperçu ci-dessous puis clique Importer.', 'ok');
+      if (lines.length) {
+        showMsg('msg-chrono', 'Fichier chargé' + autoNote + '. Vérifie l’aperçu ci-dessous puis clique Importer.', 'ok');
+      } else {
+        showMsg('msg-chrono', 'Aucune ligne reconnue dans ce fichier — vérifie/corrige le mapping dans Paramètres.', 'err');
+      }
     } catch (err) {
       showMsg('msg-chrono', 'Erreur lecture fichier: ' + err.message, 'err');
     }
@@ -589,13 +685,16 @@ export function handleChronoFile(inputEl) {
   reader.readAsArrayBuffer(file);
 }
 
-// Import unifié : normalise d'abord le texte selon le format configuré (no-op si le
-// format n'est pas personnalisé), puis bascule automatiquement selon
-// state.prefs.sectors_enabled, comme l'original.
+// Import unifié : detecte automatiquement le format si le texte colle ne correspond a
+// rien de connu (voir autoDetectChronoTextIfNeeded), normalise le texte selon le format
+// resultant (no-op si le format n'est pas personnalisé), puis bascule automatiquement
+// selon state.prefs.sectors_enabled, comme l'original.
 export async function importChrono() {
+  const raw = document.getElementById('chrono-raw')?.value || '';
+  const autoDetected = await autoDetectChronoTextIfNeeded(raw);
   normalizeChronoRawTextarea();
-  if (state.prefs.sectors_enabled) return importChronoWithSectors();
-  return importChronoSimple();
+  if (state.prefs.sectors_enabled) return importChronoWithSectors(autoDetected);
+  return importChronoSimple(autoDetected);
 }
 
 // 🆕 v19 : le texte brut de CHAQUE import (celui réellement traité, donc déjà
@@ -619,7 +718,10 @@ async function saveChronoImportHistory(sessionId, rawText, linesCount, importedC
 
 // Import "sans secteurs" : format Nom;Kart;Tour;Temps. Reste exportée car
 // importChrono() y délègue quand state.prefs.sectors_enabled est désactivé.
-export async function importChronoSimple() {
+// autoDetected (optionnel) : true si importChrono() a du deviner le format a la volee pour
+// ce texte — ajoute une note au message final pour que l'organisateur le sache et puisse
+// verifier/corriger le mapping dans Paramètres si besoin.
+export async function importChronoSimple(autoDetected) {
   if (!state.activeDetailSession) {
     showMsg('msg-chrono', 'Aucune session active.', 'err');
     return;
@@ -700,14 +802,15 @@ export async function importChronoSimple() {
   await saveChronoImportHistory(sid, raw, lines.length, imported);
   btn.disabled = false;
   btn.innerHTML = originalLabel;
-  showMsg('msg-chrono', imported + ' temps importes' + (errors.length ? ' - ' + errors.length + ' erreurs' : ''), 'ok');
+  showMsg('msg-chrono', imported + ' temps importes' + (errors.length ? ' - ' + errors.length + ' erreurs' : '') + (autoDetected ? ' — format d’import détecté et enregistré automatiquement (vérifie/corrige dans Paramètres si besoin)' : ''), 'ok');
   await loadInscrits();
   await refreshOccupation();
   await renderResultatsSection();
 }
 
 // Variante "secteurs activés" — format attendu : Nom;Kart;NumTour;S1;S2;...;Sn;Temps
-async function importChronoWithSectors() {
+// autoDetected (optionnel) : voir importChronoSimple() ci-dessus.
+async function importChronoWithSectors(autoDetected) {
   if (!state.activeDetailSession) {
     showMsg('msg-chrono', 'Aucune session active.', 'err');
     return;
@@ -775,7 +878,7 @@ async function importChronoWithSectors() {
     if (saved.error) throw saved.error;
     await db.from('sessions').update({ status: 'chrono_imported' }).eq('id', sid);
     await saveChronoImportHistory(sid, raw, lines.length, rows.length);
-    showMsg('msg-chrono', rows.length + ' tours importés' + (errors.length ? ' — ' + errors.length + ' lignes ignorées' : ''), 'ok');
+    showMsg('msg-chrono', rows.length + ' tours importés' + (errors.length ? ' — ' + errors.length + ' lignes ignorées' : '') + (autoDetected ? ' — format d’import détecté et enregistré automatiquement (vérifie/corrige dans Paramètres si besoin)' : ''), 'ok');
     document.getElementById('chrono-raw').value = '';
     await loadDetailSession(sid);
   } catch (e) {
