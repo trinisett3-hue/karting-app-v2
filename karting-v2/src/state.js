@@ -25,6 +25,13 @@ export const state = {
     kart_numbers: [],
     sectors_enabled: false,
     sector_count: 3,
+    // Format d'import des chronos personnalisable (24/08, Trinisette) — null = format
+    // canonique historique (Nom;Kart;NumTour[;S1..Sn];Temps, separateur ';'), aucun
+    // changement de comportement pour un circuit qui n'a jamais touche ce reglage.
+    // Objet {customized:true, delimiter, has_header, col_name, col_kart, col_lap,
+    // col_time, col_sectors} des qu'un circuit personnalise (voir results.js >
+    // getChronoImportFormat / normalizeChronoText).
+    chrono_import: null,
     results_theme: 'classic',
     helmet_choice: 1,
     helmet_colors: null,
