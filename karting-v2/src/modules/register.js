@@ -246,12 +246,13 @@ const LEGAL_DOCS = {
   rgpd: {
     title: 'Confidentialité',
     html:
-      '<h3>Données collectées</h3><p>Pseudo, prénom, nom, adresse e-mail, date de naissance, nationalité choisie, avatar, ainsi que les temps réalisés lors de vos sessions.</p>' +
+      '<h3>Responsable du traitement</h3><p>Le circuit auprès duquel vous vous inscrivez est responsable de vos données. Il utilise TRINISETTE comme prestataire technique (sous-traitant au sens du RGPD) pour les héberger et les traiter en son nom.</p>' +
+      '<h3>Données collectées</h3><p>Pseudo, prénom, nom, adresse e-mail, date de naissance, nationalité choisie, avatar (aucune photo), ainsi que les temps réalisés lors de vos sessions.</p>' +
       '<h3>Pourquoi</h3><p>Pour vous inscrire à la session, afficher le classement, et vous envoyer par e-mail vos résultats et votre carte de performance à l\'issue de la course.</p>' +
       '<h3>Communication commerciale</h3><p>Les offres et nouveautés du circuit ne vous sont envoyées que si vous cochez la case dédiée. Ce choix est indépendant de l\'inscription et se retire à tout moment.</p>' +
-      '<h3>Durée</h3><p>Votre profil pilote est conservé tant que vous roulez sur le circuit, afin de retrouver votre historique d\'une session à l\'autre.</p>' +
-      '<h3>Vos droits</h3><p>Accès, rectification, suppression et opposition : il suffit d\'en faire la demande à l\'accueil du circuit ou à l\'adresse de contact affichée sur cette page.</p>' +
-      '<div class="legal-note">Texte de démonstration — le circuit renseignera ici sa politique de confidentialité définitive et son contact délégué avant l\'ouverture au public.</div>',
+      '<h3>Durée de conservation</h3><p>Votre profil pilote est conservé tant que vous roulez sur le circuit. Trois ans après votre dernière session, votre nom, votre e-mail et les autres données qui vous identifient sont effacés automatiquement ; vos performances (chronos, classements) restent dans les archives du circuit, mais ne sont plus associées à votre identité.</p>' +
+      '<h3>Vos droits</h3><p>Accès, rectification, suppression et opposition à tout moment : il suffit d\'en faire la demande à l\'accueil du circuit ou à l\'adresse de contact affichée sur cette page. Le circuit peut supprimer définitivement votre profil et votre historique à votre demande.</p>' +
+      '<div class="legal-note">Politique de confidentialité TRINISETTE, applicable à tous les circuits utilisant le service.</div>',
   },
 };
 

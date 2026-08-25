@@ -1,0 +1,516 @@
+From e7b338a0fd3dffe17056402733def5c598457c17 Mon Sep 17 00:00:00 2001
+From: "Trinisette (via Claude)" <trinisett3@gmail.com>
+Date: Wed, 19 Aug 2026 23:43:31 +0000
+Subject: [PATCH] feat(K-16): Hall of Fame public segmente par plan
+ (piste/semaine/mois)
+
+- Migration v28 (appliquee en prod) : 2 nouvelles RPC additives
+  - public_venue_hall_of_fame(_venue_token) : page circuit anonyme,
+    piste (all-time) toujours renvoye, semaine/mois filtres SERVEUR-SIDE
+    aux plans pro/business (private.tenant_plan_code, meme source de
+    verite que plan.js et my_theme_entitlement()).
+  - my_hall_of_fame() : panneau admin authentifie, staff voit toujours
+    les 3 scopes quel que soit le plan (decision produit).
+- public-results.js : nouvel onglet Hall of Fame sur la page circuit
+  (results.html?v=<venue_token>&hof=1), accessible depuis le meme QR
+  permanent (v23) et depuis l'onglet Resultats. Upsell neutre (texte
+  seul, aucune donnee) pour les circuits Starter.
+- admin.html / stats.js : bloc 'Records actuels' dans Statistiques >
+  Hall of Fame (staff = toujours tout) + nouvelle feuille 'Records
+  circuit' dans l'export XLSX, colonnes semaine/mois incluses
+  uniquement si le plan est pro/business.
+
+Backlog: claude/Backlog-idees.md > K-16 (decide le 19/08).
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01TweNSRVBKgadYLjVDCVDqm
+---
+ admin.html                                    |   9 +
+ karting-v2/src/modules/public-results.js      |  95 +++++++-
+ karting-v2/src/modules/stats.js               |  63 +++++
+ .../migration-v28-hall-of-fame-public.sql     | 227 ++++++++++++++++++
+ 4 files changed, 388 insertions(+), 6 deletions(-)
+ create mode 100644 karting-v2/supabase/migration-v28-hall-of-fame-public.sql
+
+diff --git a/admin.html b/admin.html
+index 2899852..5898cd5 100644
+--- a/admin.html
++++ b/admin.html
+@@ -702,6 +702,15 @@ updateThemeToggleUI();
+ 
+ <!-- 2) HALL OF FAME — chronos de base (Basique) -->
+ <div class="subtab-panel" id="stats-subtab-hof">
++<!-- 19/08 (K-16) : records actuels (piste/semaine/mois) tels qu'exposes
++     publiquement sur la page circuit (?v=<venue_token>&hof=1). Staff =
++     toujours les 3, quel que soit le plan (voir my_hall_of_fame(),
++     migration-v28) ; seul l'export XLSX plus bas filtre par plan. -->
++<div class="card" style="margin-bottom:16px">
++<div class="ctitle">Records actuels du circuit (page publique Hall of Fame)</div>
++<div style="font-size:11px;color:var(--mut);margin-bottom:10px">All-time, mois et semaine en cours — issus des memes donnees que le QR permanent. Les pilotes voient all-time uniquement en Starter ; mois et semaine s'affichent en plus a partir du plan Pro. Toi, en tant que staff, tu vois toujours les trois.</div>
++<div id="stats-hof-current"><div class="empty">Chargement...</div></div>
++</div>
+ <div class="g2">
+ <div class="card">
+ <div class="ctitle">Top 10 meilleurs temps absolus</div>
+diff --git a/karting-v2/src/modules/public-results.js b/karting-v2/src/modules/public-results.js
+index 0313192..715a154 100644
+--- a/karting-v2/src/modules/public-results.js
++++ b/karting-v2/src/modules/public-results.js
+@@ -519,14 +519,20 @@ function venueRow(href, tag, title, meta, hot) {
+ 
+ // Onglets en pilule centree. Volontairement AUTONOMES : ils ne sont plus
+ // greffes dans l'entete de la page resultats (voir renderVenuePicker).
+-function venueTabs(active, otherHref) {
++// 19/08 (K-16) : 3e onglet Hall of Fame ajoute a cote de Inscription/
++// Résultats. `hrefs` = { register, results, hof } — seul le lien de
++// l'onglet NON actif est utilise (l'actif reste un <span>, comme avant).
++function venueTabs(active, hrefs) {
+   const reg = active === 'register'
+     ? '<span>Inscription</span>'
+-    : '<a href="' + otherHref + '">Inscription</a>';
++    : '<a href="' + hrefs.register + '">Inscription</a>';
+   const res = active === 'results'
+     ? '<span>Résultats</span>'
+-    : '<a href="' + otherHref + '">Résultats</a>';
+-  return '<nav class="venue-tabs" aria-label="Navigation">' + reg + res + '</nav>';
++    : '<a href="' + hrefs.results + '">Résultats</a>';
++  const hof = active === 'hof'
++    ? '<span>Hall of Fame</span>'
++    : '<a href="' + hrefs.hof + '">Hall of Fame</a>';
++  return '<nav class="venue-tabs" aria-label="Navigation">' + reg + res + hof + '</nav>';
+ }
+ 
+ function venueHero(logoUrl, circuit, title, sub) {
+@@ -662,7 +668,10 @@ export async function renderVenuePicker(venueToken) {
+     : '<div class="venue-empty">Aucun résultat publié pour l’instant.<br>Reviens juste après ta session.</div>';
+ 
+   mountVenue(
+-    venueTabs('results', 'register?v=' + encodeURIComponent(venueToken)) +
++    venueTabs('results', {
++      register: 'register?v=' + encodeURIComponent(venueToken),
++      hof: '?v=' + encodeURIComponent(venueToken) + '&hof=1'
++    }) +
+     venueHero(data.logo_url, venueName, 'Choisis ta session',
+               'Sélectionne la session que tu viens de courir pour voir le classement.') +
+     rows +
+@@ -671,6 +680,75 @@ export async function renderVenuePicker(venueToken) {
+   return true;
+ }
+ 
++// 19/08 (K-16) : page Hall of Fame du circuit, accessible depuis l'onglet
++// ci-dessus ET depuis le meme QR permanent que renderVenuePicker (le lien
++// imprime pointe toujours vers results.html?v=<venue_token> ; ?hof=1
++// bascule simplement sur cet ecran — voir load()).
++function venueRecordRow(tag, label, rec) {
++  if (!rec) return '';
++  const when = venueTime(rec.achieved_at);
++  const meta = [fmtTime(rec.lap_time_s), when ? 'le ' + new Date(rec.achieved_at).toLocaleDateString('fr-FR') : '']
++    .filter(Boolean).join(' · ');
++  return '<div class="venue-row hot" style="cursor:default">' +
++    '<span class="venue-tag">' + escapeHTML(tag) + '</span>' +
++    '<span class="venue-txt"><b>' + escapeHTML(rec.pilot || 'Pilote') + '</b><i>' + escapeHTML(label + ' — ' + meta) + '</i></span>' +
++    '</div>';
++}
++
++export async function renderVenueHallOfFame(venueToken) {
++  ['podium-title', 'page-screen-2', 'page-screen-3'].forEach(id => {
++    const el = document.getElementById(id);
++    if (el) el.style.display = 'none';
++  });
++  const t10 = document.getElementById('top10-title');
++  const t10s = t10 ? t10.closest('section') : null;
++  if (t10s) t10s.style.display = 'none';
++  ['.circuit-header', '.pdf-btn-wrap', '.page-nav', '.results-nav'].forEach(sel => {
++    document.querySelectorAll(sel).forEach(el => { el.style.display = 'none'; });
++  });
++  const floatSwitch = document.querySelector('.page-switch');
++  if (floatSwitch) floatSwitch.remove();
++
++  mountVenue('<div class="venue-empty">Chargement…</div>');
++
++  const { data, error } = await db.rpc('public_venue_hall_of_fame', { _venue_token: venueToken });
++  if (error || !data) {
++    mountVenue('<div class="venue-empty">Lien invalide ou circuit introuvable.</div>');
++    return false;
++  }
++
++  const theme = String(data.results_theme || '').trim();
++  if (theme) document.documentElement.setAttribute('data-theme', theme);
++
++  const venueName = String(data.venue_name || '').trim();
++  if (venueName) document.title = venueName + ' — Hall of Fame';
++
++  const rows = [
++    venueRecordRow('All-time', 'Record du circuit', data.piste),
++    venueRecordRow('Ce mois-ci', 'Meilleur temps du mois', data.mois),
++    venueRecordRow('Cette semaine', 'Meilleur temps de la semaine', data.semaine)
++  ].filter(Boolean).join('');
++
++  // Starter/Free : ni erreur ni donnee vide qui inquieterait le pilote --
++  // juste une invitation neutre, sans jamais laisser deviner la valeur
++  // des records semaine/mois (ils ne sont meme pas dans la reponse serveur,
++  // voir migration-v28 > public_venue_hall_of_fame()).
++  const upsell = (data.plan !== 'pro' && data.plan !== 'business')
++    ? '<p class="venue-note">Les records de la semaine et du mois sont disponibles sur les plans Pro et Business.</p>'
++    : '';
++
++  mountVenue(
++    venueTabs('hof', {
++      register: 'register?v=' + encodeURIComponent(venueToken),
++      results: '?v=' + encodeURIComponent(venueToken)
++    }) +
++    venueHero(data.logo_url, venueName, 'Hall of Fame', 'Les meilleurs chronos jamais réalisés sur ce circuit.') +
++    (rows || '<div class="venue-empty">Aucun record enregistré pour l’instant.<br>Sois le premier à en établir un !</div>') +
++    upsell
++  );
++  return true;
++}
++
+ export async function load() {
+ const params0 = new URLSearchParams(window.location.search);
+ const token = params0.get('result');
+@@ -679,7 +757,12 @@ const token = params0.get('result');
+ // de sessions (QR unique permanent). Sinon seulement, message d'erreur.
+ if (!token) {
+   const venueToken = params0.get('v') || params0.get('venue');
+-  if (venueToken) { await renderVenuePicker(venueToken); return false; }
++  if (venueToken) {
++    // 19/08 (K-16) : ?hof=1 bascule sur l'ecran Hall of Fame, meme QR
++    // permanent que le selecteur de sessions (renderVenuePicker).
++    if (params0.get('hof') === '1') { await renderVenueHallOfFame(venueToken); return false; }
++    await renderVenuePicker(venueToken); return false;
++  }
+   return fail();
+ }
+ resultsToken = token;
+diff --git a/karting-v2/src/modules/stats.js b/karting-v2/src/modules/stats.js
+index 0587fc1..a5599a6 100644
+--- a/karting-v2/src/modules/stats.js
++++ b/karting-v2/src/modules/stats.js
+@@ -26,6 +26,12 @@ let chartInstance = null;
+ // le filtre en cours, sans requete DB supplementaire.
+ let lastKpis = { sessions: 0, pilotsUniques: 0, chronos: 0 };
+ let lastHofKarts = [];
++// 19/08 (K-16) : records actuels du circuit (piste/semaine/mois), memes
++// donnees que la page publique Hall of Fame (my_hall_of_fame(), migration-v28).
++// Le staff voit toujours les 3 a l'ecran ; `plan` sert uniquement a decider,
++// a l'export XLSX, si les colonnes semaine/mois sont incluses dans le fichier
++// (meme regle que ce que les pilotes voient publiquement).
++let lastHofCurrent = { plan: 'starter', piste: null, semaine: null, mois: null };
+ let lastExploitation = { avgFill: null, minFill: null, maxFill: null, utilizationRate: null, sessionsPerDay: null, sessionsPerWeek: null, days: 0 };
+ 
+ // --- Exploitation piste (Basique, MVP) --------------------------------------------------
+@@ -396,6 +402,31 @@ document.querySelectorAll('.info-ico.open').forEach((el) => el.classList.remove(
+ });
+ }
+ 
++// --- Records actuels (piste/semaine/mois) — K-16, 19/08 ----------------------------------
++function hofRecordRow(label, rec) {
++  if (!rec) return '<tr><td>' + label + '</td><td colspan="2" class="mut">--</td></tr>';
++  const when = rec.achieved_at ? formatDate(rec.achieved_at) : '--';
++  return '<tr><td>' + label + '</td><td>' + formatTime(rec.lap_time_s) + '</td><td>' + (rec.pilot || '--') + ' <span class="mut" style="font-size:11px">(' + when + ')</span></td></tr>';
++}
++
++async function loadHofCurrent() {
++  const el = document.getElementById('stats-hof-current');
++  if (!el) return;
++  const { data, error } = await db.rpc('my_hall_of_fame');
++  if (error || !data) {
++    lastHofCurrent = { plan: 'starter', piste: null, semaine: null, mois: null };
++    el.innerHTML = '<div class="empty">Aucun record enregistre pour l\'instant.</div>';
++    return;
++  }
++  lastHofCurrent = { plan: data.plan || 'starter', piste: data.piste || null, semaine: data.semaine || null, mois: data.mois || null };
++  el.innerHTML =
++    '<table class="rank-tbl"><thead><tr><th>Scope</th><th>Temps</th><th>Pilote</th></tr></thead><tbody>' +
++    hofRecordRow('All-time (piste)', lastHofCurrent.piste) +
++    hofRecordRow('Ce mois-ci', lastHofCurrent.mois) +
++    hofRecordRow('Cette semaine', lastHofCurrent.semaine) +
++    '</tbody></table>';
++}
++
+ export async function loadStatsTab(range) {
+   currentRange = range || currentRange || { key: 'all', from: null, to: null };
+   const kpiGrid = document.getElementById('stats-kpi-grid');
+@@ -540,6 +571,12 @@ export async function loadStatsTab(range) {
+       : '<div class="empty">Aucun tour enregistre.</div>';
+   }
+ 
++  // --- Records actuels (piste/semaine/mois) — memes donnees que la page --------------------
++  // publique Hall of Fame (K-16, 19/08). Independant du filtre de plage en haut de
++  // page : ce sont TOUJOURS les records "en cours", pas une reconstitution sur la
++  // periode selectionnee. Staff = toujours les 3, quel que soit le plan.
++  await loadHofCurrent();
++
+   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
+   // Fait partie du meme verrou 'session_occupancy' que l'exploitation piste ci-dessus.
+   if (occupancyAllowed) renderFrequencyChart(allSessions, currentRange);
+@@ -1179,6 +1216,32 @@ export function exportStatsXLSX() {
+   ]);
+   XLSX.utils.book_append_sheet(wb, hofKartsSheet, 'HOF karts');
+ 
++  // 19/08 (K-16) : feuille "Records circuit" — memes donnees que la page publique
++  // Hall of Fame. IMPORTANT, meme regle que l'affichage public : les colonnes
++  // semaine/mois ne sont incluses dans le fichier QUE si le plan resolu est
++  // pro/business, meme si le staff les voit deja a l'ecran (voir loadHofCurrent()).
++  // Ce n'est pas une nouvelle verification de securite (la donnee est deja
++  // legitimement arrivee jusqu'a l'admin authentifie via my_hall_of_fame()) : il
++  // s'agit seulement de ne pas mettre dans le fichier telechargeable plus que ce
++  // que le plan du circuit donne droit d'exploiter.
++  const hofPlan = lastHofCurrent.plan;
++  const hofPlanIsPro = hofPlan === 'pro' || hofPlan === 'business';
++  const recRow = (label, rec) => [label, rec ? formatTime(rec.lap_time_s) : '', rec ? (rec.pilot || '') : '', rec && rec.achieved_at ? fmtRangeDate(rec.achieved_at) : ''];
++  const recordsAOA = [
++    ['Records circuit (Hall of Fame public) — plan ' + hofPlan],
++    [],
++    ['Scope', 'Temps', 'Pilote', 'Date'],
++    recRow('All-time (piste)', lastHofCurrent.piste),
++  ];
++  if (hofPlanIsPro) {
++    recordsAOA.push(recRow('Ce mois-ci', lastHofCurrent.mois));
++    recordsAOA.push(recRow('Cette semaine', lastHofCurrent.semaine));
++  } else {
++    recordsAOA.push([], ['Records mois/semaine reserves aux plans Pro et Business.']);
++  }
++  const recordsSheet = XLSX.utils.aoa_to_sheet(recordsAOA);
++  XLSX.utils.book_append_sheet(wb, recordsSheet, 'Records circuit');
++
+   const e = lastExploitation;
+   const exploitationSheet = XLSX.utils.aoa_to_sheet([
+     ['Exploitation piste — ' + periodeTxt],
+diff --git a/karting-v2/supabase/migration-v28-hall-of-fame-public.sql b/karting-v2/supabase/migration-v28-hall-of-fame-public.sql
+new file mode 100644
+index 0000000..5fa3963
+--- /dev/null
++++ b/karting-v2/supabase/migration-v28-hall-of-fame-public.sql
+@@ -0,0 +1,227 @@
++-- =====================================================================
++-- Migration v28 — Hall of Fame public (page circuit), segmente par plan
++-- =====================================================================
++-- Objectif metier : les records du circuit existent deja depuis la v22
++-- (table track_records, scopes 'piste'/'semaine'/'mois'/'perso'), mais
++-- ne sont exploites que pour declencher les cartes/emails de record
++-- (card_deliveries). Ils ne sont visibles NULLE PART en dehors de ca :
++-- ni sur une page publique, ni cote admin. Cette migration les rend
++-- consultables :
++--   1) publiquement, depuis la page circuit (results.html?v=<venue_token>,
++--      routee par le QR permanent v23) via un nouvel onglet/bouton
++--      "Hall of Fame" ;
++--   2) cote staff (admin), sans restriction de plan, dans le sous-onglet
++--      Statistiques > Hall of Fame existant (stats.js).
++-- Voir claude/Backlog-idees.md > K-16 (decision du 19/08).
++--
++-- Segmentation commerciale tranchee avec le fondateur le 19/08 :
++--   - Starter (et Free)  : record 'piste' (all-time) uniquement, cote
++--                          public. C'est deja ce qui existait avant
++--                          cette migration (rien ne change pour eux
++--                          hormis la visibilite publique du record).
++--   - Pro / Business     : + record 'semaine' (semaine ISO en cours) et
++--                          'mois' (mois calendaire en cours), cote public.
++--   - Staff (admin connecte)  : voit TOUJOURS les 3 scopes, quel que
++--                          soit le plan du circuit — c'est un outil de
++--                          pilotage interne, pas une fonctionnalite
++--                          facturee (cf. my_hall_of_fame() ci-dessous).
++--   - Export (XLSX)      : cote client (stats.js > exportStatsXLSX()),
++--                          les colonnes semaine/mois de la feuille
++--                          "Hall of Fame" ne sont incluses QUE si le
++--                          plan resolu est pro/business — meme regle
++--                          que l'affichage public. Comme l'admin a deja
++--                          recu la donnee complete via my_hall_of_fame()
++--                          (point precedent), il ne s'agit ici que d'un
++--                          filtre sur le contenu du fichier genere, pas
++--                          d'une nouvelle fuite de donnees.
++--
++-- Principe de securite (repris de plan.js) : le filtrage Starter/Pro de
++-- la RPC PUBLIQUE se fait ICI, cote serveur, jamais cote client — un
++-- circuit Starter ne doit jamais recevoir les champs semaine/mois dans
++-- la reponse HTTP, meme masques en CSS.
++--
++-- 100% ADDITIF : aucune table, colonne ou policy existante n'est
++-- modifiee ni supprimee. Rejouable sans perte de donnee (create or
++-- replace / grant, aucun drop).
++-- =====================================================================
++
++
++-- ---------------------------------------------------------------------
++-- 1. RPC publique — page circuit (visiteur anonyme, via ?v=<venue_token>)
++-- ---------------------------------------------------------------------
++-- Meme pattern que public_venue_sessions (v23) : token permanent du
++-- circuit, SECURITY DEFINER, search_path fige, zero donnee nominative
++-- au-dela du pseudo (display_name) deja public sur la page resultats.
++
++create or replace function public.public_venue_hall_of_fame(_venue_token text)
++returns jsonb
++language plpgsql
++stable
++security definer
++set search_path = public, pg_temp
++as $$
++declare
++  v_tenant   uuid;
++  v_name     text;
++  v_cfg      jsonb;
++  v_logo     text;
++  v_theme    text;
++  v_display  text;
++  v_plan     text;
++  v_key_sem  text;
++  v_key_mois text;
++begin
++  if _venue_token is null or length(trim(_venue_token)) < 16 then
++    return null;
++  end if;
++
++  select t.id, t.name into v_tenant, v_name
++    from public.tenants t
++   where t.public_venue_token = trim(_venue_token)
++   limit 1;
++
++  if v_tenant is null then
++    return null;
++  end if;
++
++  -- Meme lecture de app_settings.global que public_venue_sessions (v23),
++  -- pour que l'entete (logo, theme, nom affiche) soit identique entre les
++  -- deux ecrans de la page circuit.
++  select a.value into v_cfg
++    from public.app_settings a
++   where a.tenant_id = v_tenant and a.key = 'global'
++   limit 1;
++
++  v_logo    := nullif(trim(coalesce(v_cfg->>'logo_url', '')), '');
++  v_theme   := nullif(trim(coalesce(v_cfg->>'results_theme', '')), '');
++  v_display := coalesce(nullif(trim(coalesce(v_cfg->>'circuit_name', '')), ''), v_name);
++
++  -- Meme source de verite que partout ailleurs dans le projet pour
++  -- resoudre le plan effectif d'un tenant (voir plan.js, my_theme_entitlement()).
++  v_plan     := private.tenant_plan_code(v_tenant);
++  v_key_sem  := to_char(current_date, 'IYYY"-W"IW');
++  v_key_mois := to_char(current_date, 'YYYY-MM');
++
++  return jsonb_build_object(
++    'venue_name',    v_display,
++    'logo_url',      v_logo,
++    'results_theme', coalesce(v_theme, 'classic'),
++    'plan', v_plan,
++
++    -- Record piste (all-time) : toujours renvoye, quel que soit le plan.
++    'piste', (
++      select jsonb_build_object(
++               'pilot',       r.display_name,
++               'lap_time_s',  tr.lap_time_seconds,
++               'achieved_at', tr.achieved_at
++             )
++        from public.track_records tr
++        join public.session_registrations r on r.id = tr.registration_id
++       where tr.tenant_id = v_tenant and tr.scope = 'piste' and tr.period_key = 'all'
++       limit 1
++    ),
++
++    -- Semaine / mois : null pour Starter. Le filtrage est fait dans la
++    -- requete elle-meme (case when), donc la donnee ne quitte jamais le
++    -- serveur pour un tenant qui n'y a pas droit.
++    'semaine', case when v_plan in ('pro', 'business') then (
++      select jsonb_build_object(
++               'pilot',       r.display_name,
++               'lap_time_s',  tr.lap_time_seconds,
++               'achieved_at', tr.achieved_at
++             )
++        from public.track_records tr
++        join public.session_registrations r on r.id = tr.registration_id
++       where tr.tenant_id = v_tenant and tr.scope = 'semaine' and tr.period_key = v_key_sem
++       limit 1
++    ) else null end,
++
++    'mois', case when v_plan in ('pro', 'business') then (
++      select jsonb_build_object(
++               'pilot',       r.display_name,
++               'lap_time_s',  tr.lap_time_seconds,
++               'achieved_at', tr.achieved_at
++             )
++        from public.track_records tr
++        join public.session_registrations r on r.id = tr.registration_id
++       where tr.tenant_id = v_tenant and tr.scope = 'mois' and tr.period_key = v_key_mois
++       limit 1
++    ) else null end
++  );
++end;
++$$;
++
++grant execute on function public.public_venue_hall_of_fame(text) to anon, authenticated;
++
++
++-- ---------------------------------------------------------------------
++-- 2. RPC authentifiee — panneau admin (staff), TOUJOURS sans restriction
++-- ---------------------------------------------------------------------
++-- A l'inverse de la RPC publique ci-dessus, celle-ci ne filtre jamais par
++-- plan : le staff du circuit doit voir piste/semaine/mois quel que soit
++-- son abonnement (decision produit du 19/08 — c'est un outil de pilotage
++-- interne, pas une fonctionnalite vendue). Le filtrage par plan n'existe
++-- QUE pour l'export XLSX genere a partir de cette meme donnee, cote
++-- front (voir stats.js > exportStatsXLSX()).
++
++create or replace function public.my_hall_of_fame()
++returns jsonb
++language plpgsql
++stable
++security definer
++set search_path = public, pg_temp
++as $$
++declare
++  v_tenant   uuid;
++  v_key_sem  text;
++  v_key_mois text;
++begin
++  v_tenant := private.current_tenant_id();
++  if v_tenant is null then
++    return null;
++  end if;
++
++  v_key_sem  := to_char(current_date, 'IYYY"-W"IW');
++  v_key_mois := to_char(current_date, 'YYYY-MM');
++
++  return jsonb_build_object(
++    'plan', private.tenant_plan_code(v_tenant),
++    'piste', (
++      select jsonb_build_object('pilot', r.display_name, 'lap_time_s', tr.lap_time_seconds, 'achieved_at', tr.achieved_at)
++        from public.track_records tr
++        join public.session_registrations r on r.id = tr.registration_id
++       where tr.tenant_id = v_tenant and tr.scope = 'piste' and tr.period_key = 'all'
++       limit 1
++    ),
++    'semaine', (
++      select jsonb_build_object('pilot', r.display_name, 'lap_time_s', tr.lap_time_seconds, 'achieved_at', tr.achieved_at)
++        from public.track_records tr
++        join public.session_registrations r on r.id = tr.registration_id
++       where tr.tenant_id = v_tenant and tr.scope = 'semaine' and tr.period_key = v_key_sem
++       limit 1
++    ),
++    'mois', (
++      select jsonb_build_object('pilot', r.display_name, 'lap_time_s', tr.lap_time_seconds, 'achieved_at', tr.achieved_at)
++        from public.track_records tr
++        join public.session_registrations r on r.id = tr.registration_id
++       where tr.tenant_id = v_tenant and tr.scope = 'mois' and tr.period_key = v_key_mois
++       limit 1
++    )
++  );
++end;
++$$;
++
++revoke execute on function public.my_hall_of_fame() from public, anon;
++grant  execute on function public.my_hall_of_fame() to authenticated;
++
++
++-- ---------------------------------------------------------------------
++-- Reste a faire (hors SQL, voir la PR associee)
++-- ---------------------------------------------------------------------
++-- - public-results.js : onglet/bouton "Hall of Fame" sur la page circuit,
++--   consomme public_venue_hall_of_fame(), affiche 'semaine'/'mois' si
++--   presents dans la reponse (donc jamais pour un tenant Starter).
++-- - admin.html / stats.js : bloc "Records actuels (piste/semaine/mois)"
++--   dans le sous-onglet Statistiques > Hall of Fame existant, consomme
++--   my_hall_of_fame() (staff = toujours tout). Colonnes semaine/mois de
++--   la feuille XLSX "Hall of Fame" filtrees par plan a l'export.
+-- 
+2.43.0
+
