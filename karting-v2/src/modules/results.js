@@ -312,7 +312,9 @@ function identityChronoFormat() {
     customized: false,
     delimiter: ';',
     has_header: false,
-    col_name: 1,
+    // col_name : conserve pour compatibilite avec les formats deja enregistres, mais plus
+    // jamais utilise — c'est le n° de kart qui fait le rapprochement avec les inscriptions.
+    col_name: 0,
     col_kart: 2,
     col_lap: 3,
     col_sectors: Array.from({ length: n }, (_, i) => 4 + i),
@@ -377,7 +379,7 @@ export function normalizeChronoText(rawText, explicitFmt) {
       const kart = parts[1] || '';
       const lap = isMultiLap ? parts[2] : '1';
       const time = isMultiLap ? parts[3] : parts[2];
-      const valid = parts.length >= 3 && !!name && Number.isFinite(Number(kart)) && Number.isFinite(Number(lap)) && Number.isFinite(parseTime(time));
+      const valid = parts.length >= 3 && kart !== '' && Number.isFinite(Number(kart)) && Number.isFinite(Number(lap)) && Number.isFinite(parseTime(time));
       return { raw: line, canonical: line, name, kart, lap, sectorVals: [], time: time || '', valid };
     });
     return { text: rows.map((r) => r.canonical).join('\n'), rows };
@@ -387,17 +389,28 @@ export function normalizeChronoText(rawText, explicitFmt) {
   // Parametres > Secteurs et format d'import des chronos).
   const delim = resolvedDelimiter(fmt, lines[0]);
   const dataLines = fmt.has_header ? lines.slice(1) : lines;
-  const get = (parts, colNum) => (parts[colNum - 1] != null ? String(parts[colNum - 1]).trim() : '');
+  const get = (parts, colNum) => (colNum && parts[colNum - 1] != null ? String(parts[colNum - 1]).trim() : '');
+  // col_lap absent (0) : le fichier ne porte pas de numero de tour. On numerote alors les
+  // tours sequentiellement PAR KART, dans l'ordre d'apparition des lignes — sans quoi tous
+  // les tours porteraient l'index 1 et s'ecraseraient les uns les autres a l'import.
+  const lapCounters = {};
   const rows = dataLines.map((line) => {
     const parts = line.split(delim);
-    const name = get(parts, fmt.col_name);
     const kart = get(parts, fmt.col_kart);
-    const lap = get(parts, fmt.col_lap) || '1';
+    let lap = get(parts, fmt.col_lap);
+    if (!lap) {
+      lapCounters[kart] = (lapCounters[kart] || 0) + 1;
+      lap = String(lapCounters[kart]);
+    }
     const sectorVals = sectorsOn ? (fmt.col_sectors || []).slice(0, n).map((c) => get(parts, c)) : [];
     const time = get(parts, fmt.col_time);
-    const canonicalParts = sectorsOn ? [name, kart, lap, ...sectorVals, time] : [name, kart, lap, time];
-    const valid = !!name && Number.isFinite(Number(kart)) && Number.isFinite(parseTime(time)) && (!sectorsOn || sectorVals.every((v) => Number.isFinite(parseTime(v))));
-    return { raw: line, canonical: canonicalParts.join(';'), name, kart, lap, sectorVals, time, valid };
+    // Le nom du pilote n'est jamais repris du fichier : le rapprochement se fait sur le n°
+    // de kart, et le nom affiche est celui de l'inscription. La colonne nom du fichier, si
+    // elle existe, est simplement ignoree — d'ou le champ vide en tete du format canonique.
+    const canonicalParts = sectorsOn ? ['', kart, lap, ...sectorVals, time] : ['', kart, lap, time];
+    const valid = kart !== '' && Number.isFinite(Number(kart)) && Number.isFinite(Number(lap)) &&
+      Number.isFinite(parseTime(time)) && (!sectorsOn || sectorVals.every((v) => Number.isFinite(parseTime(v))));
+    return { raw: line, canonical: canonicalParts.join(';'), name: '', kart, lap, sectorVals, time, valid };
   });
   return { text: rows.map((r) => r.canonical).join('\n'), rows };
 }
@@ -432,13 +445,13 @@ export function renderChronoPreview(sourceId, targetId) {
   const sample = rows.slice(0, 5);
   const sectorsOn = !!state.prefs.sectors_enabled;
   const head = sectorsOn
-    ? '<tr><th>Nom</th><th>Kart</th><th>Tour</th><th>Secteurs</th><th>Temps</th><th></th></tr>'
-    : '<tr><th>Nom</th><th>Kart</th><th>Tour</th><th>Temps</th><th></th></tr>';
+    ? '<tr><th>Kart</th><th>Tour</th><th>Secteurs</th><th>Temps</th><th></th></tr>'
+    : '<tr><th>Kart</th><th>Tour</th><th>Temps</th><th></th></tr>';
   const body = sample.map((r) => {
     const badge = r.valid ? '<span style="color:#3ddc97;font-weight:700">OK</span>' : '<span style="color:#ff6767;font-weight:700">Ignoree</span>';
     return sectorsOn
-      ? '<tr><td>' + escapeHTML(r.name) + '</td><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + r.sectorVals.map(escapeHTML).join(' / ') + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>'
-      : '<tr><td>' + escapeHTML(r.name) + '</td><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>';
+      ? '<tr><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + r.sectorVals.map(escapeHTML).join(' / ') + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>'
+      : '<tr><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>';
   }).join('');
   el.innerHTML =
     '<div style="font-size:11px;color:var(--mut);margin-bottom:6px">Aperçu (' + sample.length + ' sur ' + rows.length + ' lignes) — ' +
@@ -469,22 +482,23 @@ function inferColumnRoles(dataRows) {
   const looksSmallInt = (s) => /^\d{1,3}$/.test(String(s).trim());
   const timeScores = [];
   const intCols = [];
-  let colName = null;
   for (let c = 0; c < colCount; c++) {
     const vals = dataRows.map((p) => (p[c] != null ? String(p[c]).trim() : '')).filter(Boolean);
     if (!vals.length) continue;
     const timeRatio = vals.filter(looksTime).length / vals.length;
     const intRatio = vals.filter(looksSmallInt).length / vals.length;
-    const textRatio = vals.filter((v) => isNaN(Number(String(v).replace(',', '.'))) && !looksTime(v)).length / vals.length;
     timeScores.push({ c, timeRatio });
     if (intRatio > 0.7) intCols.push(c);
-    if (textRatio > 0.7 && colName == null) colName = c + 1;
   }
   timeScores.sort((a, b) => b.timeRatio - a.timeRatio);
   const colTime = timeScores.length && timeScores[0].timeRatio > 0.5 ? timeScores[0].c + 1 : colCount;
   const colKart = intCols.length ? intCols[0] + 1 : Math.min(2, colCount);
-  const colLap = intCols.length > 1 ? intCols[1] + 1 : colKart;
-  return { col_name: colName == null ? 1 : colName, col_kart: colKart, col_lap: colLap, col_time: colTime };
+  // Pas de 2e colonne d'entiers : le fichier ne porte pas de numero de tour. On renvoie 0
+  // (= numeroter automatiquement par kart) plutot que de retomber sur la colonne kart, ce qui
+  // donnait auparavant des numeros de tour egaux au n° de kart.
+  const colLap = intCols.length > 1 ? intCols[1] + 1 : 0;
+  // col_name : jamais devine, le nom n'intervient pas dans le rapprochement.
+  return { col_name: 0, col_kart: colKart, col_lap: colLap, col_time: colTime };
 }
 
 // Devine separateur + en-tete + mapping de colonnes a partir de LIGNES DE TEXTE brutes
@@ -551,7 +565,6 @@ function reflectChronoFormatInSettingsForm(fmt) {
   setC('pref-chrono-custom', true);
   setV('pref-chrono-delim', fmt.delimiter);
   setC('pref-chrono-header', fmt.has_header);
-  setV('pref-chrono-col-name', fmt.col_name);
   setV('pref-chrono-col-kart', fmt.col_kart);
   setV('pref-chrono-col-lap', fmt.col_lap);
   setV('pref-chrono-col-time', fmt.col_time);
@@ -577,9 +590,8 @@ function openChronoMappingModal(opts) {
 
   let delim = suggested && suggested.delimiter ? suggested.delimiter : (isText ? (detectDelimiter(lines[0]) === '\t' ? 'tab' : detectDelimiter(lines[0])) : ';');
   let hasHeader = suggested ? !!suggested.has_header : false;
-  let colName = (suggested && suggested.col_name) || 1;
   let colKart = (suggested && suggested.col_kart) || 2;
-  let colLap = (suggested && suggested.col_lap) || 3;
+  let colLap = suggested && suggested.col_lap != null ? suggested.col_lap : 3;
   let colTime = (suggested && suggested.col_time) || 4;
   let colSectors = ((suggested && suggested.col_sectors) || identityChronoFormat().col_sectors).slice(0, nSectors);
 
@@ -592,7 +604,7 @@ function openChronoMappingModal(opts) {
     customized: true,
     delimiter: isText ? delim : ';',
     has_header: hasHeader,
-    col_name: colName,
+    col_name: 0,
     col_kart: colKart,
     col_lap: colLap,
     col_time: colTime,
@@ -615,16 +627,20 @@ function openChronoMappingModal(opts) {
     const rows = splitRows();
     const data = hasHeader ? rows.slice(1) : rows;
     const f = currentFmt();
-    const get = (parts, c) => (parts[c - 1] != null ? String(parts[c - 1]).trim() : '');
+    const get = (parts, c) => (c && parts[c - 1] != null ? String(parts[c - 1]).trim() : '');
+    const lapCounters = {};
     return data.map((parts) => {
-      const name = get(parts, f.col_name);
       const kart = get(parts, f.col_kart);
-      const lap = get(parts, f.col_lap) || '1';
+      let lap = get(parts, f.col_lap);
+      if (!lap) {
+        lapCounters[kart] = (lapCounters[kart] || 0) + 1;
+        lap = String(lapCounters[kart]);
+      }
       const sv = sectorsOn ? f.col_sectors.map((c) => get(parts, c)) : [];
       const time = get(parts, f.col_time);
-      const valid = !!name && Number.isFinite(Number(kart)) && Number.isFinite(parseTime(time)) &&
-        (!sectorsOn || sv.every((v) => Number.isFinite(parseTime(v))));
-      return { name, kart, lap, sectorVals: sv, time, valid };
+      const valid = kart !== '' && Number.isFinite(Number(kart)) && Number.isFinite(Number(lap)) &&
+        Number.isFinite(parseTime(time)) && (!sectorsOn || sv.every((v) => Number.isFinite(parseTime(v))));
+      return { kart, lap, sectorVals: sv, time, valid };
     });
   };
 
@@ -651,8 +667,11 @@ function openChronoMappingModal(opts) {
       const sample = rowsEval.slice(0, 5);
       const dataRows = (hasHeader ? splitRows().slice(1) : splitRows()).slice(0, 3);
 
-      const colSelect = (id, current) =>
+      // noneLabel : quand il est fourni, une option "0" est ajoutee en tete (colonne absente
+      // du fichier). Utilise pour le n° de tour, que beaucoup d'exports ne fournissent pas.
+      const colSelect = (id, current, noneLabel) =>
         '<select data-col="' + id + '" style="width:100%;padding:7px 8px;border-radius:8px;border:1px solid var(--bord,#444);background:var(--surf2,#111);color:var(--txt,#eee);font-size:12px">' +
+        (noneLabel ? '<option value="0"' + (Number(current) === 0 ? ' selected' : '') + '>' + escapeHTML(noneLabel) + '</option>' : '') +
         cols.map((c) => '<option value="' + c.c + '"' + (Number(current) === c.c ? ' selected' : '') + '>' + escapeHTML(c.label) + '</option>').join('') +
         '</select>';
 
@@ -665,21 +684,20 @@ function openChronoMappingModal(opts) {
         '</tbody></table>';
 
       const attribution =
-        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Nom du pilote</label>' + colSelect('name', colName) + '</div>' +
-        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">N° de kart</label>' + colSelect('kart', colKart) + '</div>' +
-        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">N° de tour</label>' + colSelect('lap', colLap) + '</div>' +
+        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">N° de kart <span style="color:var(--mut,#888);text-transform:none;font-weight:400">— fait le rapprochement</span></label>' + colSelect('kart', colKart) + '</div>' +
+        '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">N° de tour</label>' + colSelect('lap', colLap, 'Aucune — numéroter automatiquement') + '</div>' +
         '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Temps au tour</label>' + colSelect('time', colTime) + '</div>' +
         (sectorsOn ? colSectors.map((sc, i) =>
           '<div class="field" style="margin-bottom:8px"><label style="font-size:11px">Secteur ' + (i + 1) + '</label>' + colSelect('sector' + i, sc) + '</div>').join('') : '');
 
       const head = sectorsOn
-        ? '<tr><th>Nom</th><th>Kart</th><th>Tour</th><th>Secteurs</th><th>Temps</th><th></th></tr>'
-        : '<tr><th>Nom</th><th>Kart</th><th>Tour</th><th>Temps</th><th></th></tr>';
+        ? '<tr><th>Kart</th><th>Tour</th><th>Secteurs</th><th>Temps</th><th></th></tr>'
+        : '<tr><th>Kart</th><th>Tour</th><th>Temps</th><th></th></tr>';
       const previewBody = sample.map((r) => {
         const badge = r.valid ? '<span style="color:#3ddc97;font-weight:700">OK</span>' : '<span style="color:#ff6767;font-weight:700">Ignorée</span>';
         return sectorsOn
-          ? '<tr><td>' + escapeHTML(r.name) + '</td><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + r.sectorVals.map(escapeHTML).join(' / ') + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>'
-          : '<tr><td>' + escapeHTML(r.name) + '</td><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>';
+          ? '<tr><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + r.sectorVals.map(escapeHTML).join(' / ') + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>'
+          : '<tr><td>' + escapeHTML(r.kart) + '</td><td>' + escapeHTML(r.lap) + '</td><td>' + escapeHTML(r.time) + '</td><td>' + badge + '</td></tr>';
       }).join('');
 
       box.innerHTML =
@@ -702,7 +720,7 @@ function openChronoMappingModal(opts) {
         '</div>' +
         '<div style="flex:1 1 260px;min-width:230px">' +
         '<div style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Attribution</div>' +
-        '<div style="font-size:11px;color:var(--mut,#aaa);margin-bottom:10px">Ce dont l’application a besoin pour calculer le classement.</div>' +
+        '<div style="font-size:11px;color:var(--mut,#aaa);margin-bottom:10px">Ce dont l’application a besoin pour calculer le classement. Le nom du pilote n’est pas demandé : il vient de l’inscription, retrouvée par le n° de kart. Si ton fichier contient une colonne nom, elle est simplement ignorée.</div>' +
         attribution +
         '</div>' +
         '</div>' +
@@ -724,8 +742,7 @@ function openChronoMappingModal(opts) {
         sel.addEventListener('change', () => {
           const v = parseInt(sel.value, 10);
           const which = sel.getAttribute('data-col');
-          if (which === 'name') colName = v;
-          else if (which === 'kart') colKart = v;
+          if (which === 'kart') colKart = v;
           else if (which === 'lap') colLap = v;
           else if (which === 'time') colTime = v;
           else if (which.startsWith('sector')) colSectors[parseInt(which.slice(6), 10)] = v;
@@ -779,6 +796,48 @@ export async function detectAndSaveChronoFormat(sourceId) {
   showMsg(msgId, 'Format détecté et enregistré — vérifie le mapping et l’aperçu ci-dessus avant de sauvegarder.', 'ok');
 }
 
+// Detection depuis un FICHIER dans Parametres (pendant du collage de texte juste au-dessus).
+// Le fichier n'est pas importe : on le lit uniquement pour en deduire le format. Ses lignes
+// sont recopiees dans la zone d'echantillon — assemblees avec un separateur qui n'apparait
+// dans AUCUNE cellule, pour ne pas scinder une valeur par accident — puis la detection
+// habituelle s'applique, ce qui garde un seul chemin de code et un apercu identique.
+export function detectChronoFormatFromFile(inputEl) {
+  const file = inputEl && inputEl.files && inputEl.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async function (e) {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const rawRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true })
+        .filter((r) => r && r.length && r.some((v) => String(v == null ? '' : v).trim() !== ''));
+      if (!rawRows.length) {
+        showMsg('msg-prefs', 'Ce fichier ne contient aucune ligne exploitable.', 'err');
+        return;
+      }
+      const cells = rawRows.flat().map((v) => String(v == null ? '' : v));
+      const joiner = [';', '\t', '|', ','].find((c) => !cells.some((v) => v.includes(c)));
+      if (!joiner) {
+        showMsg('msg-prefs', 'Fichier illisible pour la détection (ses valeurs contiennent tous les séparateurs testés). Corrige le mapping à la main ci-dessous.', 'err');
+        return;
+      }
+      const area = document.getElementById('pref-chrono-detect-sample');
+      if (area) {
+        area.value = rawRows.slice(0, 15)
+          .map((r) => r.map((v) => String(v == null ? '' : v).trim()).join(joiner))
+          .join('\n');
+      }
+      const delimSel = document.getElementById('pref-chrono-delim');
+      if (delimSel) delimSel.value = joiner === '\t' ? 'tab' : joiner;
+      await detectAndSaveChronoFormat('pref-chrono-detect-sample');
+    } catch (err) {
+      showMsg('msg-prefs', 'Erreur lecture fichier : ' + err.message, 'err');
+    } finally {
+      if (inputEl) inputEl.value = '';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 // Detection automatique SILENCIEUSE au moment d'un import de texte reel (voir
 // importChrono() plus bas) : si le format actuellement enregistre ne reconnait AUCUNE
 // ligne valide sur ce contenu (signal fort d'un format etranger au format habituel), on
@@ -824,6 +883,7 @@ export function handleChronoFile(inputEl) {
         const n = Number(state.prefs.sector_count || 3);
         const rows = f.customized && f.has_header ? rawRows.slice(1) : rawRows;
         const out = [];
+        const lapCounters = {};
         rows.forEach((row) => {
           if (!row || !row.length) return;
           if (!f.customized) {
@@ -838,21 +898,26 @@ export function handleChronoFile(inputEl) {
             } else {
               time = String(row[2]).trim();
             }
-            if (!name || !kart || !time) return;
+            if (!kart || !time) return;
             if (isNaN(parseInt(kart)) || isNaN(parseTime(time))) return;
             out.push(name + ';' + kart + ';' + lapIdx + ';' + time);
             return;
           }
-          // Format personnalisé : mapping de colonnes explicite (Paramètres).
-          const get = (colNum) => (row[colNum - 1] != null ? String(row[colNum - 1]).trim() : '');
-          const name = get(f.col_name);
+          // Format personnalisé : mapping de colonnes explicite (Paramètres). Le nom du
+          // fichier est ignore (rapprochement par n° de kart) et les tours sont numerotes
+          // automatiquement par kart quand le fichier ne porte pas de colonne de tour.
+          const get = (colNum) => (colNum && row[colNum - 1] != null ? String(row[colNum - 1]).trim() : '');
           const kart = get(f.col_kart);
-          const lap = get(f.col_lap) || '1';
           const time = get(f.col_time);
-          const sectorVals = sectorsOn ? (f.col_sectors || []).slice(0, n).map(get) : [];
-          if (!name || !kart || !time) return;
+          if (!kart || !time) return;
           if (isNaN(parseInt(kart)) || isNaN(parseTime(time))) return;
-          const parts = sectorsOn ? [name, kart, lap, ...sectorVals, time] : [name, kart, lap, time];
+          let lap = get(f.col_lap);
+          if (!lap) {
+            lapCounters[kart] = (lapCounters[kart] || 0) + 1;
+            lap = String(lapCounters[kart]);
+          }
+          const sectorVals = sectorsOn ? (f.col_sectors || []).slice(0, n).map(get) : [];
+          const parts = sectorsOn ? ['', kart, lap, ...sectorVals, time] : ['', kart, lap, time];
           out.push(parts.join(';'));
         });
         return out;
@@ -898,7 +963,13 @@ export function handleChronoFile(inputEl) {
           : ' — mapping corrigé pour cet import';
       }
 
-      document.getElementById('chrono-raw').value = lines.join('\n');
+      const rawArea = document.getElementById('chrono-raw');
+      rawArea.value = lines.join('\n');
+      // Marque le contenu comme DEJA converti au format canonique : sans ce drapeau,
+      // importChrono() reappliquerait le mapping du fichier source a ce texte-la et lirait
+      // les mauvaises colonnes (bug du 24/08 : les temps devenaient les n° de tour).
+      // Le drapeau est efface des que l'organisateur retouche la zone (oninput dans admin.html).
+      rawArea.dataset.canonical = '1';
       renderChronoPreview();
       if (lines.length) {
         showMsg('msg-chrono', 'Fichier chargé' + autoNote + '. Vérifie l’aperçu ci-dessous puis clique Importer.', 'ok');
@@ -923,6 +994,12 @@ export async function importChrono() {
     showMsg('msg-chrono', 'Colle les temps.', 'err');
     return;
   }
+  // Texte deja converti (chargement de fichier ou correction via la fenetre de mapping) :
+  // il est au format canonique, toute nouvelle normalisation le corromprait.
+  if (area && area.dataset.canonical === '1') {
+    if (state.prefs.sectors_enabled) return importChronoWithSectors(false);
+    return importChronoSimple(false);
+  }
   const autoDetected = await autoDetectChronoTextIfNeeded(raw);
 
   // Toujours aucune ligne exploitable apres la detection auto : on ne lance pas un import
@@ -942,7 +1019,10 @@ export async function importChrono() {
     // Conversion au format canonique avec le mapping choisi : le texte devient lisible par
     // l'import standard, que le mapping ait ete enregistre durablement ou non.
     const { text } = normalizeChronoText(raw, res.fmt);
-    if (area && text) area.value = text;
+    if (area && text) {
+      area.value = text;
+      area.dataset.canonical = '1';
+    }
     showMsg('msg-chrono', 'Mapping appliqué' + (res.persist ? ' et enregistré dans les Paramètres' : ' pour cet import') + ' — clique « Importer le texte » pour lancer l’import.', 'ok');
     return;
   }
@@ -950,6 +1030,34 @@ export async function importChrono() {
   normalizeChronoRawTextarea();
   if (state.prefs.sectors_enabled) return importChronoWithSectors(autoDetected);
   return importChronoSimple(autoDetected);
+}
+
+// Bouton "Corriger le format" — toujours visible sur l'ecran d'import, meme quand le
+// format actuel produit deja des lignes "valides". Utile quand la detection s'est trompee
+// de colonne sans que ca saute aux yeux (ex: Position confondue avec Kart) : les lignes
+// passent les controles de validite (kart numerique + temps analysable) mais le
+// rapprochement est faux. Ouvre la fenetre de mapping sur le texte actuellement dans la
+// zone, quel que soit son etat de validite.
+export async function correctChronoFormat() {
+  const area = document.getElementById('chrono-raw');
+  const raw = area?.value || '';
+  if (!raw.trim()) {
+    showMsg('msg-chrono', 'Colle ou importe des temps d’abord.', 'err');
+    return;
+  }
+  const lines = raw.split('\n').map((l) => l.replace(/\r$/, '')).filter((l) => l.trim() !== '');
+  const res = await openChronoMappingModal({ lines, suggested: computeDetectedFormat(lines) });
+  if (!res) return;
+  if (res.persist) {
+    await saveChronoImportFormat(res.fmt);
+    reflectChronoFormatInSettingsForm(res.fmt);
+  }
+  const { text } = normalizeChronoText(raw, res.fmt);
+  if (area && text) {
+    area.value = text;
+    area.dataset.canonical = '1';
+  }
+  showMsg('msg-chrono', 'Mapping appliqué' + (res.persist ? ' et enregistré dans les Paramètres' : ' pour cet import') + ' — clique « Importer le texte » pour lancer l’import.', 'ok');
 }
 
 // 🆕 v19 : le texte brut de CHAQUE import (celui réellement traité, donc déjà
@@ -1022,9 +1130,11 @@ export async function importChronoSimple(autoDetected) {
     const cacheKey = name.toLowerCase().trim() + '|' + kart;
     let reg = regCache[cacheKey];
     if (!reg) {
+      // Rapprochement par n° de kart — c'est la cle. Le nom n'est utilise qu'en repli, et
+      // seulement s'il est renseigne (les formats importes ne fournissent plus de nom).
       reg =
         (regs || []).find((r) => Number(r.kart_number) === kart) ||
-        (regs || []).find((r) => r.display_name.toLowerCase().trim() === name.toLowerCase().trim());
+        (name ? (regs || []).find((r) => r.display_name.toLowerCase().trim() === name.toLowerCase().trim()) : null);
       if (!reg) {
         const uname = 'Unknown #' + randomCode4();
         const { data: nr } = await db
@@ -1100,16 +1210,19 @@ async function importChronoWithSectors(autoDetected) {
       const sectors = tail.map(parseTime);
       const kart = Number(kartRaw);
       const lap = Number(lapRaw);
-      if (!name || !Number.isFinite(kart) || !Number.isFinite(lap) || !Number.isFinite(time) || sectors.some((x) => !Number.isFinite(x))) {
+      if (!Number.isFinite(kart) || !Number.isFinite(lap) || !Number.isFinite(time) || sectors.some((x) => !Number.isFinite(x))) {
         errors.push(lines[i]);
         continue;
       }
       const key = name.toLowerCase() + '|' + kart;
-      let reg = cache[key] || regs.find((x) => x.display_name === name && Number(x.kart_number) === kart);
+      // Avant le 24/08 ce find exigeait AUSSI que display_name corresponde : sans nom dans le
+      // fichier, aucune inscription n'etait jamais retrouvee et un pilote "Unknown" etait cree
+      // a chaque tour. Le rapprochement se fait desormais sur le seul n° de kart.
+      let reg = cache[key] || regs.find((x) => Number(x.kart_number) === kart);
       if (!reg) {
         const made = await db
           .from('session_registrations')
-          .insert({ session_id: sid, display_name: name, kart_number: kart, is_unknown: true, nationality: 'FR' })
+          .insert({ session_id: sid, display_name: name || ('Unknown #' + randomCode4()), kart_number: kart, is_unknown: true, nationality: 'FR' })
           .select('id,display_name,kart_number')
           .single();
         if (made.error) throw made.error;
@@ -1136,7 +1249,8 @@ async function importChronoWithSectors(autoDetected) {
     await db.from('sessions').update({ status: 'chrono_imported' }).eq('id', sid);
     await saveChronoImportHistory(sid, raw, lines.length, rows.length);
     showMsg('msg-chrono', rows.length + ' tours importés' + (errors.length ? ' — ' + errors.length + ' lignes ignorées' : '') + (autoDetected ? ' — format d’import détecté et enregistré automatiquement (vérifie/corrige dans Paramètres si besoin)' : ''), 'ok');
-    document.getElementById('chrono-raw').value = '';
+    const clearArea = document.getElementById('chrono-raw');
+    if (clearArea) { clearArea.value = ''; delete clearArea.dataset.canonical; }
     await loadDetailSession(sid);
   } catch (e) {
     showMsg('msg-chrono', e.message || 'Erreur import', 'err');
@@ -1871,9 +1985,13 @@ export function updateChronoFormat() {
   const help = document.getElementById('chrono-format-help');
   const area = document.getElementById('chrono-raw');
   if (label) label.textContent = 'Temps (format : ' + fmt.join(';') + ' — une ligne par tour)';
-  if (help) help.textContent = on ? 'Secteurs activés : ' + fmt.join(';') : 'Sans secteurs : Nom;Kart;NumTour;Temps';
+  // Le nom reste present dans le gabarit historique (il occupe la 1re position, sans quoi les
+  // colonnes suivantes seraient decalees), mais sa valeur n'est plus lue : le rapprochement se
+  // fait sur le n° de kart. Le texte le dit explicitement pour eviter la question.
+  if (help) help.textContent = (on ? 'Secteurs activés : ' + fmt.join(';') : 'Sans secteurs : Nom;Kart;NumTour;Temps') +
+    ' — la colonne Nom est ignorée (le pilote est retrouvé par son n° de kart), tu peux la laisser vide.';
   if (area && !area.value.trim())
     area.placeholder = on
       ? 'Pilote1;1;1;15.120;14.960;14.900;44.980\nPilote2;2;1;16.100;15.550;15.732;47.382'
-      : 'Pilote1;1;1;45.210\nPilote1;1;2;44.980\nPilote2;2;1;47.382';
+      : ';1;1;45.210\n;1;2;44.980\n;2;1;47.382';
 }

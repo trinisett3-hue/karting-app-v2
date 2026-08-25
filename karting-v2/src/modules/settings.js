@@ -216,9 +216,8 @@ setC('pref-chrono-custom', customized);
 if (customized) {
 setV('pref-chrono-delim', ci.delimiter || 'auto');
 setC('pref-chrono-header', !!ci.has_header);
-setV('pref-chrono-col-name', ci.col_name || 1);
 setV('pref-chrono-col-kart', ci.col_kart || 2);
-setV('pref-chrono-col-lap', ci.col_lap || 3);
+setV('pref-chrono-col-lap', ci.col_lap != null ? ci.col_lap : 3);
 setV('pref-chrono-col-time', ci.col_time || 4);
 setV('pref-chrono-col-sectors', (ci.col_sectors || []).join(','));
 }
@@ -871,9 +870,10 @@ chrono_import: document.getElementById('pref-chrono-custom')?.checked ? {
 customized: true,
 delimiter: document.getElementById('pref-chrono-delim')?.value || 'auto',
 has_header: !!document.getElementById('pref-chrono-header')?.checked,
-col_name: parseInt(document.getElementById('pref-chrono-col-name')?.value) || 1,
+col_name: 0, // le nom du fichier n'est plus utilise : rapprochement par n° de kart
 col_kart: parseInt(document.getElementById('pref-chrono-col-kart')?.value) || 2,
-col_lap: parseInt(document.getElementById('pref-chrono-col-lap')?.value) || 3,
+// 0 (ou vide) = le fichier n'a pas de colonne de tour, on numerote automatiquement par kart
+col_lap: parseInt(document.getElementById('pref-chrono-col-lap')?.value) || 0,
 col_time: parseInt(document.getElementById('pref-chrono-col-time')?.value) || 4,
 col_sectors: String(document.getElementById('pref-chrono-col-sectors')?.value || '')
 .split(',').map((s) => parseInt(s.trim())).filter((v) => Number.isFinite(v)),

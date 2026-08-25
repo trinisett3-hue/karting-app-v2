@@ -527,6 +527,7 @@ updateThemeToggleUI();
 <label class="btn btn-ghost" style="cursor:pointer;margin:0">Importer CSV / Excel
 <input type="file" id="chrono-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleChronoFile(this)"/>
 </label>
+<button class="btn btn-ghost" onclick="correctChronoFormat()" id="btn-correct-chrono-format" title="Le format detecte automatiquement te semble faux (colonnes inversees, etc.) ? Corrige-le manuellement ici, meme si l'import ne signale pas d'erreur.">Corriger le format</button>
 </div>
 <div id="chrono-preview"></div>
 <div class="msg" id="msg-chrono"></div>
@@ -990,12 +991,18 @@ sans secteurs <code>Nom;Kart;NumTour;Temps</code>, avec secteurs <code>Nom;Kart;
 <input type="checkbox" id="pref-chrono-custom" style="width:auto" onchange="toggleChronoCustomFormat();markPrefsDirty()"/>
 <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">Personnaliser le format d'import (fichier d'un autre système de chronométrage)</span>
 </label>
-<<<<<<< HEAD
 <div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Normalement rien à faire ici : si tu importes un fichier qui n'est pas au format habituel (onglet Sessions actives), le format est détecté et enregistré automatiquement tout seul. Ouvre cette section seulement pour vérifier ou corriger le mapping détecté, ou pour le pré-configurer avant une première session.</div>
 </div>
 <div id="pref-chrono-custom-wrap" style="display:none">
 <div class="field" style="background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:12px">
-<label>Forcer une nouvelle détection — colle un extrait de ton fichier chrono (quelques lignes suffisent)</label>
+<label>Configurer le format — importe un fichier ou colle un extrait</label>
+<div class="flex" style="margin-top:6px;margin-bottom:8px">
+<label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0">Importer un fichier CSV / Excel
+<input type="file" id="pref-chrono-detect-file" accept=".csv,.xlsx,.xls" style="display:none" onchange="detectChronoFormatFromFile(this)"/>
+</label>
+<span style="font-size:11px;color:var(--mut);align-self:center">Le fichier n'est pas importé — il sert uniquement à déduire le format.</span>
+</div>
+<label style="font-size:11px">…ou colle un extrait de ton fichier chrono (quelques lignes suffisent)</label>
 <textarea id="pref-chrono-detect-sample" style="width:100%;min-height:70px;margin-top:6px;font-family:monospace;font-size:12px" placeholder="Colle ici quelques lignes telles quelles, avec ou sans en-tête" oninput="renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"></textarea>
 <div class="flex" style="margin-top:8px">
 <button class="btn btn-ghost btn-sm" onclick="detectAndSaveChronoFormat('pref-chrono-detect-sample')">Détecter le format automatiquement</button>
@@ -1005,67 +1012,32 @@ sans secteurs <code>Nom;Kart;NumTour;Temps</code>, avec secteurs <code>Nom;Kart;
 <div class="g2" style="gap:10px;margin-top:14px">
 <div class="field"><label>Séparateur</label>
 <select id="pref-chrono-delim" onchange="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')">
-=======
-<div style="font-size:11px;color:var(--mut);margin-top:4px;padding-left:24px">Laisse décoché si tes fichiers respectent déjà le format ci-dessus. Sinon, indique ici où se trouve chaque information dans TON fichier — ou colle un exemple ci-dessous pour le détecter automatiquement.</div>
-</div>
-<div id="pref-chrono-custom-wrap" style="display:none">
-<div class="field" style="background:var(--surf2);border:1px solid var(--bord);border-radius:8px;padding:12px">
-<label>Détection automatique — colle un extrait de ton fichier chrono (quelques lignes suffisent)</label>
-<textarea id="pref-chrono-detect-sample" style="width:100%;min-height:70px;margin-top:6px;font-family:monospace;font-size:12px" placeholder="Colle ici quelques lignes telles quelles, avec ou sans en-tête"></textarea>
-<div class="flex" style="margin-top:8px">
-<button class="btn btn-ghost btn-sm" onclick="detectAndSaveChronoFormat('pref-chrono-detect-sample')">Détecter le format automatiquement</button>
-</div>
-<div style="font-size:11px;color:var(--mut);margin-top:6px">Remplit et enregistre le mapping ci-dessous à partir de cet exemple — vérifie-le avant de cliquer sur « Enregistrer les paramètres ». Sert surtout au moment où tu configures un nouveau circuit ou changes de système de chronométrage ; au quotidien, l'aperçu affiché à l'import (onglet Sessions actives) suffit à vérifier que tout est bien reconnu.</div>
-</div>
-<div class="g2" style="gap:10px;margin-top:14px">
-<div class="field"><label>Séparateur</label>
-<select id="pref-chrono-delim" onchange="markPrefsDirty()">
->>>>>>> 824a6b7 (Import chronos : format personnalisable, apercu live, detection auto)
 <option value="auto">Détection automatique</option>
 <option value=";">Point-virgule ( ; )</option>
 <option value=",">Virgule ( , )</option>
 <option value="tab">Tabulation</option>
-<<<<<<< HEAD
 <option value="|">Barre verticale ( | )</option>
 <option value="space">Espaces (colonnes alignées)</option>
-=======
->>>>>>> 824a6b7 (Import chronos : format personnalisable, apercu live, detection auto)
 </select>
 </div>
 <div class="field">
 <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:22px">
-<<<<<<< HEAD
 <input type="checkbox" id="pref-chrono-header" style="width:auto" onchange="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"/>
-=======
-<input type="checkbox" id="pref-chrono-header" style="width:auto" onchange="markPrefsDirty()"/>
->>>>>>> 824a6b7 (Import chronos : format personnalisable, apercu live, detection auto)
 <span style="text-transform:none;font-weight:600;color:var(--txt);font-size:13px">La 1ère ligne est un en-tête</span>
 </label>
 </div>
 </div>
 <div class="g2" style="gap:10px;margin-top:4px">
-<<<<<<< HEAD
 <div class="field"><label>N° de colonne — Nom du pilote</label><input type="number" id="pref-chrono-col-name" min="1" value="1" oninput="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"/></div>
 <div class="field"><label>N° de colonne — N° de kart</label><input type="number" id="pref-chrono-col-kart" min="1" value="2" oninput="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"/></div>
-<div class="field"><label>N° de colonne — N° de tour</label><input type="number" id="pref-chrono-col-lap" min="1" value="3" oninput="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"/></div>
+<div class="field"><label>N° de colonne — N° de tour (0 = numéroter automatiquement)</label><input type="number" id="pref-chrono-col-lap" min="0" value="3" oninput="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"/></div>
 <div class="field"><label>N° de colonne — Temps au tour</label><input type="number" id="pref-chrono-col-time" min="1" value="4" oninput="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"/></div>
 </div>
 <div class="field"><label>N° de colonne(s) — Secteurs (si activés ci-dessus, séparés par des virgules)</label>
 <input type="text" id="pref-chrono-col-sectors" placeholder="ex : 4,5,6" oninput="markPrefsDirty();renderChronoPreview('pref-chrono-detect-sample','pref-chrono-preview')"/>
 </div>
-<div style="font-size:11px;color:var(--mut);margin-top:6px">Les numéros de colonne commencent à 1 (la 1ère colonne de ton fichier = colonne 1).</div>
+<div style="font-size:11px;color:var(--mut);margin-top:6px">Les numéros de colonne commencent à 1 (la 1ère colonne de ton fichier = colonne 1). Le nom du pilote n'est pas demandé : c'est le n° de kart qui retrouve l'inscription, et le nom affiché vient de là. Si ton fichier a une colonne nom, elle est ignorée. Pour le n° de tour, mets 0 si ton fichier n'en a pas : les tours seront numérotés dans l'ordre, kart par kart.</div>
 <div id="pref-chrono-preview" style="margin-top:10px"></div>
-=======
-<div class="field"><label>N° de colonne — Nom du pilote</label><input type="number" id="pref-chrono-col-name" min="1" value="1" oninput="markPrefsDirty()"/></div>
-<div class="field"><label>N° de colonne — N° de kart</label><input type="number" id="pref-chrono-col-kart" min="1" value="2" oninput="markPrefsDirty()"/></div>
-<div class="field"><label>N° de colonne — N° de tour</label><input type="number" id="pref-chrono-col-lap" min="1" value="3" oninput="markPrefsDirty()"/></div>
-<div class="field"><label>N° de colonne — Temps au tour</label><input type="number" id="pref-chrono-col-time" min="1" value="4" oninput="markPrefsDirty()"/></div>
-</div>
-<div class="field"><label>N° de colonne(s) — Secteurs (si activés ci-dessus, séparés par des virgules)</label>
-<input type="text" id="pref-chrono-col-sectors" placeholder="ex : 4,5,6" oninput="markPrefsDirty()"/>
-</div>
-<div style="font-size:11px;color:var(--mut);margin-top:6px">Les numéros de colonne commencent à 1 (la 1ère colonne de ton fichier = colonne 1).</div>
->>>>>>> 824a6b7 (Import chronos : format personnalisable, apercu live, detection auto)
 </div>
 </div>
 </div>
@@ -1412,10 +1384,6 @@ perimetre de cette refonte visuelle.
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<<<<<<< HEAD
-<script type="module" src="karting-v2/src/app.js?v=20260824b"></script>
-=======
-<script type="module" src="karting-v2/src/app.js?v=20260824a"></script>
->>>>>>> 824a6b7 (Import chronos : format personnalisable, apercu live, detection auto)
+<script type="module" src="karting-v2/src/app.js?v=20260825a"></script>
 </body>
 </html>
