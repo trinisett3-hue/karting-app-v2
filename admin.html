@@ -829,6 +829,16 @@ updateThemeToggleUI();
      reste a faire cote back — voir le rapport de refonte. -->
 </div>
 
+<!-- 25/08 : lien de reservation utilise dans l'e-mail de resultats (CTA "reserver
+     une prochaine seance"). Facultatif : si vide, l'e-mail n'affiche pas la phrase
+     de relance plutot que d'afficher un lien casse. Meme mecanisme que pref-card-url
+     (cle JSON dans app_settings.value, aucune migration SQL necessaire). -->
+<div class="field" style="margin-top:12px">
+<label>Lien de reservation (dans l'e-mail de resultats)</label>
+<input type="url" id="pref-booking-url" maxlength="300" placeholder="https://mon-karting.fr/reserver" oninput="markPrefsDirty()"/>
+<div style="font-size:10px;color:var(--mut);margin-top:4px">Si renseigne, un lien "Reserver une prochaine seance" apparait dans l'e-mail de resultats envoye a chaque pilote. Laisse vide pour ne rien afficher.</div>
+</div>
+
 <!-- 31/07 : deux noms dedies au rendu PDF. Laisser vide = le PDF reprend
      simplement "Nom du circuit" ci-dessus. -->
 <div class="field" style="margin-top:12px">

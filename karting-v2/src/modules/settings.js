@@ -135,6 +135,10 @@ state.prefs.avatar_background = state.prefs.avatar_background || 'studio';
 state.prefs.avatar_outline = state.prefs.avatar_outline !== false;
 state.prefs.avatar_shape = state.prefs.avatar_shape || 'round';
 state.prefs.card_qr_url = state.prefs.card_qr_url || '';
+// booking_url (25/08) : lien de reservation utilise dans l'e-mail de resultats
+// (CTA "reserver une prochaine seance"). Meme mecanisme que card_qr_url, aucune
+// migration SQL — colonne app_settings.value deja jsonb.
+state.prefs.booking_url = String(state.prefs.booking_url || '').slice(0, 300);
 state.prefs.card_tagline = String(state.prefs.card_tagline || '').slice(0, CARD_TAGLINE_MAX);
 state.prefs.card_address = String(state.prefs.card_address || '').slice(0, 60);
 if (!Array.isArray(state.prefs.card_position_picks)) state.prefs.card_position_picks = [];
@@ -167,6 +171,8 @@ const dateFmtEl = document.getElementById('pref-date-format');
 if (dateFmtEl) dateFmtEl.value = state.prefs.date_format || 'dmy';
 const circuitNameEl = document.getElementById('pref-circuit-name');
 if (circuitNameEl) circuitNameEl.value = state.prefs.circuit_name || '';
+const bookingUrlEl = document.getElementById('pref-booking-url');
+if (bookingUrlEl) bookingUrlEl.value = state.prefs.booking_url || '';
 const circuitHeadEl = document.getElementById('pref-circuit-name-pdf-header');
 if (circuitHeadEl) circuitHeadEl.value = state.prefs.circuit_name_pdf_header || '';
 const circuitFootEl = document.getElementById('pref-circuit-name-pdf-footer');
@@ -861,6 +867,7 @@ date_format: document.getElementById('pref-date-format')?.value === 'mdy' ? 'mdy
 circuit_name: (document.getElementById('pref-circuit-name')?.value || '').trim().slice(0, CIRCUIT_NAME_MAX),
 circuit_name_pdf_header: (document.getElementById('pref-circuit-name-pdf-header')?.value || '').trim().slice(0, CIRCUIT_HEAD_MAX),
 circuit_name_pdf_footer: (document.getElementById('pref-circuit-name-pdf-footer')?.value || '').trim().slice(0, CIRCUIT_FOOT_MAX),
+booking_url: (document.getElementById('pref-booking-url')?.value || '').trim().slice(0, 300),
 laps_enabled: lapsEnabled,
 karts_locked: kartsLocked,
 kart_numbers: state.prefs.kart_numbers || [],
