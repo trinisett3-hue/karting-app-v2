@@ -1723,6 +1723,10 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 #page-screen-4 .top10-wrap { display: flex; flex-direction: column; }
 #page4-teams.is-dense .team-members { display: none; }
 #page-screen-4 .pdf-btn-wrap { flex-shrink: 0; }
+
+/* 25/08 : le mode kiosque (K-28) n'est plus rendu par cette page — voir
+   kiosk.html/kiosk.js (écran STAFF authentifié, page à part entière, avec
+   son propre CSS plein écran). Rien à garder ici. */
 </style>
 
 <!-- ============================================================
@@ -1731,7 +1735,7 @@ button { cursor: pointer; background: none; border: none; font: inherit; color: 
 <!-- ?v= : cache-buster (voir commentaire dans results-app.js). Sans lui, cette
      page peut rester servie avec un ancien results-app.js pendant 4h après un
      déploiement, qui lui-même importait encore l'ancien public-results.js. -->
-<script type="module" src="karting-v2/src/results-app.js?v=20260820b"></script>
+<script type="module" src="karting-v2/src/results-app.js?v=20260825k28e"></script>
 
 </body>
 </html>

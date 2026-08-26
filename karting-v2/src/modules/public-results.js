@@ -269,14 +269,15 @@ RENDER — PODIUM (top 3) — classement = MEILLEUR TOUR de chaque pilote,
 identique a l'admin (results.js > loadRanking). Le temps cumule n'est plus
 utilise pour classer : il penalisait les pilotes ayant boucle le plus de tours.
 ------------------------------------------------------------------ */
-function renderPodium(items) {
-const wrap = document.getElementById('podium-wrap');
+// 25/08 (K-28 v3) : la construction HTML du podium est extraite de renderPodium
+// telle quelle, pour que le classement kiosque (renderKioskClassement) puisse
+// poser le meme podium que la page mobile/PDF sans passer par #podium-wrap.
+function podiumCardsHTML(items) {
 if (!items || !items.length) {
-wrap.innerHTML = `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>Aucun résultat disponible</p></div>`;
-return;
+return `<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><p>Aucun résultat disponible</p></div>`;
 }
 const posClass = ['', 'p1', 'p2', 'p3'];
-wrap.innerHTML = items.map(d => {
+return items.map(d => {
 const cls = posClass[d.pos] || '';
 const gapTxt = gapBadge(d);
 // Mode Écurie : le podium reçoit les deux mêmes marqueurs que les lignes de
@@ -306,6 +307,10 @@ ${ptsChip}
 </div>
 </article>`;
 }).join('');
+}
+function renderPodium(items) {
+const wrap = document.getElementById('podium-wrap');
+wrap.innerHTML = podiumCardsHTML(items);
 }
 
 /* ------------------------------------------------------------------
@@ -749,6 +754,13 @@ export async function renderVenueHallOfFame(venueToken) {
   return true;
 }
 
+// 25/08 : le mode kiosque (K-28) n'est PLUS ici. Après plusieurs itérations,
+// Stéphane a tranché : l'écran TV/mini-PC est piloté par le STAFF depuis son
+// propre navigateur déjà connecté à l'admin (pas un jeton public en plus à
+// gérer) — voir kiosk.html/kiosk.js, page dédiée réservée aux admins
+// authentifiés. results.html (page publique/pilote) ne connaît plus rien du
+// kiosque : zéro risque de mélanger les deux surfaces.
+
 export async function load() {
 const params0 = new URLSearchParams(window.location.search);
 const token = params0.get('result');
@@ -765,6 +777,20 @@ if (!token) {
   }
   return fail();
 }
+return loadResultsToken(token);
+}
+
+// 25/08 (K-28) : corps de l'ancien load() une fois le token de session connu,
+// extrait tel quel (aucune ligne modifiee) pour que le mode kiosque puisse
+// l'appeler directement avec le token de la derniere session publiee, sans
+// jamais passer par l'URL ?result=.
+// 25/08 (K-28 v3) : corps de préparation des données extrait tel quel de
+// loadResultsToken (aucune ligne modifiée) — seuls les appels de rendu DOM
+// (renderPodium, page-nav, goToPage…) restent dans loadResultsToken, pour que
+// le classement kiosque (renderKioskClassement) puisse réutiliser exactement
+// le même classement/podium sans dépendre des écrans mobiles (#podium-wrap,
+// page-nav) ni de leur pagination.
+async function prepareSessionResults(token) {
 resultsToken = token;
 rankingCache.clear();
 palmaresCache.clear();
@@ -780,7 +806,7 @@ await ensureAvatarModuleLoaded();
 // ne sont plus lisibles par la cle anon (fuite RGPD : emails et noms de tous les tenants).
 const { data: bundle, error: sErr } = await db.rpc('public_session_results', { _results_token: token });
 const session = bundle && bundle.session ? bundle.session : null;
-if (sErr || !session) return fail();
+if (sErr || !session) return null;
 sessionInfo = session;
 applyRegistrationNavLink(session);
 // Le reglage global (Parametres > Sessions > Nom du circuit) prime sur le champ
@@ -889,6 +915,12 @@ if (teamMode) {
 }
 
 allResults = results;
+return results;
+}
+
+async function loadResultsToken(token) {
+const results = await prepareSessionResults(token);
+if (!results) return fail();
 renderPodium(results.slice(0, 3));
 renderTop10(results.slice(3, PAGE1MAX));
 renderPage2(results);
