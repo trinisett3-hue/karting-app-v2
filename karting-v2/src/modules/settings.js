@@ -457,7 +457,7 @@ showMsg('msg-logo', 'Logo retiré. Clique Enregistrer pour confirmer.', 'ok');
 // est desormais le volet "Résultats" a l'interieur de "apparence" (voir admin.html —
 // #apparence-resultats-panel). Tous les ids sont conserves a l'identique, seul le
 // regroupement visuel change. Voir refreshAppearancePreviews().
-const PARAMS_SUBTABS = ['general', 'sessions', 'apparence', 'pdf', 'compte'];
+const PARAMS_SUBTABS = ['general', 'sessions', 'apparence', 'pdf', 'kiosque', 'compte'];
 export function switchParamsSubtab(tab) {
   if (!PARAMS_SUBTABS.includes(tab)) return;
   PARAMS_SUBTABS.forEach((key) => {
@@ -470,6 +470,20 @@ export function switchParamsSubtab(tab) {
   if (tab === 'apparence') { renderKartAvatarGallery(); renderCardsTab(); refreshAppearancePreviews(undefined, true); }
   if (tab === 'pdf') refreshPdfPreview();
   if (tab === 'compte') renderAccountTab();
+}
+
+// --- Onglet Kiosque (K-28) ---------------------------------------------------------
+// Le kiosque (kiosk.html) est une page staff authentifiée, pas une page publique — voir
+// kiosk-app.js. Ici on donne juste au staff un moyen de l'ouvrir SANS taper d'URL : un
+// bouton par écran, qui ouvre kiosk.html dans un nouvel onglet et bascule en plein écran.
+// Le plein écran est demandé côté kiosk.html lui-même (main(), sur &fs=1) plutôt que
+// depuis cette fenêtre-ci sur la fenêtre ouverte : l'API Fullscreen exige un geste
+// utilisateur DANS le document qui la demande, et l'activation utilisateur du clic ne se
+// transmet de façon fiable au nouvel onglet que jusqu'à sa propre navigation initiale —
+// donc c'est ce document (kiosk.html), au chargement, qui doit faire la demande lui-même.
+export function openKioskScreen(mode) {
+  const qs = mode === 'pdf' ? '?screen=pdf&fs=1' : mode === 'hof' ? '?screen=hof&fs=1' : '?fs=1';
+  window.open('kiosk.html' + qs, '_blank');
 }
 
 // --- Entitlement "thèmes premium" (plan Premium) ---------------------------------------

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Écran kiosque — Trinisette</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600;1,700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root {
+  /* Valeurs par défaut (thème 'classic') — écrasées en JS à l'exécution
+     via applyTheme(), à partir de app_settings.global.results_theme :
+     le kiosque doit refléter le thème choisi par le circuit dans
+     Paramètres > Apparence, jamais un habillage neutre fixe. */
+  --accent: #ff2a2a;
+  --accent-2: #ff5555;
+  --k-bg: #050608;
+  --k-bg2: #0d0f14;
+  --k-text: #f4f5f8;
+  --k-muted: #7a7d8a;
+  --gold: #ffd166;
+  --silver: #cfd8e3;
+  --bronze: #d98a4a;
+  --line: color-mix(in srgb, var(--k-text) 10%, transparent);
+  --muted: var(--k-muted);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--k-bg); }
+body {
+  font-family: 'Barlow Condensed', system-ui, sans-serif; color: var(--k-text);
+  cursor: none; user-select: none; -webkit-user-select: none;
+  transition: background-color .4s ease, color .4s ease;
+}
+#root { width: 100vw; height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+/* ---- écran de blocage (pas connecté) --------------------------------- */
+.gate { margin: auto; text-align: center; max-width: 40rem; padding: 2rem; }
+.gate h1 { font-family: 'Teko', sans-serif; font-size: 3rem; font-weight: 600; margin: 0 0 1rem; letter-spacing: .02em; }
+.gate p { font-size: 1.2rem; line-height: 1.6; color: var(--muted); margin: 0 0 .5rem; }
+.gate code { background: #14161d; padding: .2rem .5rem; border-radius: .4rem; font-size: 1rem; }
+
+/* ---- entête commun -----------------------------------------------------
+   Adapté du header de la page 1 de results.html (.circuit-header) : carte
+   encadrée avec glow d'accent, tirets décoratifs en haut-gauche, équerre en
+   haut-droite — et surtout le LOGO SUR LE CÔTÉ (coin haut-droit de la
+   carte), jamais centré en pleine largeur au-dessus, exactement comme sur
+   la page résultats. */
+.k-head {
+  flex: 0 0 auto; position: relative; z-index: 1;
+  margin: 1.5rem 3rem .5rem; padding: 1.5rem 2.2rem;
+  background: color-mix(in srgb, var(--k-bg) 65%, black 35%);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
+  border-radius: 1.1rem; overflow: hidden;
+  box-shadow: 0 .3rem .9rem rgba(0,0,0,.28);
+}
+.k-head::before {
+  content: ''; position: absolute; top: 0; left: 0; width: 72px; height: 4px;
+  background: repeating-linear-gradient(90deg, var(--accent) 0px, var(--accent) 16px, transparent 16px, transparent 23px);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.k-head::after {
+  content: ''; position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
+  border-top: 2px solid var(--accent); border-right: 2px solid var(--accent); opacity: .55;
+}
+.k-logo { position: absolute; top: 1.3rem; right: 1.8rem; max-height: 4.4rem; max-width: 14rem; object-fit: contain; z-index: 2; }
+.k-eyebrow { font-size: 1rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); margin: 0 0 .25rem; }
+/* "Hall of Fame" est le concept de l'écran : il doit se voir depuis
+   l'autre bout de la salle. "Top 20 / catégorie" reste lisible mais
+   nettement en retrait — c'est un sous-titre, pas le titre. Skew hérité
+   du .circuit-name de results.html (identité visuelle commune). */
+.k-title {
+  font-family: 'Teko', sans-serif; font-size: 4.6rem; font-weight: 700; line-height: 1;
+  margin: 0; letter-spacing: .01em; text-transform: uppercase; transform: skewX(-6deg); display: inline-block;
+  color: var(--k-text); text-shadow: 0 0 30px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+.k-sub {
+  margin: .55rem 0 0;
+  font-size: 1.05rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+}
+
+/* ---- écran PDF (classement complet) ------------------------------------ */
+#screen-pdf { flex: 1 1 auto; display: flex; }
+#pdf-frame { flex: 1 1 auto; width: 100%; height: 100%; border: 0; background: #fff; }
+.pdf-empty { margin: auto; text-align: center; color: var(--muted); font-size: 1.6rem; }
+
+/* ---- écran Hall of Fame par catégorie ----------------------------------- */
+body.hof-bg {
+  /* Glow dérivé des couleurs d'accent du thème choisi par le circuit
+     (Paramètres > Apparence) — jamais un rouge/orange neutre fixe. */
+  background:
+    radial-gradient(60rem 34rem at 50% -10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 60%),
+    radial-gradient(46rem 30rem at 100% 110%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 55%),
+    var(--k-bg);
+}
+#screen-hof { flex: 1 1 auto; display: flex; flex-direction: column; padding: .4rem 3rem 2.2rem; overflow: hidden; position: relative; z-index: 1; }
+.hof-empty { margin: auto; text-align: center; color: var(--muted); font-size: 1.6rem; }
+
+/* Bandeau "TOP 20" — remplace les anciens onglets LOISIR/COMPET. La
+   catégorie active est déjà nommée dans l'en-tête ("Catégorie : Loisir") ;
+   ici c'est le concept de l'écran, il doit se voir de loin : plus gros que
+   le sous-titre du header, trophée assorti au thème. */
+.k-top20 {
+  display: flex; align-items: center; justify-content: center; gap: .85rem;
+  margin: .2rem 0 1.5rem;
+  font-family: 'Teko', sans-serif; font-size: 3.1rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; line-height: 1;
+  color: var(--k-text); text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.k-top20 svg {
+  width: 2.6rem; height: 2.6rem; flex: 0 0 auto; color: var(--accent);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+.hof-grid { flex: 1 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 3rem; overflow: hidden; }
+.hof-col { display: flex; flex-direction: column; height: 100%; gap: .55rem; }
+.hof-row {
+  flex: 1 1 0; min-height: 0; display: flex; align-items: center; gap: 1.1rem;
+  padding: 0 1.3rem; border-radius: .9rem;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--k-text) 5%, transparent), color-mix(in srgb, var(--k-text) 1.5%, transparent));
+  border: 1px solid var(--line);
+}
+.hof-row.top1 { background: linear-gradient(90deg, rgba(255,209,102,.14), rgba(255,209,102,.03)); border-color: rgba(255,209,102,.35); }
+.hof-row.top2 { background: linear-gradient(90deg, rgba(207,216,227,.11), rgba(207,216,227,.02)); border-color: rgba(207,216,227,.28); }
+.hof-row.top3 { background: linear-gradient(90deg, rgba(217,138,74,.13), rgba(217,138,74,.02)); border-color: rgba(217,138,74,.3); }
+
+.hof-rank {
+  flex: 0 0 3rem; height: 3rem; width: 3rem; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Teko', sans-serif; font-size: 1.9rem; font-weight: 600;
+  background: color-mix(in srgb, var(--k-text) 7%, transparent); color: var(--muted);
+}
+.hof-row.top1 .hof-rank { background: linear-gradient(145deg, var(--gold), #b8862e); color: #241705; }
+.hof-row.top2 .hof-rank { background: linear-gradient(145deg, var(--silver), #7c8896); color: #12161c; }
+.hof-row.top3 .hof-rank { background: linear-gradient(145deg, var(--bronze), #7a4a24); color: #1c0f04; }
+
+.hof-av-ring {
+  flex: 0 0 3.6rem; width: 3.6rem; height: 3.6rem; border-radius: 50%; padding: 2px;
+  background: color-mix(in srgb, var(--k-text) 14%, transparent);
+}
+.hof-row.top1 .hof-av-ring { background: linear-gradient(145deg, var(--gold), #b8862e); }
+.hof-row.top2 .hof-av-ring { background: linear-gradient(145deg, var(--silver), #7c8896); }
+.hof-row.top3 .hof-av-ring { background: linear-gradient(145deg, var(--bronze), #7a4a24); }
+.hof-av { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #14161d; display: flex; align-items: center; justify-content: center; }
+.hof-av img { width: 100%; height: 100%; object-fit: cover; }
+.hof-av svg { width: 100%; height: 100%; display: block; }
+
+/* Le nom prend sa largeur naturelle (ellipsis s'il est très long), la date
+   va chercher tout l'espace resté vide sur la ligne jusqu'au temps
+   (margin-left:auto) — occupe l'espace disponible plutôt que de rajouter
+   une ligne sous le temps. */
+.hof-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: .85rem; overflow: hidden; }
+.hof-name { flex: 0 1 auto; min-width: 0; font-size: 1.62rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hof-flag { margin-right: .5rem; }
+.hof-date { flex: 0 0 auto; margin-left: auto; font-size: 1.08rem; font-weight: 500; color: var(--muted); letter-spacing: .03em; white-space: nowrap; }
+
+.hof-time {
+  flex: 0 0 auto; font-variant-numeric: tabular-nums; font-size: 1.35rem; font-weight: 700;
+  padding: .35rem .85rem; border-radius: 999px; color: #fff;
+  background: color-mix(in srgb, var(--accent) 20%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+}
+.hof-row.top1 .hof-time { background: rgba(255,209,102,.18); border-color: rgba(255,209,102,.4); color: var(--gold); }
+.hof-row.top2 .hof-time { background: rgba(207,216,227,.14); border-color: rgba(207,216,227,.32); color: var(--silver); }
+.hof-row.top3 .hof-time { background: rgba(217,138,74,.16); border-color: rgba(217,138,74,.36); color: var(--bronze); }
+</style>
+</head>
+<body>
+<div id="root"><div class="gate"><p>Chargement…</p></div></div>
+<script type="module" src="karting-v2/src/kiosk-app.js?v=20260826k4"></script>
+</body>
+</html>

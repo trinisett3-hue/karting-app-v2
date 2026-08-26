@@ -232,10 +232,16 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 .kart-badge{display:inline-flex;align-items:center;justify-content:center;min-width:30px;height:26px;padding:0 8px;border-radius:7px;font-weight:800;font-size:13px;background:var(--surf2);border:1px solid var(--bord)}
 .kart-badge.assigned{background:rgba(255,59,48,.15);color:var(--acc2);border-color:rgba(255,59,48,.35)}
 .kart-badge.unassigned{color:var(--mut);font-weight:600;font-size:11px}
-/* Paramètres : 5 sous-onglets (refonte 30/07 : fusion "Podium" dans "Apparence" > volet
-   "Résultats" — voir settings.js > switchParamsSubtab()). Chaque sous-onglet occupe
-   toute la largeur. */
+/* Paramètres : 6 sous-onglets (refonte 30/07 : fusion "Podium" dans "Apparence" > volet
+   "Résultats" ; ajout 26/08 de "Kiosque" — K-28 — voir settings.js > switchParamsSubtab()).
+   Chaque sous-onglet occupe toute la largeur. */
 .params-subtab-bar{display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;white-space:nowrap;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+/* Onglet Kiosque (K-28) : une carte par ecran, bouton pleine largeur. */
+.kiosk-screen-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media (max-width:860px){.kiosk-screen-grid{grid-template-columns:1fr}}
+.kiosk-screen-card{border:1px solid var(--bord);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
+.kiosk-screen-title{font-size:13px;font-weight:700}
+.kiosk-screen-desc{font-size:11px;color:var(--mut);line-height:1.5;flex:1 1 auto}
 .params-subtab-bar::-webkit-scrollbar{height:6px}
 .params-subtab-bar .subtab-btn{flex:0 0 auto}
 .params-tabpanel{display:none}
@@ -808,6 +814,7 @@ updateThemeToggleUI();
 <div class="subtab-btn" data-ptab-val="sessions" onclick="switchParamsSubtab('sessions')">🏁 Sessions</div>
 <div class="subtab-btn" data-ptab-val="apparence" onclick="switchParamsSubtab('apparence')">🎨 Apparence</div>
 <div class="subtab-btn" data-ptab-val="pdf" onclick="switchParamsSubtab('pdf')">📄 PDF &amp; export</div>
+<div class="subtab-btn" data-ptab-val="kiosque" onclick="switchParamsSubtab('kiosque')">🖥️ Kiosque</div>
 <div class="subtab-btn" data-ptab-val="compte" onclick="switchParamsSubtab('compte')">👤 Compte</div>
 </div>
 
@@ -1255,7 +1262,41 @@ perimetre de cette refonte visuelle.
 </div>
 </div>
 
-<!-- 6) COMPTE — identite admin, plan, securite -->
+<!-- 6) KIOSQUE (K-28) — ouvrir l'ecran TV/mini-PC sans taper d'URL -->
+<div class="params-tabpanel" id="params-subtab-kiosque" data-tab="kiosque">
+<div class="card">
+<div class="ctitle">Écran kiosque (TV / mini-PC)</div>
+<div style="font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:16px">
+Page réservée au staff, à ouvrir sur l'ordinateur relié à la TV — dans ce même navigateur,
+déjà connecté à ton compte admin. Choisis un écran ci-dessous : il s'ouvre dans un nouvel
+onglet et passe automatiquement en plein écran (autorise le plein écran si ton navigateur
+te le demande à la première ouverture).
+</div>
+<div class="kiosk-screen-grid">
+<div class="kiosk-screen-card">
+<div class="kiosk-screen-title">🔁 Rotation automatique</div>
+<div class="kiosk-screen-desc">Alterne classement PDF et Hall of Fame toutes les 30 secondes. À utiliser quand il n'y a qu'un seul écran.</div>
+<button class="btn btn-primary btn-sm" style="width:100%" onclick="openKioskScreen('rotation')">Ouvrir en plein écran</button>
+</div>
+<div class="kiosk-screen-card">
+<div class="kiosk-screen-title">📄 Classement PDF</div>
+<div class="kiosk-screen-desc">Fige l'écran sur le classement complet — le même PDF que reçoivent les pilotes.</div>
+<button class="btn btn-ghost btn-sm" style="width:100%" onclick="openKioskScreen('pdf')">Ouvrir en plein écran</button>
+</div>
+<div class="kiosk-screen-card">
+<div class="kiosk-screen-title">🏆 Hall of Fame</div>
+<div class="kiosk-screen-desc">Fige l'écran sur le top 20 par catégorie, avec rotation automatique entre catégories (9s).</div>
+<button class="btn btn-ghost btn-sm" style="width:100%" onclick="openKioskScreen('hof')">Ouvrir en plein écran</button>
+</div>
+</div>
+<div style="font-size:11px;color:var(--mut);margin-top:14px">
+Avec plusieurs TV : ouvre un onglet par écran (un en "Classement PDF", l'autre en "Hall of Fame"
+par exemple), chacun sur son propre moniteur.
+</div>
+</div>
+</div>
+
+<!-- 7) COMPTE — identite admin, plan, securite -->
 <div class="params-tabpanel" id="params-subtab-compte" data-tab="compte">
 <div class="card">
 <div class="ctitle">Mon compte</div>
@@ -1394,6 +1435,6 @@ perimetre de cette refonte visuelle.
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260825a"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260826k28"></script>
 </body>
 </html>
