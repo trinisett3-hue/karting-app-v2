@@ -261,27 +261,6 @@ async function tick() {
   else await renderHofScreen();
 }
 
-// Plein écran automatique — demandé depuis Paramètres > Kiosque (bouton "Ouvrir en plein
-// écran" de settings.js > openKioskScreen()), qui ouvre cette page avec &fs=1. La demande
-// DOIT venir de ce document, au chargement : l'API Fullscreen exige un geste utilisateur
-// dans le document qui la déclenche, et l'activation du clic sur le bouton de Paramètres
-// ne se transmet de façon fiable au nouvel onglet que jusqu'à sa navigation initiale — donc
-// c'est ici, au tout premier rendu de kiosk.html, qu'il faut la demander. Best-effort : si
-// le navigateur refuse (Safari, pas de geste transmis, etc.), l'onglet reste ouvert
-// normalement et le staff peut forcer le plein écran lui-même (F11 / bouton navigateur).
-function tryFullscreen() {
-  if (params.get('fs') !== '1') return;
-  const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (!req) return;
-  try {
-    const p = req.call(el);
-    if (p && typeof p.catch === 'function') p.catch(() => {});
-  } catch (e) {
-    // refusé — pas grave, l'écran fonctionne quand même en fenêtre normale.
-  }
-}
-
 async function main() {
   const { data: { session } } = await db.auth.getSession();
   if (!session) {
@@ -293,7 +272,6 @@ async function main() {
     return;
   }
 
-  tryFullscreen();
   await tick();
   const delay = fixedScreen ? REFRESH_MS : ROTATE_MS;
   setInterval(tick, delay);

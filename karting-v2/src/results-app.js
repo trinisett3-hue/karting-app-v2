@@ -7,7 +7,7 @@
 // cartes avec l'ANCIEN code après un déploiement, en silence (aucune erreur :
 // juste des fonctionnalités absentes). Vécu en direct le 19/08 avec les
 // cartes d'écurie. A incrémenter à chaque changement de ce fichier.
-import * as results from './modules/public-results.js?v=20260820b';
+import * as results from './modules/public-results.js?v=20260825k28e';
 
 results.initTheme();
 results.initNav();
