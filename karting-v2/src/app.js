@@ -480,6 +480,7 @@ savePrefs: settings.savePrefs,
 refreshPdfPreview: settings.refreshPdfPreview,
 requestPasswordReset: settings.requestPasswordReset,
 openKioskScreen: settings.openKioskScreen,
+copyKioskCommand: settings.copyKioskCommand,
 // Statistiques
 selectStatsRange: stats.selectStatsRange,
 switchStatsSubtab: stats.switchStatsSubtab,

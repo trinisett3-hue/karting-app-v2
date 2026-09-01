@@ -124,6 +124,13 @@ function fmtClock(d = new Date()) {
 // Classe de taille selon la longueur du nom : plutot que de tronquer, on
 // reduit. Les seuils sont volontairement bas — le nom partage sa colonne avec
 // un drapeau, et une TV se regarde de loin.
+// Cartes du podium : trois crans, le dernier passe sur deux lignes.
+function podNameCls(name, pos) {
+  const n = String(name || '').length;
+  const lim = pos === 1 ? [13, 22] : [15, 24];
+  return n > lim[1] ? ' xlong' : n > lim[0] ? ' long' : '';
+}
+
 function nameCls(name, twoCols) {
   const n = String(name || '').length;
   const lim = twoCols ? [13, 18, 26] : [20, 27, 34];
@@ -241,14 +248,13 @@ function qrBlockHTML(token) {
 function podiumHTML(rows) {
   return rows.map(r => {
     const name = pilotName(r);
-    const sizeCls = name.length > (r.pos === 1 ? 13 : 15) ? ' long' : '';
     const showKart = r.kart != null && !/^Kart /.test(name);
     return `
     <div class="pod p${r.pos}">
       <div class="pod-rank">${r.pos}</div>
       <div class="pod-av">${avatarHTML(r.photo, r.kart, r.scheme)}</div>
       <div class="pod-info">
-        <div class="pod-name${sizeCls}">${escapeHTML(name)}</div>
+        <div class="pod-name${podNameCls(name, r.pos)}">${escapeHTML(name)}</div>
         <div class="pod-time">${fmtTime(r.best_lap)}</div>
         <div class="pod-meta">
           ${showKart ? `<span>Kart <b>${r.kart}</b></span>` : ''}
@@ -391,14 +397,13 @@ function hofRowHTML(r, twoCols) {
 function hofPodiumHTML(rows) {
   return rows.map(r => {
     const name = pilotName({ pilot: r.pilot, kart: r.kart });
-    const sizeCls = name.length > (r.pos === 1 ? 13 : 15) ? ' long' : '';
     const showKart = r.kart != null && !/^Kart /.test(name);
     return `
     <div class="pod p${r.pos}">
       <div class="pod-rank">${r.pos}</div>
       <div class="pod-av">${avatarHTML(r.photo, r.kart, r.scheme)}</div>
       <div class="pod-info">
-        <div class="pod-name${sizeCls}">${escapeHTML(name)}</div>
+        <div class="pod-name${podNameCls(name, r.pos)}">${escapeHTML(name)}</div>
         <div class="pod-time">${fmtTime(r.lap_time_s)}</div>
         <div class="pod-meta">
           ${showKart ? `<span>Kart <b>${r.kart}</b></span>` : ''}
@@ -484,20 +489,89 @@ async function renderHofScreen() {
 
 /* --------------------------------------------------------- boucle écran */
 
-// Plein écran demandé par Paramètres > Kiosque (&fs=1). La demande DOIT venir
-// de ce document au chargement : l'API Fullscreen exige un geste utilisateur
-// dans le document qui la déclenche, et l'activation du clic ne se transmet au
-// nouvel onglet que jusqu'à sa navigation initiale. Best-effort : si le
-// navigateur refuse, l'écran fonctionne quand même en fenêtre.
-function tryFullscreen() {
-  if (params.get('fs') !== '1') return;
+/* ----------------------------------------------------------- plein écran
+   Pourquoi un bouton et pas un plein écran automatique : l'API Fullscreen
+   exige une activation utilisateur DANS le document qui la demande. Ouvrir
+   kiosk.html depuis Paramètres avec ?fs=1 ne suffit pas — Chrome ne transmet
+   pas l'activation du clic au nouvel onglet une fois qu'il a navigué, et la
+   demande échoue en silence. C'était le cas de la première version : l'écran
+   s'ouvrait dans un onglet normal, barre d'adresse comprise.
+
+   Donc : on tente quand même au chargement (ça passe sur certaines
+   configurations), et si ça ne passe pas, un bouton s'affiche. Un clic — ou la
+   touche F, ou Entrée, ou un double-clic n'importe où — et l'écran est en
+   plein écran pour de bon. Le bouton réapparaît si le staff en sort (Échap).
+
+   Pour une TV allumée en permanence, le vrai réglage reste de lancer le
+   navigateur en mode kiosque (chrome --kiosk <url>) : c'est expliqué dans
+   Paramètres > Kiosque, avec la commande toute prête. */
+
+function isFullscreen() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function goFullscreen() {
   const el = document.documentElement;
   const req = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (!req) return;
+  if (!req) return Promise.reject();
   try {
     const p = req.call(el);
-    if (p && typeof p.catch === 'function') p.catch(() => {});
-  } catch (e) { /* refusé : sans conséquence */ }
+    return (p && typeof p.then === 'function') ? p : Promise.resolve();
+  } catch (e) {
+    return Promise.reject(e);
+  }
+}
+
+// Empêche la mise en veille de l'écran : une TV d'accueil qui s'éteint au bout
+// de dix minutes ne sert à rien. Le verrou saute quand l'onglet passe en
+// arrière-plan, on le reprend au retour.
+let wakeLock = null;
+async function keepAwake() {
+  try {
+    if (!('wakeLock' in navigator)) return;
+    wakeLock = await navigator.wakeLock.request('screen');
+    wakeLock.addEventListener('release', () => { wakeLock = null; });
+  } catch (e) { /* refusé (onglet caché, navigateur ancien) : sans conséquence */ }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && !wakeLock) keepAwake();
+});
+
+function syncFullscreenUI() {
+  const on = isFullscreen();
+  document.body.classList.toggle('is-fs', on);
+  const btn = document.getElementById('fs-btn');
+  if (btn) btn.hidden = on;
+}
+
+function setupFullscreen() {
+  const btn = document.createElement('button');
+  btn.id = 'fs-btn';
+  btn.type = 'button';
+  btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true">'
+    + '<path d="M3 9V4h5M21 9V4h-5M3 15v5h5M21 15v5h-5"/></svg><span>Plein écran</span>';
+  btn.addEventListener('click', () => { goFullscreen().then(keepAwake).catch(() => {}); });
+  document.body.appendChild(btn);
+
+  // Raccourcis : F, Entrée, ou double-clic n'importe où sur l'écran. Le staff
+  // n'a pas forcément la souris sous la main devant une TV.
+  document.addEventListener('keydown', (e) => {
+    if (isFullscreen()) return;
+    if (e.key === 'f' || e.key === 'F' || e.key === 'Enter') { goFullscreen().then(keepAwake).catch(() => {}); }
+  });
+  document.addEventListener('dblclick', () => {
+    if (!isFullscreen()) goFullscreen().then(keepAwake).catch(() => {});
+  });
+  document.addEventListener('fullscreenchange', syncFullscreenUI);
+  document.addEventListener('webkitfullscreenchange', syncFullscreenUI);
+
+  // Tentative automatique : inoffensive, et elle passe sur certaines
+  // configurations (navigateur déjà lancé en mode kiosque, par exemple).
+  if (params.get('fs') === '1') {
+    goFullscreen().then(keepAwake).catch(() => {});
+  }
+  syncFullscreenUI();
+  keepAwake();
 }
 
 let current = 'hof'; // pour que le premier tick affiche le classement
@@ -535,7 +609,7 @@ async function main() {
     </div>`;
     return;
   }
-  tryFullscreen();
+  setupFullscreen();
   loop();
 }
 

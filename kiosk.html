@@ -43,13 +43,37 @@ html { font-size: clamp(10px, calc(100vh / 54), 40px); }
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--k-bg); }
 body {
   font-family: 'Barlow Condensed', system-ui, sans-serif; color: var(--k-text);
-  cursor: none; user-select: none; -webkit-user-select: none;
+  user-select: none; -webkit-user-select: none;
   background:
     radial-gradient(60rem 34rem at 50% -12%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
     radial-gradient(46rem 30rem at 100% 112%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 55%),
     var(--k-bg);
 }
+body.is-fs { cursor: none; }
 #root { width: 100vw; height: 100vh; display: flex; flex-direction: column; position: relative; }
+
+/* ---- bouton plein écran ------------------------------------------------
+   Visible tant que l'écran n'est pas en plein écran, masqué dès qu'il l'est,
+   et de retour si le staff en sort (Échap). Posé en bas à droite pour ne
+   jamais recouvrir le classement. */
+#fs-btn {
+  position: fixed; right: 1.4rem; bottom: .9rem; z-index: 50;
+  display: flex; align-items: center; gap: .5rem; cursor: pointer;
+  font-family: 'Barlow Condensed', system-ui, sans-serif;
+  font-size: 1rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  padding: .6rem 1.1rem; border-radius: 999px;
+  color: var(--k-text); background: color-mix(in srgb, var(--k-bg) 82%, black 18%);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line));
+  box-shadow: 0 .3rem 1.4rem rgba(0,0,0,.45);
+  opacity: .85; transition: opacity .15s ease, transform .15s ease;
+}
+#fs-btn:hover { opacity: 1; transform: translateY(-1px); }
+#fs-btn svg { width: 1.15rem; height: 1.15rem; color: var(--accent); }
+#fs-btn[hidden] { display: none; }
+/* Tant que le bouton est là, on lui reserve sa place : il ne doit jamais
+   recouvrir la derniere ligne du classement. En plein ecran il disparait, la
+   marge aussi, et l'ecran est reellement plein. */
+body:not(.is-fs) #screen-rank { margin-bottom: 3.8rem; }
 
 /* ---- écran de blocage (pas connecté) --------------------------------- */
 .gate { margin: auto; text-align: center; max-width: 40rem; padding: 2rem; }
@@ -141,7 +165,7 @@ body {
 
 /* Colonne podium (= .pdfx-podium-col) */
 .rk-pod-col {
-  flex: 0 0 19rem; min-width: 0; max-width: 19rem; border-right: 1px solid var(--line);
+  flex: 0 0 26rem; min-width: 0; max-width: 26rem; border-right: 1px solid var(--line);
   padding: .9rem 1rem 1rem; display: flex; flex-direction: column; gap: .6rem; min-height: 0;
 }
 .pod {
@@ -176,6 +200,13 @@ body {
 .pod.p1 .pod-name { font-size: 1.85rem; }
 .pod-name.long { font-size: 1.2rem; }
 .pod.p1 .pod-name.long { font-size: 1.45rem; }
+/* Nom a rallonge : la carte a de la hauteur, on passe sur deux lignes plutot
+   que de couper le nom du client en plein milieu. */
+.pod-name.xlong {
+  font-size: 1rem; white-space: normal; line-height: 1.15;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.pod.p1 .pod-name.xlong { font-size: 1.15rem; }
 .pod-time { font-family: 'Teko', sans-serif; font-weight: 700; font-size: 2.1rem; line-height: 1; color: var(--k-text); }
 .pod.p1 .pod-time { font-size: 2.5rem; color: var(--gold); }
 .pod.p2 .pod-time { color: var(--silver); }
@@ -340,6 +371,6 @@ body {
 </head>
 <body>
 <div id="root"><div class="gate"><p>Chargement…</p></div></div>
-<script type="module" src="karting-v2/src/kiosk-app.js?v=20260826k5"></script>
+<script type="module" src="karting-v2/src/kiosk-app.js?v=20260826k6"></script>
 </body>
 </html>

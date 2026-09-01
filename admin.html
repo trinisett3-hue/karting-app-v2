@@ -1291,8 +1291,31 @@ te le demande à la première ouverture).
 </div>
 <div style="font-size:11px;color:var(--mut);margin-top:14px">
 Avec plusieurs TV : ouvre un onglet par écran (un en "Classement", l'autre en "Hall of Fame"),
-chacun sur son propre moniteur.
+chacun sur son propre moniteur. L'écran ne se met plus en veille tant qu'il est affiché.
 </div>
+</div>
+
+<div class="card">
+<div class="ctitle">TV allumée en permanence — mode kiosque du navigateur</div>
+<div style="font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:12px">
+Le bouton "Plein écran" de la page convient pour un affichage ponctuel. Pour une TV allumée
+toute la journée, lance plutôt Chrome en <strong>mode kiosque</strong> : aucune barre d'adresse,
+aucun onglet, et l'écran repart tout seul après un redémarrage de l'ordinateur. Choisis l'écran,
+copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le Bureau (Windows).
+</div>
+<div class="flex" style="gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+<select id="kiosk-cmd-mode" style="max-width:260px">
+<option value="">Rotation (classement + Hall of Fame)</option>
+<option value="rank">Classement uniquement</option>
+<option value="hof">Hall of Fame uniquement</option>
+</select>
+<button class="btn btn-ghost btn-sm" onclick="copyKioskCommand('mac')">Copier pour Mac</button>
+<button class="btn btn-ghost btn-sm" onclick="copyKioskCommand('win')">Copier pour Windows</button>
+</div>
+<div id="kiosk-cmd-out" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;
+     color:var(--txt);background:var(--bg);border:1px solid var(--bord);border-radius:8px;
+     padding:10px 12px;word-break:break-all;line-height:1.5">La commande s'affichera ici.</div>
+<div class="msg" id="msg-kiosk"></div>
 </div>
 </div>
 
@@ -1435,6 +1458,6 @@ chacun sur son propre moniteur.
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260826k28"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260826k29"></script>
 </body>
 </html>

@@ -481,13 +481,44 @@ export function switchParamsSubtab(tab) {
 // utilisateur DANS le document qui la demande, et l'activation utilisateur du clic ne se
 // transmet de façon fiable au nouvel onglet que jusqu'à sa propre navigation initiale —
 // donc c'est ce document (kiosk.html), au chargement, qui doit faire la demande lui-même.
-export function openKioskScreen(mode) {
+export function kioskURL(mode, withFs = true) {
   // 'rank' = classement de la dernière session publiée, 'hof' = Hall of Fame,
   // rien = rotation entre les deux. (L'écran s'appelait 'pdf' avant le 26/08 :
   // il affichait le fichier PDF dans un visionneur, remplacé depuis par un
   // rendu natif plein écran — voir kiosk-app.js.)
-  const qs = mode === 'rank' ? '?screen=rank&fs=1' : mode === 'hof' ? '?screen=hof&fs=1' : '?fs=1';
-  window.open('kiosk.html' + qs, '_blank');
+  const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'kiosk.html';
+  const p = [];
+  if (mode === 'rank' || mode === 'hof') p.push('screen=' + mode);
+  if (withFs) p.push('fs=1');
+  return base + (p.length ? '?' + p.join('&') : '');
+}
+
+export function openKioskScreen(mode) {
+  window.open(kioskURL(mode), '_blank');
+}
+
+// Commande de lancement du navigateur en MODE KIOSQUE, prête à coller dans un
+// terminal (macOS) ou un raccourci (Windows). C'est la seule façon d'avoir un
+// vrai plein écran permanent, sans barre d'adresse ni onglet, qui revient tout
+// seul après un redémarrage de l'ordinateur — le bouton « Plein écran » de la
+// page couvre l'usage ponctuel, celle-ci couvre la TV allumée toute la journée.
+export function kioskCommand(os, mode) {
+  const url = kioskURL(mode, false);
+  if (os === 'win') return `"C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe" --kiosk --disable-session-crashed-bubble "${url}"`;
+  return `open -na "Google Chrome" --args --kiosk --disable-session-crashed-bubble "${url}"`;
+}
+
+export async function copyKioskCommand(os) {
+  const mode = (document.getElementById('kiosk-cmd-mode') || {}).value || '';
+  const cmd = kioskCommand(os, mode);
+  const box = document.getElementById('kiosk-cmd-out');
+  if (box) box.textContent = cmd;
+  try {
+    await navigator.clipboard.writeText(cmd);
+    showMsg('msg-kiosk', 'Commande copiée — colle-la dans ' + (os === 'win' ? 'un raccourci Windows' : 'le Terminal du Mac') + '.', 'ok');
+  } catch (e) {
+    showMsg('msg-kiosk', 'Copie impossible : sélectionne la commande affichée ci-dessous et copie-la à la main.', 'err');
+  }
 }
 
 // --- Entitlement "thèmes premium" (plan Premium) ---------------------------------------
