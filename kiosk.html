@@ -9,11 +9,21 @@
 <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Barlow+Condensed:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,600;1,700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
+/* ======================================================================
+   ÉCRAN KIOSQUE — TV / mini-PC, jamais un téléphone.
+   ----------------------------------------------------------------------
+   Tout est dimensionné en rem, et le rem lui-même est calculé à partir de
+   la HAUTEUR de l'écran (100vh / 54). Conséquence : la page occupe la même
+   proportion d'écran sur un vieux mini-PC 1366x768 (rem ~14px), sur une TV
+   1080p (rem = 20px) et sur une 4K (rem = 40px) — sans media query, sans
+   scroll, sans texte qui déborde. C'est LE point qui rend un kiosque
+   utilisable en vrai : le staff branche n'importe quel écran, ça tombe
+   juste.
+   ====================================================================== */
 :root {
-  /* Valeurs par défaut (thème 'classic') — écrasées en JS à l'exécution
-     via applyTheme(), à partir de app_settings.global.results_theme :
-     le kiosque doit refléter le thème choisi par le circuit dans
-     Paramètres > Apparence, jamais un habillage neutre fixe. */
+  /* Valeurs par défaut (thème 'classic'). Écrasées à l'exécution par
+     applyTheme() depuis app_settings.global.results_theme : le kiosque
+     porte le thème choisi par le circuit dans Paramètres > Apparence. */
   --accent: #ff2a2a;
   --accent-2: #ff5555;
   --k-bg: #050608;
@@ -25,148 +35,311 @@
   --bronze: #d98a4a;
   --line: color-mix(in srgb, var(--k-text) 10%, transparent);
   --muted: var(--k-muted);
+  --surf-1: color-mix(in srgb, var(--k-text) 5%, transparent);
+  --surf-2: color-mix(in srgb, var(--k-text) 2%, transparent);
 }
+html { font-size: clamp(10px, calc(100vh / 54), 40px); }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: var(--k-bg); }
 body {
   font-family: 'Barlow Condensed', system-ui, sans-serif; color: var(--k-text);
   cursor: none; user-select: none; -webkit-user-select: none;
-  transition: background-color .4s ease, color .4s ease;
+  background:
+    radial-gradient(60rem 34rem at 50% -12%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 60%),
+    radial-gradient(46rem 30rem at 100% 112%, color-mix(in srgb, var(--accent-2) 12%, transparent), transparent 55%),
+    var(--k-bg);
 }
 #root { width: 100vw; height: 100vh; display: flex; flex-direction: column; position: relative; }
 
 /* ---- écran de blocage (pas connecté) --------------------------------- */
 .gate { margin: auto; text-align: center; max-width: 40rem; padding: 2rem; }
-.gate h1 { font-family: 'Teko', sans-serif; font-size: 3rem; font-weight: 600; margin: 0 0 1rem; letter-spacing: .02em; }
-.gate p { font-size: 1.2rem; line-height: 1.6; color: var(--muted); margin: 0 0 .5rem; }
-.gate code { background: #14161d; padding: .2rem .5rem; border-radius: .4rem; font-size: 1rem; }
+.gate h1 { font-family: 'Teko', sans-serif; font-size: 3rem; font-weight: 600; margin: 0 0 1rem; }
+.gate p { font-size: 1.15rem; line-height: 1.6; color: var(--muted); margin: 0 0 .5rem; }
+.gate code { background: var(--surf-1); padding: .2rem .5rem; border-radius: .4rem; }
 
-/* ---- entête commun -----------------------------------------------------
-   Adapté du header de la page 1 de results.html (.circuit-header) : carte
-   encadrée avec glow d'accent, tirets décoratifs en haut-gauche, équerre en
-   haut-droite — et surtout le LOGO SUR LE CÔTÉ (coin haut-droit de la
-   carte), jamais centré en pleine largeur au-dessus, exactement comme sur
-   la page résultats. */
+/* ---- en-tête commun ---------------------------------------------------
+   Repris du header de la page 1 de results.html (.circuit-header) : carte
+   encadrée, tirets décoratifs en haut-gauche, équerre en haut-droite, logo
+   du circuit posé SUR LE CÔTÉ droit. */
 .k-head {
   flex: 0 0 auto; position: relative; z-index: 1;
-  margin: 1.5rem 3rem .5rem; padding: 1.5rem 2.2rem;
-  background: color-mix(in srgb, var(--k-bg) 65%, black 35%);
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--line));
-  border-radius: 1.1rem; overflow: hidden;
-  box-shadow: 0 .3rem .9rem rgba(0,0,0,.28);
+  margin: .85rem 2.2rem .45rem; padding: .7rem 1.5rem;
+  background: color-mix(in srgb, var(--k-bg) 62%, black 38%);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--line));
+  border-radius: .9rem; overflow: hidden;
+  display: flex; align-items: center; gap: 1.4rem;
 }
 .k-head::before {
-  content: ''; position: absolute; top: 0; left: 0; width: 72px; height: 4px;
-  background: repeating-linear-gradient(90deg, var(--accent) 0px, var(--accent) 16px, transparent 16px, transparent 23px);
-  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 55%, transparent);
+  content: ''; position: absolute; top: 0; left: 0; width: 4.2rem; height: .2rem;
+  background: repeating-linear-gradient(90deg, var(--accent) 0, var(--accent) .9rem, transparent .9rem, transparent 1.3rem);
+  box-shadow: 0 0 .6rem color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .k-head::after {
-  content: ''; position: absolute; top: 8px; right: 8px; width: 30px; height: 30px;
-  border-top: 2px solid var(--accent); border-right: 2px solid var(--accent); opacity: .55;
+  content: ''; position: absolute; top: .4rem; right: .4rem; width: 1.5rem; height: 1.5rem;
+  border-top: .1rem solid var(--accent); border-right: .1rem solid var(--accent); opacity: .5;
 }
-.k-logo { position: absolute; top: 1.3rem; right: 1.8rem; max-height: 4.4rem; max-width: 14rem; object-fit: contain; z-index: 2; }
-.k-eyebrow { font-size: 1rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); margin: 0 0 .25rem; }
-/* "Hall of Fame" est le concept de l'écran : il doit se voir depuis
-   l'autre bout de la salle. "Top 20 / catégorie" reste lisible mais
-   nettement en retrait — c'est un sous-titre, pas le titre. Skew hérité
-   du .circuit-name de results.html (identité visuelle commune). */
+.k-head-txt { flex: 1 1 auto; min-width: 0; }
+.k-eyebrow { font-size: .85rem; font-weight: 700; letter-spacing: .3em; text-transform: uppercase; color: var(--accent); margin: 0 0 .1rem; }
 .k-title {
-  font-family: 'Teko', sans-serif; font-size: 4.6rem; font-weight: 700; line-height: 1;
-  margin: 0; letter-spacing: .01em; text-transform: uppercase; transform: skewX(-6deg); display: inline-block;
-  color: var(--k-text); text-shadow: 0 0 30px color-mix(in srgb, var(--accent) 30%, transparent);
+  font-family: 'Teko', sans-serif; font-size: 3.1rem; font-weight: 700; line-height: .95;
+  margin: 0; text-transform: uppercase; transform: skewX(-6deg); transform-origin: left center;
+  display: inline-block; color: var(--k-text);
+  text-shadow: 0 0 2rem color-mix(in srgb, var(--accent) 30%, transparent);
 }
-.k-sub {
-  margin: .55rem 0 0;
-  font-size: 1.05rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted);
+.k-sub { margin: .15rem 0 0; font-size: 1.05rem; font-weight: 600; letter-spacing: .04em; color: var(--muted); text-transform: uppercase; }
+.k-sub b { color: var(--k-text); font-weight: 700; }
+.k-logo { flex: 0 0 auto; max-height: 3.6rem; max-width: 11rem; object-fit: contain; }
+
+/* ---- ÉCRAN 1 : CLASSEMENT DE LA DERNIÈRE SESSION ----------------------
+   Mise en page calquée sur le PDF PAYSAGE du projet (public-results.js,
+   .pdfx-page.landscape) : bandeau d'en-tête, colonne podium à gauche, tableau
+   du classement complet à droite, pied de page. Mêmes codes visuels — display
+   italique, liseré d'accent devant les titres de section, bordures or/argent/
+   bronze sur le podium, zébrage une ligne sur deux — mais dimensionnés pour une
+   TV au lieu d'une feuille A4. Toutes les couleurs descendent du thème choisi
+   dans Paramètres > Apparence : aucune n'est écrite en dur ici. */
+#screen-rank {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+  margin: 0 1.6rem 1.2rem; border-radius: .9rem; overflow: hidden;
+  background: var(--k-bg2); border: 1px solid var(--line);
 }
 
-/* ---- écran PDF (classement complet) ------------------------------------ */
-#screen-pdf { flex: 1 1 auto; display: flex; }
-#pdf-frame { flex: 1 1 auto; width: 100%; height: 100%; border: 0; background: #fff; }
-.pdf-empty { margin: auto; text-align: center; color: var(--muted); font-size: 1.6rem; }
-
-/* ---- écran Hall of Fame par catégorie ----------------------------------- */
-body.hof-bg {
-  /* Glow dérivé des couleurs d'accent du thème choisi par le circuit
-     (Paramètres > Apparence) — jamais un rouge/orange neutre fixe. */
-  background:
-    radial-gradient(60rem 34rem at 50% -10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 60%),
-    radial-gradient(46rem 30rem at 100% 110%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 55%),
-    var(--k-bg);
+/* Bandeau d'en-tête (= .pdfx-head-band) */
+.rk-band {
+  position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 1.2rem;
+  padding: .85rem 1.6rem; border-bottom: 1px solid var(--line);
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 30%, transparent), transparent 65%), var(--surf-1);
 }
-#screen-hof { flex: 1 1 auto; display: flex; flex-direction: column; padding: .4rem 3rem 2.2rem; overflow: hidden; position: relative; z-index: 1; }
-.hof-empty { margin: auto; text-align: center; color: var(--muted); font-size: 1.6rem; }
-
-/* Bandeau "TOP 20" — remplace les anciens onglets LOISIR/COMPET. La
-   catégorie active est déjà nommée dans l'en-tête ("Catégorie : Loisir") ;
-   ici c'est le concept de l'écran, il doit se voir de loin : plus gros que
-   le sous-titre du header, trophée assorti au thème. */
-.k-top20 {
-  display: flex; align-items: center; justify-content: center; gap: .85rem;
-  margin: .2rem 0 1.5rem;
-  font-family: 'Teko', sans-serif; font-size: 3.1rem; font-weight: 700;
-  letter-spacing: .06em; text-transform: uppercase; line-height: 1;
-  color: var(--k-text); text-shadow: 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+.rk-band::after {
+  content: ''; position: absolute; top: .45rem; right: .45rem; width: 1.1rem; height: 1.1rem;
+  border-top: .1rem solid var(--accent); border-right: .1rem solid var(--accent); opacity: .5;
 }
-.k-top20 svg {
-  width: 2.6rem; height: 2.6rem; flex: 0 0 auto; color: var(--accent);
-  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 55%, transparent));
+.rk-band-left { flex: 1 1 auto; min-width: 0; }
+.rk-circuit {
+  font-family: 'Teko', sans-serif; font-weight: 700; font-style: italic; font-size: 2.5rem;
+  text-transform: uppercase; color: var(--k-text); line-height: 1.1;
+  transform: skewX(-6deg); transform-origin: left; display: inline-block;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.rk-session {
+  font-size: 1rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--accent); margin-top: .05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rk-band-logo { flex: 0 0 auto; max-height: 3.4rem; max-width: 10rem; object-fit: contain; }
+.rk-band-right { flex: 0 0 auto; text-align: right; }
+.rk-band-date { font-size: 1.05rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.rk-band-count { font-size: .95rem; color: var(--muted); margin-top: .1rem; }
+
+/* Corps : podium à gauche, tableau à droite (= .pdfx-body-wrap en paysage) */
+.rk-body { flex: 1 1 auto; min-height: 0; display: flex; align-items: stretch; }
+
+/* Titre de section avec liseré d'accent (= .pdfx-rank-title) */
+.rk-sect {
+  font-size: .92rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--muted); border-left: .18rem solid var(--accent); padding-left: .6rem; margin-bottom: .55rem;
 }
 
-.hof-grid { flex: 1 1 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 3rem; overflow: hidden; }
-.hof-col { display: flex; flex-direction: column; height: 100%; gap: .55rem; }
-.hof-row {
-  flex: 1 1 0; min-height: 0; display: flex; align-items: center; gap: 1.1rem;
-  padding: 0 1.3rem; border-radius: .9rem;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--k-text) 5%, transparent), color-mix(in srgb, var(--k-text) 1.5%, transparent));
-  border: 1px solid var(--line);
+/* Colonne podium (= .pdfx-podium-col) */
+.rk-pod-col {
+  flex: 0 0 19rem; min-width: 0; max-width: 19rem; border-right: 1px solid var(--line);
+  padding: .9rem 1rem 1rem; display: flex; flex-direction: column; gap: .6rem; min-height: 0;
 }
-.hof-row.top1 { background: linear-gradient(90deg, rgba(255,209,102,.14), rgba(255,209,102,.03)); border-color: rgba(255,209,102,.35); }
-.hof-row.top2 { background: linear-gradient(90deg, rgba(207,216,227,.11), rgba(207,216,227,.02)); border-color: rgba(207,216,227,.28); }
-.hof-row.top3 { background: linear-gradient(90deg, rgba(217,138,74,.13), rgba(217,138,74,.02)); border-color: rgba(217,138,74,.3); }
-
-.hof-rank {
-  flex: 0 0 3rem; height: 3rem; width: 3rem; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Teko', sans-serif; font-size: 1.9rem; font-weight: 600;
-  background: color-mix(in srgb, var(--k-text) 7%, transparent); color: var(--muted);
+.pod {
+  display: flex; align-items: center; gap: .8rem; min-width: 0; flex: 1 1 0; min-height: 0; max-height: 12rem;
+  background: var(--surf-1); border: .14rem solid var(--line); border-radius: .7rem; padding: .6rem .8rem;
 }
-.hof-row.top1 .hof-rank { background: linear-gradient(145deg, var(--gold), #b8862e); color: #241705; }
-.hof-row.top2 .hof-rank { background: linear-gradient(145deg, var(--silver), #7c8896); color: #12161c; }
-.hof-row.top3 .hof-rank { background: linear-gradient(145deg, var(--bronze), #7a4a24); color: #1c0f04; }
-
-.hof-av-ring {
-  flex: 0 0 3.6rem; width: 3.6rem; height: 3.6rem; border-radius: 50%; padding: 2px;
-  background: color-mix(in srgb, var(--k-text) 14%, transparent);
+.pod.p1 { border-color: var(--gold); }
+.pod.p2 { border-color: var(--silver); }
+.pod.p3 { border-color: var(--bronze); }
+.pod-rank {
+  flex: 0 0 auto; width: 1.9rem; text-align: center; font-family: 'Teko', sans-serif;
+  font-weight: 700; font-style: italic; font-size: 2.6rem; line-height: 1; color: var(--muted);
 }
-.hof-row.top1 .hof-av-ring { background: linear-gradient(145deg, var(--gold), #b8862e); }
-.hof-row.top2 .hof-av-ring { background: linear-gradient(145deg, var(--silver), #7c8896); }
-.hof-row.top3 .hof-av-ring { background: linear-gradient(145deg, var(--bronze), #7a4a24); }
-.hof-av { width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #14161d; display: flex; align-items: center; justify-content: center; }
-.hof-av img { width: 100%; height: 100%; object-fit: cover; }
-.hof-av svg { width: 100%; height: 100%; display: block; }
-
-/* Le nom prend sa largeur naturelle (ellipsis s'il est très long), la date
-   va chercher tout l'espace resté vide sur la ligne jusqu'au temps
-   (margin-left:auto) — occupe l'espace disponible plutôt que de rajouter
-   une ligne sous le temps. */
-.hof-main { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: .85rem; overflow: hidden; }
-.hof-name { flex: 0 1 auto; min-width: 0; font-size: 1.62rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hof-flag { margin-right: .5rem; }
-.hof-date { flex: 0 0 auto; margin-left: auto; font-size: 1.08rem; font-weight: 500; color: var(--muted); letter-spacing: .03em; white-space: nowrap; }
-
-.hof-time {
-  flex: 0 0 auto; font-variant-numeric: tabular-nums; font-size: 1.35rem; font-weight: 700;
-  padding: .35rem .85rem; border-radius: 999px; color: #fff;
-  background: color-mix(in srgb, var(--accent) 20%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+.pod.p1 .pod-rank { color: var(--gold); font-size: 3.2rem; }
+.pod.p2 .pod-rank { color: var(--silver); }
+.pod.p3 .pod-rank { color: var(--bronze); }
+.pod-av {
+  flex: 0 0 auto; width: 4.2rem; height: 4.2rem; border-radius: 50%; overflow: hidden;
+  background: var(--k-bg); border: .14rem solid var(--line);
 }
-.hof-row.top1 .hof-time { background: rgba(255,209,102,.18); border-color: rgba(255,209,102,.4); color: var(--gold); }
-.hof-row.top2 .hof-time { background: rgba(207,216,227,.14); border-color: rgba(207,216,227,.32); color: var(--silver); }
-.hof-row.top3 .hof-time { background: rgba(217,138,74,.16); border-color: rgba(217,138,74,.36); color: var(--bronze); }
+.pod.p1 .pod-av { width: 5rem; height: 5rem; border-color: var(--gold); }
+.pod.p2 .pod-av { border-color: var(--silver); }
+.pod.p3 .pod-av { border-color: var(--bronze); }
+.pod-av img { width: 100%; height: 100%; object-fit: cover; }
+.pod-av svg { width: 100%; height: 100%; display: block; }
+.pod-info { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: .15rem; }
+.pod-name {
+  font-family: 'Teko', sans-serif; font-weight: 700; font-style: italic; font-size: 1.55rem;
+  line-height: 1.15; text-transform: uppercase; color: var(--k-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.pod.p1 .pod-name { font-size: 1.85rem; }
+.pod-name.long { font-size: 1.2rem; }
+.pod.p1 .pod-name.long { font-size: 1.45rem; }
+.pod-time { font-family: 'Teko', sans-serif; font-weight: 700; font-size: 2.1rem; line-height: 1; color: var(--k-text); }
+.pod.p1 .pod-time { font-size: 2.5rem; color: var(--gold); }
+.pod.p2 .pod-time { color: var(--silver); }
+.pod.p3 .pod-time { color: var(--bronze); }
+.pod-meta { display: flex; gap: .6rem; flex-wrap: wrap; }
+.pod-meta span { font-size: .78rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.pod-meta b { color: var(--k-text); }
+
+/* QR : la seule chose que le PDF ne peut pas offrir — le pilote scanne l'écran
+   et repart avec ses chronos. Posé au pied de la colonne podium. */
+.rk-qr {
+  flex: 0 0 auto; margin-top: auto; display: flex; align-items: center; gap: .7rem;
+  border-top: 1px solid var(--line); padding-top: .7rem;
+}
+.rk-qr-img { flex: 0 0 auto; width: 5.4rem; height: 5.4rem; background: #fff; border-radius: .4rem; padding: .22rem; }
+.rk-qr-img svg { width: 100%; height: 100%; display: block; }
+.rk-qr-lbl { font-size: .92rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; line-height: 1.3; color: var(--k-text); }
+.rk-qr-lbl span { display: block; color: var(--muted); font-weight: 600; font-size: .82rem; letter-spacing: .03em; }
+
+/* Tableau du classement (= .pdfx-rank-wrap) */
+.rk-table { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; padding: .9rem 1.2rem 1rem; }
+.rk-cols { flex: 1 1 auto; min-height: 0; display: grid; gap: 0 1.6rem; }
+.rk-colblock { display: flex; flex-direction: column; min-height: 0; }
+.rk-head, .rk-row {
+  display: grid; align-items: center;
+  grid-template-columns: 2.2rem 2.6rem minmax(0, 1fr) 3.6rem 4rem 6.6rem 5.4rem;
+  gap: .45rem;
+}
+.rk-head {
+  flex: 0 0 auto; padding: 0 .6rem .45rem; font-size: .72rem; font-weight: 700;
+  letter-spacing: .03em; text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+.rk-head span { white-space: nowrap; }
+.rk-head .c { text-align: center; }
+.rk-rows { flex: 1 1 auto; min-height: 0; display: grid; grid-auto-rows: minmax(0, 1fr); }
+.rk-row {
+  min-height: 0; padding: 0 .6rem;
+  border-bottom: 1px solid var(--line); color: var(--k-text);
+}
+.rk-row:nth-child(even) { background: var(--surf-2); }
+.rk-row:last-child { border-bottom: none; }
+.rk-row.no-time { opacity: .5; }
+.rk-pos {
+  font-family: 'Teko', sans-serif; font-weight: 700; font-style: italic; font-size: 1.9rem;
+  color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; line-height: 1;
+}
+.rk-row.top3 .rk-pos { color: var(--accent); }
+.rk-av { width: 2.3rem; height: 2.3rem; border-radius: 50%; overflow: hidden; background: var(--k-bg); border: 1px solid var(--line); justify-self: center; }
+.rk-av img { width: 100%; height: 100%; object-fit: cover; }
+.rk-av svg { width: 100%; height: 100%; display: block; }
+.rk-name { font-size: 1.4rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.35; }
+/* Nom long : on descend d'un cran plutot que de couper. « Chloé Marcha... » sur
+   un ecran d'accueil, ca fait bacle — et c'est le nom du client. */
+.rk-name.n1 { font-size: 1.18rem; }
+.rk-name.n2 { font-size: 1.02rem; }
+.rk-name.n3 { font-size: .88rem; letter-spacing: -.01em; }
+.rk-cols.airy .rk-name.n1 { font-size: 1.95rem; }
+.rk-cols.airy .rk-name.n2 { font-size: 1.65rem; }
+.rk-cols.airy .rk-name.n3 { font-size: 1.3rem; }
+.rk-cols.dense .rk-name.n1 { font-size: 1.02rem; }
+.rk-cols.dense .rk-name.n2 { font-size: .9rem; }
+.rk-cols.dense .rk-name.n3 { font-size: .78rem; }
+.rk-cols.hof .rk-name.n1 { font-size: 1.1rem; }
+.rk-cols.hof .rk-name.n2 { font-size: .96rem; }
+.rk-cols.hof .rk-name.n3 { font-size: .84rem; }
+.rk-flag { margin-right: .35rem; }
+.rk-team { display: block; font-size: .78rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; line-height: 1.2; }
+.rk-kart, .rk-laps { color: var(--muted); font-size: 1.05rem; text-align: center; font-variant-numeric: tabular-nums; }
+.rk-best { font-family: 'Teko', sans-serif; font-weight: 600; font-size: 1.75rem; text-align: center; font-variant-numeric: tabular-nums; line-height: 1; }
+.rk-gap { color: var(--muted); font-size: 1.05rem; text-align: center; font-variant-numeric: tabular-nums; }
+
+/* Densité : la typo du tableau suit le nombre de lignes. Peu de pilotes = tout
+   grossit (sinon le texte flotte au milieu de lignes de 150 px) ; beaucoup de
+   pilotes = tout se resserre. */
+.rk-cols.airy .rk-name { font-size: 2.3rem; }
+.rk-cols.airy .rk-pos  { font-size: 2.9rem; }
+.rk-cols.airy .rk-best { font-size: 2.8rem; }
+.rk-cols.airy .rk-av   { width: 3.6rem; height: 3.6rem; }
+.rk-cols.airy .rk-kart, .rk-cols.airy .rk-laps, .rk-cols.airy .rk-gap { font-size: 1.4rem; }
+.rk-cols.airy .rk-head { font-size: .9rem; }
+.rk-cols.airy .rk-head, .rk-cols.airy .rk-row {
+  grid-template-columns: 3rem 3.8rem minmax(0, 1fr) 4.4rem 4.8rem 8.4rem 6.4rem; gap: .6rem;
+}
+
+/* Densité : le tableau se resserre quand il y a beaucoup de pilotes. */
+.rk-cols.dense .rk-name { font-size: 1.15rem; }
+.rk-cols.dense .rk-pos  { font-size: 1.5rem; }
+.rk-cols.dense .rk-best { font-size: 1.4rem; }
+.rk-cols.dense .rk-av   { width: 1.9rem; height: 1.9rem; }
+.rk-cols.dense .rk-kart, .rk-cols.dense .rk-laps, .rk-cols.dense .rk-gap { font-size: .92rem; }
+.rk-cols.dense .rk-head, .rk-cols.dense .rk-row {
+  /* Deux colonnes cote a cote : la colonne TOURS disparait au profit du nom.
+     Sur une TV, savoir qu'un pilote a fait 16 tours est secondaire ; lire son
+     nom en entier ne l'est pas (« Camille D... » sur un ecran d'accueil, non). */
+  /* SIX colonnes ici, pas sept : la cellule TOURS est retiree du flux (lignes
+     ET en-tete, sinon la grille se decale d'un cran et l'ecart se superpose au
+     chrono). */
+  grid-template-columns: 1.8rem 2.1rem minmax(0, 1fr) 2.6rem 5rem 4.4rem; gap: .3rem;
+}
+.rk-cols.dense .rk-laps,
+.rk-cols.dense .rk-head span:nth-child(5) { display: none; }
+
+/* Pied de page (= .pdfx-sheet-footer) */
+.rk-foot {
+  flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+  padding: .55rem 1.6rem .7rem; border-top: 1px solid var(--line);
+  font-size: .88rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+.rk-foot b { color: var(--k-text); }
+.rk-foot .rk-brand { font-weight: 800; letter-spacing: .22em; color: var(--k-text); }
+.rk-foot .rk-record { color: var(--gold); display: flex; align-items: center; gap: .4rem; }
+.rk-foot .rk-record svg { width: 1.1rem; height: 1.1rem; }
+
+/* ---- ÉCRAN 2 : HALL OF FAME ------------------------------------------
+   Réutilise intégralement la charpente de l'écran classement (bandeau,
+   colonne de gauche, tableau, pied) : quand les deux écrans alternent sur la
+   même TV, ils doivent paraître taillés dans le même bloc. Seules les colonnes
+   du tableau changent — ici Date du record au lieu de Tours et Écart. */
+.rk-cols.hof .rk-head, .rk-cols.hof .rk-row {
+  grid-template-columns: 2.2rem 2.6rem minmax(0, 1fr) 2.8rem 5rem 5.8rem;
+}
+/* En deux colonnes, le nom du pilote passait a « Kevin Mo... ». On lui rend la
+   place : date raccourcie, et surtout la colonne KART disparait — sur un record
+   de tous les temps, le numero du kart de l'epoque n'apprend rien a personne,
+   et il figure deja sur la plaque de l'avatar. */
+.rk-cols.hof.twocol .rk-head, .rk-cols.hof.twocol .rk-row {
+  grid-template-columns: 2.2rem 2.6rem minmax(0, 1fr) 4.6rem 5.8rem;
+}
+.rk-cols.hof.twocol .rk-kart,
+.rk-cols.hof.twocol .rk-head span:nth-child(4) { display: none; }
+.rk-cols.hof .rk-name { font-size: 1.3rem; }
+.rk-cols.hof.airy .rk-head, .rk-cols.hof.airy .rk-row {
+  grid-template-columns: 3rem 3.8rem minmax(0, 1fr) 4.4rem 7rem 8.4rem;
+}
+.rk-cols.hof.dense .rk-head, .rk-cols.hof.dense .rk-row {
+  grid-template-columns: 1.8rem 2.1rem minmax(0, 1fr) 4.2rem 4.8rem; gap: .3rem;
+}
+/* La colonne Date reste lisible mais ne doit jamais voler la vedette au chrono. */
+.rk-date { color: var(--muted); font-size: 1rem; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rk-cols.airy .rk-date { font-size: 1.25rem; }
+.rk-cols.dense .rk-date { font-size: .88rem; }
+
+/* Bloc "Top 20" au pied de la colonne de gauche : rappelle le concept de
+   l'écran, à la place du QR (qui n'a pas de sens ici — un Hall of Fame n'est
+   pas rattaché à une session précise). */
+.rk-top20 {
+  flex: 0 0 auto; margin-top: auto; display: flex; align-items: center; justify-content: center; gap: .6rem;
+  border-top: 1px solid var(--line); padding-top: .8rem;
+  font-family: 'Teko', sans-serif; font-size: 2.4rem; font-weight: 700;
+  letter-spacing: .06em; text-transform: uppercase; line-height: 1; color: var(--k-text);
+}
+.rk-top20 svg {
+  width: 2rem; height: 2rem; color: var(--accent);
+  filter: drop-shadow(0 0 .5rem color-mix(in srgb, var(--accent) 55%, transparent));
+}
+
+/* ---- états vides ------------------------------------------------------ */
+.k-empty { margin: auto; text-align: center; color: var(--muted); font-size: 1.5rem; max-width: 40rem; line-height: 1.5; padding: 2rem; }
+.k-empty strong { display: block; color: var(--k-text); font-size: 2rem; margin-bottom: .6rem; font-family: 'Teko', sans-serif; letter-spacing: .02em; }
 </style>
 </head>
 <body>
 <div id="root"><div class="gate"><p>Chargement…</p></div></div>
-<script type="module" src="karting-v2/src/kiosk-app.js?v=20260826k3"></script>
+<script type="module" src="karting-v2/src/kiosk-app.js?v=20260826k5"></script>
 </body>
 </html>

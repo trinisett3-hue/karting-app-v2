@@ -1,46 +1,67 @@
-// Écran KIOSQUE (K-28, dernier mot du 25/08) — page STAFF, jamais publique.
-// Contrairement à results.html (page pilote/publique), cette page n'a
-// AUCUN jeton dans l'URL : elle utilise le client Supabase normal, avec
-// la session persistée de l'admin déjà connecté sur cette machine (voir
-// lib/supabase.js — 'kiosk' n'est pas dans isPublicPage, donc client
-// authentifié standard, exactement comme admin.html). Si personne n'est
-// connecté sur ce navigateur, l'écran affiche un message et rien d'autre
-// — jamais de repli anonyme, jamais de jeton à distribuer.
+// Écran KIOSQUE (K-28) — page STAFF, jamais publique.
 //
-// Deux écrans :
-//   1) Le PDF classement.pdf de la dernière session publiée — LE MÊME
-//      fichier que celui reçu par les pilotes (session_assets, kind=
-//      'full_pdf'), affiché via une URL signée (bucket privé session-
-//      exports, policy admin déjà en place — aucune nouvelle exposition).
-//   2) Hall of Fame TOP 20 par catégorie (type de session), avec avatar,
-//      nationalité et meilleur temps (my_hall_of_fame_top20(), v29).
+// Contrairement à results.html (page pilote/publique), cette page n'a AUCUN
+// jeton dans l'URL : elle utilise le client Supabase normal, avec la session
+// persistée de l'admin déjà connecté sur cette machine (voir lib/supabase.js —
+// 'kiosk' n'est pas dans isPublicPage, donc client authentifié standard, comme
+// admin.html). Personne de connecté sur ce navigateur = message et rien
+// d'autre : jamais de repli anonyme, jamais de jeton à distribuer.
 //
-// ?screen=pdf ou ?screen=hof fige l'écran (plusieurs TV différentes) ;
-// sans paramètre, rotation entre les deux (30s), et l'écran Hall of Fame
-// fait lui-même défiler les catégories (9s) sans recharger la page.
+// Deux écrans, tous les deux rendus NATIVEMENT en HTML plein écran :
+//
+//   1) CLASSEMENT de la dernière session publiée (my_kiosk_ranking, v31).
+//      Historique : cet écran affichait au départ le fichier classement.pdf
+//      lui-même, dans un <embed>. Abandonné le 26/08 pour deux raisons de
+//      fond, toutes deux visibles à l'œil nu sur une TV :
+//        - le PDF est généré en A4 PORTRAIT (il est fait pour l'impression et
+//          l'e-mail) ; sur un écran 16:9 il n'occupe qu'un tiers de la largeur,
+//          avec deux bandes vides sur les côtés, et le texte tombe à une taille
+//          illisible à plus de deux mètres ;
+//        - le visionneur PDF de Chrome impose sa barre d'outils (télécharger,
+//          imprimer, zoom) : #toolbar=0 n'est plus respecté depuis Chrome 90+.
+//          Sur un écran d'accueil, un bouton « télécharger » n'a aucun sens.
+//      Les CHIFFRES sont identiques à ceux du PDF : même source (laps +
+//      session_registrations), même tri (meilleur tour croissant, sans-chrono
+//      en dernier), même écart (meilleur tour - meilleur tour du leader) que
+//      prepareSessionResults() dans public-results.js. Seule la mise en page
+//      change, et c'est précisément ce qu'on veut : le PDF est fait pour du
+//      papier, cet écran est fait pour une TV.
+//
+//   2) HALL OF FAME top 20 par catégorie (my_hall_of_fame_top20, v30).
+//
+// ?screen=rank ou ?screen=hof fige l'écran (utile quand le circuit a
+// plusieurs TV) ; sans paramètre, les deux alternent. ?fs=1 demande le plein
+// écran au chargement (posé par Paramètres > Kiosque).
 
 import { db } from './lib/supabase.js';
 import { kartAvatarSVG } from './modules/kart-avatar.js';
+import { qrSVG } from './modules/qr.js';
 
-const ROTATE_MS = 30000;   // alternance PDF <-> HOF quand aucun ?screen= n'est fixé
-const REFRESH_MS = 180000; // re-vérifie la dernière session publiée / les records
-const CAT_ROTATE_MS = 9000; // alternance entre catégories sur l'écran Hall of Fame
+// Le classement reste plus longtemps que le Hall of Fame : c'est lui que les
+// pilotes qui descendent du kart viennent chercher.
+const RANK_MS = 40000;
+const HOF_MS = 25000;
+const REFRESH_MS = 180000;  // ré-interrogation en mode écran fixe
+const CAT_MS = 9000;        // rotation des catégories (Hall of Fame)
+const PAGE_MS = 11000;      // rotation des pages (classement très fourni)
 
 const root = document.getElementById('root');
 const params = new URLSearchParams(window.location.search);
-const fixedScreen = (params.get('screen') === 'pdf' || params.get('screen') === 'hof') ? params.get('screen') : null;
+const SCREENS = ['rank', 'hof'];
+const fixedScreen = SCREENS.includes(params.get('screen')) ? params.get('screen') : null;
 
-// Minuteur de rotation des catégories (écran HOF) — UNE seule instance à la
-// fois. Bug corrigé : renderHofScreen() est ré-appelée toutes les 30s (mode
-// rotation) ou 180s (écran fixe), et créait un nouveau setInterval à CHAQUE
-// appel sans jamais annuler le précédent — la rotation des catégories
-// accélérait au fil du temps (plusieurs minuteurs empilés qui tournent tous
-// en parallèle) au lieu de rester à 9s. Un seul minuteur nommé, toujours
-// coupé avant d'en reposer un.
-let catTimer = null;
-function clearCatTimer() {
-  if (catTimer) { clearInterval(catTimer); catTimer = null; }
+// Un SEUL minuteur interne d'écran à la fois (rotation des catégories du Hall
+// of Fame, ou des pages du classement). Bug corrigé le 26/08 : chaque rendu
+// d'écran créait un setInterval sans annuler le précédent, et comme tick()
+// re-rend toutes les 25-40s, les minuteurs s'empilaient — la rotation
+// accélérait au fil des heures. Un seul minuteur nommé, toujours coupé avant
+// d'en reposer un.
+let subTimer = null;
+function clearSubTimer() {
+  if (subTimer) { clearInterval(subTimer); subTimer = null; }
 }
+
+/* ---------------------------------------------------------------- outils */
 
 function escapeHTML(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -48,34 +69,76 @@ function escapeHTML(s) {
 
 function flagOf(nat) {
   const n = String(nat || '').trim().toUpperCase();
-  const MAP = { FR: '🇫🇷', BE: '🇧🇪', CH: '🇨🇭', DE: '🇩🇪', ES: '🇪🇸', IT: '🇮🇹', GB: '🇬🇧', US: '🇺🇸', LU: '🇱🇺', NL: '🇳🇱', PT: '🇵🇹' };
+  const MAP = { FR: '🇫🇷', BE: '🇧🇪', CH: '🇨🇭', DE: '🇩🇪', ES: '🇪🇸', IT: '🇮🇹', GB: '🇬🇧', US: '🇺🇸', LU: '🇱🇺', NL: '🇳🇱', PT: '🇵🇹', MA: '🇲🇦', DZ: '🇩🇿', TN: '🇹🇳', CA: '🇨🇦' };
   return MAP[n] || '';
 }
 
 function fmtTime(sec) {
   const n = Number(sec);
   if (!Number.isFinite(n) || n <= 0) return '--';
-  if (n >= 60) { const m = Math.floor(n / 60); const s = (n % 60).toFixed(3).padStart(6, '0'); return `${m}:${s}`; }
-  return `${n.toFixed(3)}s`;
+  if (n >= 60) { const m = Math.floor(n / 60); return `${m}:${(n % 60).toFixed(3).padStart(6, '0')}`; }
+  return n.toFixed(3);
 }
 
-// Date du record en dd/mm/aaaa : chaque ligne est un record précis d'un
-// pilote donné (pas une moyenne du mois), la date complète a donc plus de
-// sens qu'un simple "août 2026" qui gommerait l'info exacte.
+function fmtGap(gap) {
+  const n = Number(gap);
+  if (!Number.isFinite(n)) return '';
+  if (n <= 0) return '';
+  return '+' + n.toFixed(3);
+}
+
+// Date d'un record en dd/mm/aaaa : chaque ligne du Hall of Fame est un record
+// précis d'un pilote donné, la date complète a donc plus de sens qu'un mois.
 function fmtDate(iso) {
   const d = iso ? new Date(iso) : null;
   if (!d || Number.isNaN(d.getTime())) return '';
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${d.getFullYear()}`;
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 }
 
-// ------------------------------------------------------------------
-// Thème visuel — dérivé de app_settings.global.results_theme, EXACTEMENT
-// les mêmes tokens que results.html (Paramètres > Apparence). Le kiosque
-// ne doit jamais afficher un fond neutre indépendant de ce que le circuit
-// a choisi pour sa page publique.
-// ------------------------------------------------------------------
+// Date de session : « lundi 26 août », plus parlant sur un écran d'accueil
+// qu'un 26/08/2026 administratif.
+// Variante courte pour les tableaux serres : 26/08/26.
+function fmtDateShort(iso) {
+  const d = iso ? new Date(iso) : null;
+  if (!d || Number.isNaN(d.getTime())) return '';
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getFullYear()).slice(2)}`;
+}
+
+function fmtSessionDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(String(dateStr).length <= 10 ? dateStr + 'T12:00:00' : dateStr);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+// Heure courte (16h42) pour le pied de page : sur un ecran qui tourne en
+// continu, savoir a quand remonte le dernier rafraichissement vaut mieux que
+// de repeter la date de session, deja affichee dans le bandeau.
+function fmtClock(d = new Date()) {
+  return `${String(d.getHours()).padStart(2, '0')}h${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+// Les inscrits non identifiés s'appellent « Unknown #3050 » en base. Tel quel
+// sur une TV vue par les clients, ça fait bâclé : on affiche le kart, qui est
+// l'identifiant que le pilote a réellement sous les yeux pendant la course.
+// Classe de taille selon la longueur du nom : plutot que de tronquer, on
+// reduit. Les seuils sont volontairement bas — le nom partage sa colonne avec
+// un drapeau, et une TV se regarde de loin.
+function nameCls(name, twoCols) {
+  const n = String(name || '').length;
+  const lim = twoCols ? [13, 18, 26] : [20, 27, 34];
+  return n > lim[2] ? ' n3' : n > lim[1] ? ' n2' : n > lim[0] ? ' n1' : '';
+}
+
+function pilotName(r) {
+  const raw = String(r.pilot || '').trim();
+  if (r.unknown || !raw || /^unknown/i.test(raw)) return r.kart != null ? `Kart ${r.kart}` : 'Pilote';
+  return raw;
+}
+
+/* ------------------------------------------------------------- le thème */
+// Mêmes tokens que results.html (Paramètres > Apparence) : le kiosque porte
+// l'habillage choisi par le circuit, jamais un fond neutre indépendant.
 const KIOSK_THEMES = {
   classic:   { bg: '#050608', bg2: '#0d0f14', text: '#f4f5f8', muted: '#7a7d8a', accent: '#ff2a2a', accent2: '#ff5555' },
   neon:      { bg: '#060810', bg2: '#0b0e18', text: '#f0f4ff', muted: '#6a7a9a', accent: '#00d4ff', accent2: '#ff0080' },
@@ -87,9 +150,25 @@ const KIOSK_THEMES = {
   arctic:    { bg: '#f4f6f9', bg2: '#ffffff', text: '#11131c', muted: '#565c72', accent: '#1a6fbd', accent2: '#0c4a86' },
 };
 
+// Luminance approchee d'une couleur hex : sert a savoir si le theme est clair.
+function isLight(hex) {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || ''));
+  if (!m) return false;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255 > 0.55;
+}
+
 function applyTheme(themeKey) {
   const t = KIOSK_THEMES[themeKey] || KIOSK_THEMES.classic;
   const s = document.documentElement.style;
+  // Or / argent / bronze : les teintes claires (pensees pour un fond sombre)
+  // deviennent illisibles sur le theme clair (arctic). On bascule sur des
+  // versions assombries des memes metaux.
+  const light = isLight(t.bg);
+  s.setProperty('--gold', light ? '#a9791a' : '#ffd166');
+  s.setProperty('--silver', light ? '#6b7684' : '#cfd8e3');
+  s.setProperty('--bronze', light ? '#9a5a24' : '#d98a4a');
   s.setProperty('--k-bg', t.bg);
   s.setProperty('--k-bg2', t.bg2);
   s.setProperty('--k-text', t.text);
@@ -98,14 +177,11 @@ function applyTheme(themeKey) {
   s.setProperty('--accent-2', t.accent2);
 }
 
-// Même moteur d'avatars que partout ailleurs dans l'app (public-results.js,
-// exports PDF, admin) : le vrai kart illustré (24 vignettes dessinées à la
-// main), pas un simple rond de couleur — photo du pilote en priorité si elle
-// existe, sinon l'avatar kart illustré correspondant au numéro/scheme.
+// Même moteur d'avatars que partout ailleurs (public-results.js, exports PDF,
+// admin) : le vrai kart illustré (24 vignettes dessinées à la main). Photo du
+// pilote en priorité quand elle existe.
 function avatarHTML(photo, kart, scheme) {
-  if (photo) {
-    return `<img src="${escapeHTML(photo)}" alt="" loading="lazy" onerror="this.style.display='none'">`;
-  }
+  if (photo) return `<img src="${escapeHTML(photo)}" alt="" loading="lazy" onerror="this.style.display='none'">`;
   return kartAvatarSVG(kart, { scheme, title: kart != null ? `Kart ${kart}` : '' });
 }
 
@@ -115,150 +191,338 @@ function typeLabel(type) {
   return t.charAt(0).toUpperCase() + t.slice(1);
 }
 
+const TROPHY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a1 1 0 0 0-1 1c0 2.5 1.8 4.5 4.2 4.9M17 6h3a1 1 0 0 1 1 1c0 2.5-1.8 4.5-4.2 4.9"/></svg>';
+const BOLT_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M13 2 4.5 13.5H11l-1 8.5 8.5-11.5H12l1-8.5z"/></svg>';
+
 async function getTenantHeader() {
   const { data } = await db.from('app_settings').select('value').eq('key', 'global').maybeSingle();
   const v = (data && data.value) || {};
   return { circuitName: v.circuit_name || '', logoUrl: v.logo_url || null, theme: v.results_theme || 'classic' };
 }
 
-// ------------------------------------------------------------------
-// ÉCRAN 1 — PDF classement complet (le même que celui reçu par les
-// pilotes), dernière session publiée.
-// ------------------------------------------------------------------
-async function renderPdfScreen() {
-  clearCatTimer();
-  document.body.classList.remove('hof-bg');
-  root.innerHTML = `<div class="k-head"><div class="k-eyebrow">Chargement…</div></div>`;
+// En-tête commun aux deux écrans — logo du circuit SUR LE CÔTÉ droit, comme
+// sur la page 1 de results.html.
+function headHTML(header, title, subHTML) {
+  return `<div class="k-head">
+    <div class="k-head-txt">
+      <div class="k-eyebrow">${escapeHTML(header.circuitName || '')}</div>
+      <h1 class="k-title">${escapeHTML(title)}</h1>
+      ${subHTML ? `<p class="k-sub">${subHTML}</p>` : ''}
+    </div>
+    ${header.logoUrl ? `<img class="k-logo" src="${escapeHTML(header.logoUrl)}" alt="" onerror="this.remove()">` : ''}
+  </div>`;
+}
 
-  const { data: sess, error: sErr } = await db
-    .from('session_assets')
-    .select('storage_path, created_at')
-    .eq('kind', 'full_pdf')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+function emptyHTML(title, msg) {
+  return `<div class="k-empty"><strong>${escapeHTML(title)}</strong>${escapeHTML(msg)}</div>`;
+}
 
-  if (sErr || !sess) {
-    root.innerHTML = `<div id="screen-pdf"><div class="pdf-empty">Aucun classement publié pour l'instant.</div></div>`;
+/* ------------------------------------------- ÉCRAN 1 — CLASSEMENT (v31)
+   Mise en page reprise du PDF PAYSAGE du projet (public-results.js,
+   .pdfx-page.landscape) : bandeau, colonne podium à gauche, tableau du
+   classement complet à droite, pied de page. Le tableau reprend exactement les
+   colonnes du PDF (Pos / Pilote / Kart / Tours / Meilleur tour / Écart) et,
+   comme lui, liste TOUS les pilotes — le podium de gauche est un rappel, pas
+   une soustraction. */
+
+// QR vers le classement public de CETTE session : le pilote scanne l'écran en
+// sortant de piste et repart avec ses chronos et son PDF sur son téléphone.
+function qrBlockHTML(token) {
+  if (!token) return '';
+  const url = window.location.origin + '/results.html?result=' + encodeURIComponent(token);
+  let svg = '';
+  try { svg = qrSVG(url, '#0a0a0a', '#ffffff'); } catch (e) { return ''; }
+  return `<div class="rk-qr">
+    <div class="rk-qr-img">${svg}</div>
+    <div class="rk-qr-lbl">Tes chronos<span>scanne ce code</span></div>
+  </div>`;
+}
+
+function podiumHTML(rows) {
+  return rows.map(r => {
+    const name = pilotName(r);
+    const sizeCls = name.length > (r.pos === 1 ? 13 : 15) ? ' long' : '';
+    const showKart = r.kart != null && !/^Kart /.test(name);
+    return `
+    <div class="pod p${r.pos}">
+      <div class="pod-rank">${r.pos}</div>
+      <div class="pod-av">${avatarHTML(r.photo, r.kart, r.scheme)}</div>
+      <div class="pod-info">
+        <div class="pod-name${sizeCls}">${escapeHTML(name)}</div>
+        <div class="pod-time">${fmtTime(r.best_lap)}</div>
+        <div class="pod-meta">
+          ${showKart ? `<span>Kart <b>${r.kart}</b></span>` : ''}
+          <span>Tours <b>${r.laps_count || 0}</b></span>
+          ${r.pos > 1 && r.gap != null ? `<span>Écart <b>${fmtGap(r.gap)}</b></span>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+const RANK_HEAD_HTML = `<div class="rk-head">
+  <span class="c"></span><span></span><span>Pilote</span>
+  <span class="c">Kart</span><span class="c">Tours</span><span class="c">Meill. tour</span><span class="c">Écart</span>
+</div>`;
+
+function rankRowHTML(r, twoCols) {
+  const name = pilotName(r);
+  const team = r.team_name
+    ? `<span class="rk-team" style="color:${escapeHTML(r.team_color || 'inherit')}">${escapeHTML(r.team_name)}</span>` : '';
+  return `<div class="rk-row${r.pos <= 3 ? ' top3' : ''}${r.has_time ? '' : ' no-time'}">
+    <div class="rk-pos">${r.pos}</div>
+    <div class="rk-av">${avatarHTML(r.photo, r.kart, r.scheme)}</div>
+    <div class="rk-name${nameCls(name, twoCols)}">${flagOf(r.nat) ? `<span class="rk-flag">${flagOf(r.nat)}</span>` : ''}${escapeHTML(name)}${team}</div>
+    <div class="rk-kart">${r.kart ?? '-'}</div>
+    <div class="rk-laps">${r.has_time ? (r.laps_count || 0) : '--'}</div>
+    <div class="rk-best">${fmtTime(r.best_lap)}</div>
+    <div class="rk-gap">${r.has_time ? (fmtGap(r.gap) || '—') : '--'}</div>
+  </div>`;
+}
+
+async function renderRankScreen() {
+  clearSubTimer();
+  root.innerHTML = `<div class="k-head"><div class="k-head-txt"><div class="k-eyebrow">Chargement…</div></div></div>`;
+
+  const [{ data, error }, header] = await Promise.all([
+    db.rpc('my_kiosk_ranking'),
+    getTenantHeader(),
+  ]);
+  applyTheme(header.theme);
+
+  if (error || !data) {
+    root.innerHTML = headHTML(header, 'Classement', '') + emptyHTML('Classement indisponible', 'Impossible de lire les résultats pour le moment.');
     return false;
   }
 
-  const { data: signed, error: uErr } = await db.storage
-    .from('session-exports')
-    .createSignedUrl(sess.storage_path, 3600);
-
-  if (uErr || !signed || !signed.signedUrl) {
-    root.innerHTML = `<div id="screen-pdf"><div class="pdf-empty">Impossible de charger le PDF (droits ou fichier manquant).</div></div>`;
+  const session = data.session || null;
+  const rows = Array.isArray(data.rows) ? data.rows : [];
+  // Pas encore de session publiée : on le dit clairement, et tick() enchaînera
+  // sur le Hall of Fame plutôt que de laisser une TV sur un écran mort.
+  if (!session || !rows.length) {
+    root.innerHTML = headHTML(header, 'Classement', '') +
+      emptyHTML('Aucune course publiée', 'Le classement s’affichera ici dès la première session publiée.');
     return false;
   }
 
-  // #toolbar=0&view=FitH : plein écran sans barre d'outils, ajusté en
-  // largeur — le PDF est généré en portrait (impression pilote) ; sur une
-  // TV en paysage on le laisse centré à sa taille naturelle plutôt que de
-  // le déformer, le fond blanc de la page reste visible autour.
-  root.innerHTML = `<div id="screen-pdf"><embed id="pdf-frame" src="${signed.signedUrl}#toolbar=0&navpanes=0&view=FitH" type="application/pdf"></div>`;
+  const podium = rows.slice(0, 3);
+  const recordHolder = rows.find(r => r.is_record && r.has_time);
+  const dateTxt = fmtSessionDate(session.session_date);
+
+  // Découpage : une colonne jusqu'à 14 pilotes, deux au-delà, et pagination
+  // quand même deux colonnes ne suffisent plus (28 lignes visibles à la fois).
+  const PER_PAGE = 28;
+  const pages = [];
+  for (let i = 0; i < rows.length; i += PER_PAGE) pages.push(rows.slice(i, i + PER_PAGE));
+
+  let page = 0;
+  const paint = () => {
+    const list = pages[page] || [];
+    const nCols = list.length > 14 ? 2 : 1;
+    const perCol = Math.ceil(list.length / nCols);
+    const cols = [];
+    for (let i = 0; i < nCols; i++) cols.push(list.slice(i * perCol, (i + 1) * perCol));
+    const dens = perCol <= 6 ? ' airy' : perCol > 11 ? ' dense' : '';
+    const pageTag = pages.length > 1 ? ` · page ${page + 1}/${pages.length}` : '';
+
+    root.innerHTML = `<div id="screen-rank">
+      <div class="rk-band">
+        <div class="rk-band-left">
+          <div class="rk-circuit">${escapeHTML(header.circuitName || 'Classement')}</div>
+          <div class="rk-session">Classement complet${session.title ? ' — ' + escapeHTML(session.title) : ''}</div>
+        </div>
+        ${header.logoUrl ? `<img class="rk-band-logo" src="${escapeHTML(header.logoUrl)}" alt="" onerror="this.remove()">` : ''}
+        <div class="rk-band-right">
+          <div class="rk-band-date">${escapeHTML(dateTxt)}</div>
+          <div class="rk-band-count">${rows.length} pilote${rows.length > 1 ? 's' : ''}${pageTag}</div>
+        </div>
+      </div>
+      <div class="rk-body">
+        <div class="rk-pod-col">
+          <div class="rk-sect">Podium</div>
+          ${podiumHTML(podium)}
+          ${qrBlockHTML(session.results_token)}
+        </div>
+        <div class="rk-table">
+          <div class="rk-sect">Classement complet</div>
+          <div class="rk-cols${dens}" style="grid-template-columns:repeat(${nCols},minmax(0,1fr))">
+            ${cols.map(c => `<div class="rk-colblock">${RANK_HEAD_HTML}<div class="rk-rows">${c.map(r => rankRowHTML(r, nCols > 1)).join('')}</div></div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="rk-foot">
+        <span class="rk-brand">Trinisette</span>
+        ${recordHolder ? `<span class="rk-record">${BOLT_SVG}Record de piste — ${escapeHTML(pilotName(recordHolder))} · ${fmtTime(recordHolder.best_lap)}</span>` : '<span></span>'}
+        <span>Actualisé à <b>${escapeHTML(fmtClock())}</b></span>
+      </div>
+    </div>`;
+  };
+  paint();
+
+  if (pages.length > 1) {
+    subTimer = setInterval(() => { page = (page + 1) % pages.length; paint(); }, PAGE_MS);
+  }
   return true;
 }
 
-// ------------------------------------------------------------------
-// ÉCRAN 2 — Hall of Fame top 20 par catégorie
-// ------------------------------------------------------------------
-async function renderHofScreen() {
-  clearCatTimer();
-  root.innerHTML = `<div class="k-head"><div class="k-eyebrow">Chargement…</div></div>`;
+/* ------------------------------------------ ÉCRAN 2 — HALL OF FAME (v30)
+   Exactement la même charpente que l'écran classement (bandeau, colonne de
+   gauche, tableau, pied) : les deux écrans doivent se ressembler quand ils
+   alternent sur la même TV. Seul le contenu change — ici les meilleurs chronos
+   de tous les temps, par catégorie, au lieu de la dernière course. */
 
-  const [{ data: hof, error: hErr }, header] = await Promise.all([
+const HOF_HEAD_HTML = `<div class="rk-head">
+  <span class="c"></span><span></span><span>Pilote</span>
+  <span class="c">Kart</span><span class="c">Date</span><span class="c">Meill. tour</span>
+</div>`;
+
+function hofRowHTML(r, twoCols) {
+  const name = pilotName({ pilot: r.pilot, kart: r.kart });
+  return `<div class="rk-row${r.pos <= 3 ? ' top3' : ''}">
+    <div class="rk-pos">${r.pos}</div>
+    <div class="rk-av">${avatarHTML(r.photo, r.kart, r.scheme)}</div>
+    <div class="rk-name${nameCls(name, twoCols)}">${flagOf(r.nat) ? `<span class="rk-flag">${flagOf(r.nat)}</span>` : ''}${escapeHTML(name)}</div>
+    <div class="rk-kart">${r.kart ?? '-'}</div>
+    <div class="rk-date">${escapeHTML(fmtDateShort(r.achieved_at))}</div>
+    <div class="rk-best">${fmtTime(r.lap_time_s)}</div>
+  </div>`;
+}
+
+function hofPodiumHTML(rows) {
+  return rows.map(r => {
+    const name = pilotName({ pilot: r.pilot, kart: r.kart });
+    const sizeCls = name.length > (r.pos === 1 ? 13 : 15) ? ' long' : '';
+    const showKart = r.kart != null && !/^Kart /.test(name);
+    return `
+    <div class="pod p${r.pos}">
+      <div class="pod-rank">${r.pos}</div>
+      <div class="pod-av">${avatarHTML(r.photo, r.kart, r.scheme)}</div>
+      <div class="pod-info">
+        <div class="pod-name${sizeCls}">${escapeHTML(name)}</div>
+        <div class="pod-time">${fmtTime(r.lap_time_s)}</div>
+        <div class="pod-meta">
+          ${showKart ? `<span>Kart <b>${r.kart}</b></span>` : ''}
+          <span>Le <b>${escapeHTML(fmtDate(r.achieved_at))}</b></span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function renderHofScreen() {
+  clearSubTimer();
+  root.innerHTML = `<div class="k-head"><div class="k-head-txt"><div class="k-eyebrow">Chargement…</div></div></div>`;
+
+  const [{ data: hof, error }, header] = await Promise.all([
     db.rpc('my_hall_of_fame_top20'),
     getTenantHeader(),
   ]);
+  applyTheme(header.theme);
 
-  if (hErr || !hof) {
-    root.innerHTML = `<div id="screen-hof"><div class="hof-empty">Hall of Fame indisponible.</div></div>`;
+  if (error || !hof) {
+    root.innerHTML = headHTML(header, 'Hall of Fame', '') + emptyHTML('Hall of Fame indisponible', 'Impossible de lire les records pour le moment.');
     return false;
   }
 
-  applyTheme(header.theme);
-
   const types = Array.isArray(hof.types) ? hof.types : [];
   if (!types.length) {
-    root.innerHTML =
-      headHTML(header, 'Hall of Fame', 'Aucun record enregistré pour l’instant.') +
-      `<div id="screen-hof"><div class="hof-empty">Publie une première session pour voir apparaître le classement ici.</div></div>`;
-    return true;
+    root.innerHTML = headHTML(header, 'Hall of Fame', '') +
+      emptyHTML('Aucun record enregistré', 'Publie une première session pour voir apparaître les meilleurs chronos.');
+    return false;
   }
-
-  document.body.classList.add('hof-bg');
 
   let idx = 0;
   const paint = () => {
     const t = types[idx];
-    const half = Math.ceil((t.rows || []).length / 2);
-    const col1 = (t.rows || []).slice(0, half);
-    const col2 = (t.rows || []).slice(half);
-    const topCls = (pos) => pos === 1 ? ' top1' : pos === 2 ? ' top2' : pos === 3 ? ' top3' : '';
-    // La date suit le nom SUR LA MÊME LIGNE (pas empilée sous le temps) :
-    // .hof-main est en ligne, le nom prend sa largeur naturelle et la date
-    // va chercher tout l'espace qui restait inutilisé jusqu'au temps
-    // (margin-left:auto côté CSS) — rien n'est ajouté en hauteur.
-    const colHTML = (list) => list.map(r => `
-      <div class="hof-row${topCls(r.pos)}">
-        <div class="hof-rank">${r.pos}</div>
-        <div class="hof-av-ring"><div class="hof-av">${avatarHTML(r.photo, r.kart, r.scheme)}</div></div>
-        <div class="hof-main">
-          <div class="hof-name"><span class="hof-flag">${flagOf(r.nat)}</span>${escapeHTML(r.pilot || 'Pilote')}</div>
-          <div class="hof-date">${escapeHTML(fmtDate(r.achieved_at))}</div>
+    const list = t.rows || [];
+    const podium = list.slice(0, 3);
+    const nCols = list.length > 14 ? 2 : 1;
+    const perCol = Math.ceil(list.length / nCols);
+    const cols = [];
+    for (let i = 0; i < nCols; i++) cols.push(list.slice(i * perCol, (i + 1) * perCol));
+    const dens = perCol <= 6 ? ' airy' : perCol > 11 ? ' dense' : '';
+
+    root.innerHTML = `<div id="screen-rank">
+      <div class="rk-band">
+        <div class="rk-band-left">
+          <div class="rk-circuit">${escapeHTML(header.circuitName || 'Hall of Fame')}</div>
+          <div class="rk-session">Hall of Fame — Catégorie ${escapeHTML(typeLabel(t.session_type))}</div>
         </div>
-        <div class="hof-time">${fmtTime(r.lap_time_s)}</div>
-      </div>`).join('');
-    // Plus d'onglets "LOISIR / COMPET" en dessous — juste la catégorie
-    // active nommée dans l'en-tête ("Catégorie : Loisir"), et un bandeau
-    // "TOP 20" à la place des anciens onglets, en gros avec le trophée :
-    // c'est le concept de l'écran qui doit sauter aux yeux, pas la liste
-    // des catégories du circuit.
-    root.innerHTML =
-      headHTML(header, 'Hall of Fame', 'Catégorie : ' + typeLabel(t.session_type)) +
-      TOP20_BANNER +
-      `<div id="screen-hof"><div class="hof-grid"><div class="hof-col">${colHTML(col1)}</div><div class="hof-col">${colHTML(col2)}</div></div></div>`;
+        ${header.logoUrl ? `<img class="rk-band-logo" src="${escapeHTML(header.logoUrl)}" alt="" onerror="this.remove()">` : ''}
+        <div class="rk-band-right">
+          <div class="rk-band-date">Meilleurs chronos</div>
+          <div class="rk-band-count">${list.length} pilote${list.length > 1 ? 's' : ''} classé${list.length > 1 ? 's' : ''}</div>
+        </div>
+      </div>
+      <div class="rk-body">
+        <div class="rk-pod-col">
+          <div class="rk-sect">Les plus rapides</div>
+          ${hofPodiumHTML(podium)}
+          <div class="rk-top20">${TROPHY_SVG}<span>Top ${Math.min(20, list.length)}</span></div>
+        </div>
+        <div class="rk-table">
+          <div class="rk-sect">Records — ${escapeHTML(typeLabel(t.session_type))}</div>
+          <div class="rk-cols hof${nCols > 1 ? ' twocol' : ''}${dens}" style="grid-template-columns:repeat(${nCols},minmax(0,1fr))">
+            ${cols.map(c => `<div class="rk-colblock">${HOF_HEAD_HTML}<div class="rk-rows">${c.map(r => hofRowHTML(r, nCols > 1)).join('')}</div></div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="rk-foot">
+        <span class="rk-brand">Trinisette</span>
+        <span></span>
+        <span>Actualisé à <b>${escapeHTML(fmtClock())}</b></span>
+      </div>
+    </div>`;
   };
   paint();
 
   if (types.length > 1) {
-    catTimer = setInterval(() => { idx = (idx + 1) % types.length; paint(); }, CAT_ROTATE_MS);
+    subTimer = setInterval(() => { idx = (idx + 1) % types.length; paint(); }, CAT_MS);
   }
   return true;
 }
 
-// En-tête — adapté du header de la page 1 de results.html (.circuit-header) :
-// carte encadrée, glow d'accent, tirets décoratifs en haut-gauche, équerre en
-// haut-droite, logo posé SUR LE CÔTÉ (coin haut-droit, comme sur results.html)
-// et non au-dessus en pleine largeur.
-function headHTML(header, title, sub) {
-  return `<div class="k-head">
-    ${header.logoUrl ? `<img class="k-logo" src="${escapeHTML(header.logoUrl)}" alt="" onerror="this.remove()">` : ''}
-    <div class="k-eyebrow">${escapeHTML(header.circuitName || '')}</div>
-    <h1 class="k-title">${escapeHTML(title)}</h1>
-    ${sub ? `<p class="k-sub">${escapeHTML(sub)}</p>` : ''}
-  </div>`;
+/* --------------------------------------------------------- boucle écran */
+
+// Plein écran demandé par Paramètres > Kiosque (&fs=1). La demande DOIT venir
+// de ce document au chargement : l'API Fullscreen exige un geste utilisateur
+// dans le document qui la déclenche, et l'activation du clic ne se transmet au
+// nouvel onglet que jusqu'à sa navigation initiale. Best-effort : si le
+// navigateur refuse, l'écran fonctionne quand même en fenêtre.
+function tryFullscreen() {
+  if (params.get('fs') !== '1') return;
+  const el = document.documentElement;
+  const req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (!req) return;
+  try {
+    const p = req.call(el);
+    if (p && typeof p.catch === 'function') p.catch(() => {});
+  } catch (e) { /* refusé : sans conséquence */ }
 }
 
-const TROPHY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a1 1 0 0 0-1 1c0 2.5 1.8 4.5 4.2 4.9M17 6h3a1 1 0 0 1 1 1c0 2.5-1.8 4.5-4.2 4.9"/></svg>';
-// Bandeau "TOP 20" — remplace les anciens onglets LOISIR/COMPET : le nom de
-// la catégorie active est déjà dans l'en-tête ("Catégorie : …"), ici c'est
-// uniquement le concept de l'écran qu'on veut voir de loin.
-const TOP20_BANNER = `<div class="k-top20">${TROPHY_SVG}<span>Top 20</span></div>`;
+let current = 'hof'; // pour que le premier tick affiche le classement
+let nextDelay = RANK_MS;
 
-// ------------------------------------------------------------------
-// Boucle principale
-// ------------------------------------------------------------------
 async function tick() {
-  let screen = fixedScreen;
-  if (!screen) {
-    screen = (window.__kioskCurrentScreen === 'pdf') ? 'hof' : 'pdf';
-  }
+  const screen = fixedScreen || (current === 'rank' ? 'hof' : 'rank');
+  current = screen;
   window.__kioskCurrentScreen = screen;
 
-  if (screen === 'pdf') await renderPdfScreen();
-  else await renderHofScreen();
+  const ok = screen === 'rank' ? await renderRankScreen() : await renderHofScreen();
+
+  // Repli utile : un écran vide ne doit pas monopoliser la TV. Si le
+  // classement n'a rien à montrer (aucune session publiée) et qu'on est en
+  // rotation, on enchaîne tout de suite sur le Hall of Fame au lieu
+  // d'attendre 40 secondes devant un message.
+  if (!ok && !fixedScreen) { nextDelay = 4000; return; }
+  nextDelay = fixedScreen ? REFRESH_MS : (screen === 'rank' ? RANK_MS : HOF_MS);
+}
+
+// Boucle à délai variable (les deux écrans n'ont pas la même durée) : un
+// setTimeout ré-armé plutôt qu'un setInterval fixe.
+async function loop() {
+  await tick();
+  setTimeout(loop, nextDelay);
 }
 
 async function main() {
@@ -271,16 +535,12 @@ async function main() {
     </div>`;
     return;
   }
-
-  await tick();
-  const delay = fixedScreen ? REFRESH_MS : ROTATE_MS;
-  setInterval(tick, delay);
+  tryFullscreen();
+  loop();
 }
 
-// Exposé uniquement pour les tests automatisés (Playwright) : permet de
-// déclencher des cycles tick() à la demande sans attendre ROTATE_MS/
-// REFRESH_MS en conditions réelles, pour vérifier qu'aucun minuteur ne
-// s'accumule d'un cycle à l'autre. Ne fait rien d'autre en production.
+// Exposé pour les tests automatisés (Playwright) uniquement : déclencher des
+// cycles à la demande sans attendre les vrais délais. Sans effet en production.
 if (typeof window !== 'undefined') window.__kioskTick = tick;
 
 main();

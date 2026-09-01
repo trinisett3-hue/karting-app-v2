@@ -482,7 +482,11 @@ export function switchParamsSubtab(tab) {
 // transmet de façon fiable au nouvel onglet que jusqu'à sa propre navigation initiale —
 // donc c'est ce document (kiosk.html), au chargement, qui doit faire la demande lui-même.
 export function openKioskScreen(mode) {
-  const qs = mode === 'pdf' ? '?screen=pdf&fs=1' : mode === 'hof' ? '?screen=hof&fs=1' : '?fs=1';
+  // 'rank' = classement de la dernière session publiée, 'hof' = Hall of Fame,
+  // rien = rotation entre les deux. (L'écran s'appelait 'pdf' avant le 26/08 :
+  // il affichait le fichier PDF dans un visionneur, remplacé depuis par un
+  // rendu natif plein écran — voir kiosk-app.js.)
+  const qs = mode === 'rank' ? '?screen=rank&fs=1' : mode === 'hof' ? '?screen=hof&fs=1' : '?fs=1';
   window.open('kiosk.html' + qs, '_blank');
 }
 
