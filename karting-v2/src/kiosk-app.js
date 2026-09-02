@@ -50,6 +50,17 @@ const params = new URLSearchParams(window.location.search);
 const SCREENS = ['rank', 'hof'];
 const fixedScreen = SCREENS.includes(params.get('screen')) ? params.get('screen') : null;
 
+// Catégorie courante du Hall of Fame. Volontairement AU NIVEAU DU MODULE et
+// non dans renderHofScreen() : l'écran est re-rendu à chaque passage dans la
+// rotation, et une variable locale repartait de zéro à chaque fois. Avec quatre
+// catégories, un écran affiché 25 s et une rotation de 9 s, les deux dernières
+// n'apparaissaient JAMAIS — on revoyait sans cesse les deux premières. Ici la
+// rotation reprend là où elle s'était arrêtée.
+let hofCatIdx = 0;
+// Durée que le dernier rendu du Hall of Fame réclame : calculée pour laisser
+// défiler toutes les catégories au moins une fois (voir renderHofScreen).
+let hofScreenMs = HOF_MS;
+
 // Un SEUL minuteur interne d'écran à la fois (rotation des catégories du Hall
 // of Fame, ou des pages du classement). Bug corrigé le 26/08 : chaque rendu
 // d'écran créait un setInterval sans annuler le précédent, et comme tick()
@@ -192,10 +203,16 @@ function avatarHTML(photo, kart, scheme) {
   return kartAvatarSVG(kart, { scheme, title: kart != null ? `Kart ${kart}` : '' });
 }
 
+let sessionTypeLabels = {};
 function typeLabel(type) {
   const t = String(type || '').trim();
   if (!t) return 'Records';
-  return t.charAt(0).toUpperCase() + t.slice(1);
+  // Libellé tel que le circuit l'a écrit dans Paramètres > Sessions
+  // (« endurance_2h » -> « Endurance 2h »). Repli propre si le type n'y est
+  // plus : on remet les espaces à la place des underscores.
+  if (sessionTypeLabels[t]) return sessionTypeLabels[t];
+  const clean = t.replace(/[_-]+/g, ' ');
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
 }
 
 const TROPHY_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M8 21h8M12 17v4M7 4h10v4a5 5 0 0 1-10 0V4z"/><path d="M7 6H4a1 1 0 0 0-1 1c0 2.5 1.8 4.5 4.2 4.9M17 6h3a1 1 0 0 1 1 1c0 2.5-1.8 4.5-4.2 4.9"/></svg>';
@@ -204,6 +221,13 @@ const BOLT_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true
 async function getTenantHeader() {
   const { data } = await db.from('app_settings').select('value').eq('key', 'global').maybeSingle();
   const v = (data && data.value) || {};
+  // Table de correspondance valeur -> libellé, alimentée à chaque lecture des
+  // réglages : le circuit peut renommer ses catégories quand il veut.
+  const map = {};
+  (Array.isArray(v.session_types) ? v.session_types : []).forEach((t) => {
+    if (t && t.v) map[String(t.v)] = String(t.l || t.v);
+  });
+  sessionTypeLabels = map;
   return { circuitName: v.circuit_name || '', logoUrl: v.logo_url || null, theme: v.results_theme || 'classic' };
 }
 
@@ -436,7 +460,12 @@ async function renderHofScreen() {
     return false;
   }
 
-  let idx = 0;
+  // Le Hall of Fame reste affiché assez longtemps pour que TOUTES les
+  // catégories du circuit défilent au moins une fois avant de rendre la main
+  // au classement — sinon les dernières ne seraient jamais vues.
+  hofScreenMs = Math.max(HOF_MS, types.length * CAT_MS);
+
+  let idx = hofCatIdx % types.length;
   const paint = () => {
     const t = types[idx];
     const list = t.rows || [];
@@ -482,7 +511,11 @@ async function renderHofScreen() {
   paint();
 
   if (types.length > 1) {
-    subTimer = setInterval(() => { idx = (idx + 1) % types.length; paint(); }, CAT_MS);
+    subTimer = setInterval(() => {
+      idx = (idx + 1) % types.length;
+      hofCatIdx = idx;   // mémorisé pour le prochain passage sur cet écran
+      paint();
+    }, CAT_MS);
   }
   return true;
 }
@@ -589,7 +622,7 @@ async function tick() {
   // rotation, on enchaîne tout de suite sur le Hall of Fame au lieu
   // d'attendre 40 secondes devant un message.
   if (!ok && !fixedScreen) { nextDelay = 4000; return; }
-  nextDelay = fixedScreen ? REFRESH_MS : (screen === 'rank' ? RANK_MS : HOF_MS);
+  nextDelay = fixedScreen ? REFRESH_MS : (screen === 'rank' ? RANK_MS : hofScreenMs);
 }
 
 // Boucle à délai variable (les deux écrans n'ont pas la même durée) : un
