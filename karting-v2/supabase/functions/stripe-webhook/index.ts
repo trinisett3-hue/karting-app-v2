@@ -41,6 +41,7 @@ const admin = createClient(
 );
 
 const APP_ADMIN_URL = Deno.env.get("APP_ADMIN_URL") ?? "https://app.trinisette.fr/admin";
+const MANUAL_URL = Deno.env.get("MANUAL_URL") ?? "https://app.trinisette.fr/manuel-trinisette.pdf";
 const EMAIL_API_KEY = Deno.env.get("EMAIL_API_KEY") ?? "";
 const WELCOME_FROM = Deno.env.get("WELCOME_EMAIL_FROM") ?? "TRINISETTE <contact@trinisette.fr>";
 const REPLY_TO = Deno.env.get("EMAIL_REPLY_TO") ?? "contact@trinisette.fr";
@@ -367,7 +368,9 @@ async function sendWelcomeEmail(p: {
 
   const planLabel =
     p.planCode === "pro" ? "Premium" : p.planCode === "business" ? "Business" : "Basique";
-  const subject = `Votre espace TRINISETTE est pret — ${p.circuitName}`;
+  const subject = `Votre espace TRINISETTE est prêt — ${p.circuitName}`;
+
+  const adminHost = APP_ADMIN_URL.replace(/^https:\/\//, "");
 
   const html = `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -382,51 +385,75 @@ async function sendWelcomeEmail(p: {
   <tr><td style="padding:32px">
     <p style="margin:0 0 18px;font-size:17px;font-weight:700">Bienvenue, et merci pour votre confiance.</p>
     <p style="margin:0 0 18px;font-size:15px;line-height:1.6;color:#3a3f4a">
-      Votre paiement est bien enregistre et l'espace de <strong>${escapeHtml(p.circuitName)}</strong>
-      est cree, sur l'offre <strong>${planLabel}</strong>.
+      Votre paiement est bien enregistré et l'espace de <strong>${escapeHtml(p.circuitName)}</strong>
+      est créé, sur l'offre <strong>${planLabel}</strong>.
     </p>
     <p style="margin:0 0 26px;font-size:15px;line-height:1.6;color:#3a3f4a">
       ${
         p.isNewAccount
-          ? "Il ne reste qu'une etape : choisir votre mot de passe."
-          : "Votre compte existant a ete rattache a cet abonnement. Ce lien vous permet de vous connecter ou de redefinir votre mot de passe."
+          ? "Il ne reste qu'une étape : choisir votre mot de passe."
+          : "Votre compte existant a été rattaché à cet abonnement. Ce lien vous permet de vous connecter ou de redéfinir votre mot de passe."
       }
     </p>
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 26px">
+    <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 18px">
       <tr><td style="border-radius:9px;background:#ff3b30">
         <a href="${p.link}" style="display:inline-block;padding:15px 34px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:9px">
-          Definir mon mot de passe
+          Définir mon mot de passe
         </a>
       </td></tr>
     </table>
-    <p style="margin:0 0 26px;font-size:13px;line-height:1.6;color:#79808f;text-align:center">
-      Ce lien est valable 24 heures et ne fonctionne qu'une fois.<br>
-      Ensuite, votre espace reste accessible sur
-      <a href="${APP_ADMIN_URL}" style="color:#ff3b30;text-decoration:none">${APP_ADMIN_URL.replace(/^https:\/\//, "")}</a>.
+    <p style="margin:0 0 24px;font-size:13px;line-height:1.6;color:#79808f;text-align:center">
+      Ce lien est valable 24 heures et ne fonctionne qu'une seule fois.
     </p>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 26px;background:#f4f5f7;border-left:4px solid #ff3b30;border-radius:0 8px 8px 0">
+      <tr><td style="padding:18px 20px">
+        <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#16181d">
+          Ajoutez cette adresse à vos favoris, maintenant
+        </p>
+        <p style="margin:0 0 10px;font-size:14px;line-height:1.6;color:#3a3f4a">
+          Votre espace vit ici, une fois votre mot de passe choisi :<br>
+          <a href="${APP_ADMIN_URL}" style="color:#ff3b30;text-decoration:none;font-weight:700">${adminHost}</a>
+        </p>
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#79808f">
+          Enregistrez-la dès maintenant dans votre navigateur — <strong>Ctrl + D</strong> sur Windows,
+          <strong>⌘ + D</strong> sur Mac — et nommez le favori « Espace karting ». C'est le seul chemin
+          vers votre espace : il n'apparaît pas dans les moteurs de recherche, et cet e-mail finira
+          par se perdre au fond de votre boîte de réception. Sur la tablette du comptoir, utilisez
+          « Ajouter à l'écran d'accueil » : l'espace s'ouvrira comme une application.
+        </p>
+      </td></tr>
+    </table>
+
     <div style="border-top:1px solid #e6e8ec;padding-top:22px">
-      <p style="margin:0 0 12px;font-size:14px;font-weight:700">Vos trois premieres minutes</p>
+      <p style="margin:0 0 12px;font-size:14px;font-weight:700">Vos trois premières minutes</p>
       <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#3a3f4a">
-        <strong>1.</strong> Dans <em>Parametres</em>, renseignez le nom de votre circuit et votre logo.
+        <strong>1.</strong> Dans <em>Paramètres</em>, renseignez le nom de votre circuit et votre logo.
       </p>
       <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#3a3f4a">
-        <strong>2.</strong> Reglez le nombre de karts et de tours par defaut : vos sessions seront pre-remplies.
+        <strong>2.</strong> Réglez le nombre de karts et de tours par défaut : vos sessions seront pré-remplies.
+      </p>
+      <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#3a3f4a">
+        <strong>3.</strong> Créez une première session d'essai, affichez son QR code d'inscription, et
+        scannez-le avec votre téléphone pour voir ce que verront vos pilotes.
       </p>
       <p style="margin:0;font-size:14px;line-height:1.6;color:#3a3f4a">
-        <strong>3.</strong> Creez une premiere session d'essai, affichez son QR code d'inscription, et scannez-le avec votre telephone pour voir ce que verront vos pilotes.
+        Tout est détaillé, écran par écran, dans le
+        <a href="${MANUAL_URL}" style="color:#ff3b30;text-decoration:none;font-weight:700">manuel de mise en route (PDF)</a> —
+        sa dernière page est un mémo à imprimer pour votre comptoir.
       </p>
     </div>
   </td></tr>
   <tr><td style="background:#f9fafb;padding:22px 32px;border-top:1px solid #e6e8ec">
     <p style="margin:0;font-size:13px;line-height:1.6;color:#79808f">
-      Une question, un reglage a faire ensemble ? Repondez simplement a cet e-mail,
-      ou ecrivez a <a href="mailto:${REPLY_TO}" style="color:#ff3b30;text-decoration:none">${REPLY_TO}</a>.
+      Une question, un réglage à faire ensemble ? Répondez simplement à cet e-mail,
+      ou écrivez à <a href="mailto:${REPLY_TO}" style="color:#ff3b30;text-decoration:none">${REPLY_TO}</a>.
       Nous vous rappelons volontiers pour la mise en route.
     </p>
   </td></tr>
 </table>
 <p style="max-width:560px;margin:16px auto 0;font-size:11px;line-height:1.5;color:#9aa1ae;text-align:center">
-  TRINISETTE — gestion d'evenements karting. Vous recevez cet e-mail suite a votre abonnement.
+  TRINISETTE — gestion d'événements karting. Vous recevez cet e-mail suite à votre abonnement.
 </p>
 </td></tr></table>
 </body></html>`;
@@ -434,19 +461,25 @@ async function sendWelcomeEmail(p: {
   const text = [
     `Bienvenue, et merci pour votre confiance.`,
     ``,
-    `Votre paiement est bien enregistre et l'espace de ${p.circuitName} est cree, sur l'offre ${planLabel}.`,
+    `Votre paiement est bien enregistré et l'espace de ${p.circuitName} est créé, sur l'offre ${planLabel}.`,
     ``,
-    `Definissez votre mot de passe ici (lien valable 24 h, usage unique) :`,
+    `Définissez votre mot de passe ici (lien valable 24 h, usage unique) :`,
     p.link,
     ``,
-    `Ensuite, votre espace reste accessible sur ${APP_ADMIN_URL}`,
+    `AJOUTEZ CETTE ADRESSE A VOS FAVORIS, MAINTENANT`,
+    `Votre espace vit ici : ${APP_ADMIN_URL}`,
+    `Enregistrez-la dans votre navigateur (Ctrl + D sur Windows, Cmd + D sur Mac) et nommez`,
+    `le favori "Espace karting". C'est le seul chemin vers votre espace : il n'apparait pas`,
+    `dans les moteurs de recherche, et cet e-mail finira par se perdre dans votre boite.`,
     ``,
-    `Vos trois premieres minutes :`,
-    `1. Dans Parametres, renseignez le nom de votre circuit et votre logo.`,
-    `2. Reglez le nombre de karts et de tours par defaut.`,
-    `3. Creez une session d'essai et scannez son QR code d'inscription.`,
+    `Vos trois premières minutes :`,
+    `1. Dans Paramètres, renseignez le nom de votre circuit et votre logo.`,
+    `2. Réglez le nombre de karts et de tours par défaut.`,
+    `3. Créez une session d'essai et scannez son QR code d'inscription.`,
     ``,
-    `Une question ? Repondez a cet e-mail ou ecrivez a ${REPLY_TO}.`,
+    `Manuel de mise en route (PDF) : ${MANUAL_URL}`,
+    ``,
+    `Une question ? Répondez à cet e-mail ou écrivez à ${REPLY_TO}.`,
   ].join("\n");
 
   const res = await fetch("https://api.resend.com/emails", {
