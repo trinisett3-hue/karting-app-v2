@@ -488,7 +488,7 @@ export function kioskURL(mode, withFs = true) {
   // rendu natif plein écran — voir kiosk-app.js.)
   const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '') + 'kiosk.html';
   const p = [];
-  if (mode === 'rank' || mode === 'hof') p.push('screen=' + mode);
+  if (mode === 'rank' || mode === 'hof' || mode === 'teams') p.push('screen=' + mode);
   if (withFs) p.push('fs=1');
   return base + (p.length ? '?' + p.join('&') : '');
 }

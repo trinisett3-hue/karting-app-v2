@@ -237,7 +237,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
    Chaque sous-onglet occupe toute la largeur. */
 .params-subtab-bar{display:flex;gap:8px;margin-bottom:18px;overflow-x:auto;white-space:nowrap;flex-wrap:nowrap;-webkit-overflow-scrolling:touch;padding-bottom:2px}
 /* Onglet Kiosque (K-28) : une carte par ecran, bouton pleine largeur. */
-.kiosk-screen-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.kiosk-screen-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 @media (max-width:860px){.kiosk-screen-grid{grid-template-columns:1fr}}
 .kiosk-screen-card{border:1px solid var(--bord);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:10px;background:var(--bg)}
 .kiosk-screen-title{font-size:13px;font-weight:700}
@@ -1275,7 +1275,7 @@ te le demande à la première ouverture).
 <div class="kiosk-screen-grid">
 <div class="kiosk-screen-card">
 <div class="kiosk-screen-title">🔁 Rotation automatique</div>
-<div class="kiosk-screen-desc">Alterne le classement (40 s) et le Hall of Fame (25 s). À utiliser quand il n'y a qu'un seul écran.</div>
+<div class="kiosk-screen-desc">Alterne le classement (40 s), le Hall of Fame, et le championnat par écuries quand la dernière session en est une. À utiliser quand il n'y a qu'un seul écran.</div>
 <button class="btn btn-primary btn-sm" style="width:100%" onclick="openKioskScreen('rotation')">Ouvrir en plein écran</button>
 </div>
 <div class="kiosk-screen-card">
@@ -1287,6 +1287,11 @@ te le demande à la première ouverture).
 <div class="kiosk-screen-title">🏆 Hall of Fame</div>
 <div class="kiosk-screen-desc">Fige l'écran sur le top 20 par catégorie, avec rotation automatique entre catégories (9s).</div>
 <button class="btn btn-ghost btn-sm" style="width:100%" onclick="openKioskScreen('hof')">Ouvrir en plein écran</button>
+</div>
+<div class="kiosk-screen-card">
+<div class="kiosk-screen-title">🚩 Championnat écuries</div>
+<div class="kiosk-screen-desc">Classement par écuries de la dernière session : points, position moyenne et pilotes de chaque équipe. N'affiche quelque chose que si la dernière session publiée est en mode Écurie — sinon il est aussi sauté dans la rotation.</div>
+<button class="btn btn-ghost btn-sm" style="width:100%" onclick="openKioskScreen('teams')">Ouvrir en plein écran</button>
 </div>
 </div>
 <div style="font-size:11px;color:var(--mut);margin-top:14px">
@@ -1308,6 +1313,7 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <option value="">Rotation (classement + Hall of Fame)</option>
 <option value="rank">Classement uniquement</option>
 <option value="hof">Hall of Fame uniquement</option>
+<option value="teams">Championnat écuries uniquement</option>
 </select>
 <button class="btn btn-ghost btn-sm" onclick="copyKioskCommand('mac')">Copier pour Mac</button>
 <button class="btn btn-ghost btn-sm" onclick="copyKioskCommand('win')">Copier pour Windows</button>
@@ -1458,6 +1464,6 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260826k29"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260826k30"></script>
 </body>
 </html>

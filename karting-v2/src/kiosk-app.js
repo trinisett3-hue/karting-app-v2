@@ -44,10 +44,11 @@ const HOF_MS = 25000;
 const REFRESH_MS = 180000;  // ré-interrogation en mode écran fixe
 const CAT_MS = 9000;        // rotation des catégories (Hall of Fame)
 const PAGE_MS = 11000;      // rotation des pages (classement très fourni)
+const TEAMS_MS = 25000;     // écran championnat par écuries
 
 const root = document.getElementById('root');
 const params = new URLSearchParams(window.location.search);
-const SCREENS = ['rank', 'hof'];
+const SCREENS = ['rank', 'hof', 'teams'];
 const fixedScreen = SCREENS.includes(params.get('screen')) ? params.get('screen') : null;
 
 // Catégorie courante du Hall of Fame. Volontairement AU NIVEAU DU MODULE et
@@ -57,6 +58,11 @@ const fixedScreen = SCREENS.includes(params.get('screen')) ? params.get('screen'
 // n'apparaissaient JAMAIS — on revoyait sans cesse les deux premières. Ici la
 // rotation reprend là où elle s'était arrêtée.
 let hofCatIdx = 0;
+// Le 3e écran (championnat par écuries) n'existe que si la dernière session
+// publiée est une session Écurie. Renseigné par renderRankScreen, lu par la
+// boucle : inutile d'afficher un classement constructeur après une course
+// individuelle, l'écran serait vide.
+let hasTeams = false;
 // Durée que le dernier rendu du Hall of Fame réclame : calculée pour laisser
 // défiler toutes les catégories au moins une fois (voir renderHofScreen).
 let hofScreenMs = HOF_MS;
@@ -280,22 +286,31 @@ function podiumHTML(rows) {
       <div class="pod-info">
         <div class="pod-name${podNameCls(name, r.pos)}">${escapeHTML(name)}</div>
         <div class="pod-time">${fmtTime(r.best_lap)}</div>
+        ${r.team_name ? `<div class="pod-team" style="color:${escapeHTML(r.team_color || 'inherit')}">
+          <i style="background:${escapeHTML(r.team_color || 'currentColor')}"></i>${escapeHTML(r.team_name)}
+        </div>` : ''}
         <div class="pod-meta">
           ${showKart ? `<span>Kart <b>${r.kart}</b></span>` : ''}
           <span>Tours <b>${r.laps_count || 0}</b></span>
           ${r.pos > 1 && r.gap != null ? `<span>Écart <b>${fmtGap(r.gap)}</b></span>` : ''}
+          ${r.points != null ? `<span>Pts <b>${r.points}</b></span>` : ''}
         </div>
       </div>
     </div>`;
   }).join('');
 }
 
-const RANK_HEAD_HTML = `<div class="rk-head">
-  <span class="c"></span><span></span><span>Pilote</span>
-  <span class="c">Kart</span><span class="c">Tours</span><span class="c">Meill. tour</span><span class="c">Écart</span>
-</div>`;
+// En mode Écurie, une colonne Points s'ajoute — exactement comme sur le PDF
+// (voir pdfxRankHeadHTML, classe .with-team).
+function rankHeadHTML(teamMode) {
+  return `<div class="rk-head">
+    <span class="c"></span><span></span><span>Pilote</span>
+    <span class="c">Kart</span><span class="c">Tours</span><span class="c">Meill. tour</span><span class="c">Écart</span>
+    ${teamMode ? '<span class="c">Pts</span>' : ''}
+  </div>`;
+}
 
-function rankRowHTML(r, twoCols) {
+function rankRowHTML(r, twoCols, teamMode) {
   const name = pilotName(r);
   const team = r.team_name
     ? `<span class="rk-team" style="color:${escapeHTML(r.team_color || 'inherit')}">${escapeHTML(r.team_name)}</span>` : '';
@@ -307,6 +322,7 @@ function rankRowHTML(r, twoCols) {
     <div class="rk-laps">${r.has_time ? (r.laps_count || 0) : '--'}</div>
     <div class="rk-best">${fmtTime(r.best_lap)}</div>
     <div class="rk-gap">${r.has_time ? (fmtGap(r.gap) || '—') : '--'}</div>
+    ${teamMode ? `<div class="rk-pts">${r.has_time ? (r.points ?? 0) : '--'}</div>` : ''}
   </div>`;
 }
 
@@ -338,6 +354,9 @@ async function renderRankScreen() {
   const podium = rows.slice(0, 3);
   const recordHolder = rows.find(r => r.is_record && r.has_time);
   const dateTxt = fmtSessionDate(session.session_date);
+  const teamMode = !!session.team_mode;
+  // Mémorisé pour la boucle : le 3e écran (championnat) n'a de sens qu'ici.
+  hasTeams = teamMode && Array.isArray(data.teams) && data.teams.length > 0;
 
   // Découpage : une colonne jusqu'à 14 pilotes, deux au-delà, et pagination
   // quand même deux colonnes ne suffisent plus (28 lignes visibles à la fois).
@@ -360,6 +379,7 @@ async function renderRankScreen() {
         <div class="rk-band-left">
           <div class="rk-circuit">${escapeHTML(header.circuitName || 'Classement')}</div>
           <div class="rk-session">Classement complet${session.title ? ' — ' + escapeHTML(session.title) : ''}</div>
+          ${teamMode ? '<div class="rk-badge-team">Course par écuries</div>' : ''}
         </div>
         ${header.logoUrl ? `<img class="rk-band-logo" src="${escapeHTML(header.logoUrl)}" alt="" onerror="this.remove()">` : ''}
         <div class="rk-band-right">
@@ -375,8 +395,8 @@ async function renderRankScreen() {
         </div>
         <div class="rk-table">
           <div class="rk-sect">Classement complet</div>
-          <div class="rk-cols${dens}" style="grid-template-columns:repeat(${nCols},minmax(0,1fr))">
-            ${cols.map(c => `<div class="rk-colblock">${RANK_HEAD_HTML}<div class="rk-rows">${c.map(r => rankRowHTML(r, nCols > 1)).join('')}</div></div>`).join('')}
+          <div class="rk-cols${teamMode ? ' team' : ''}${dens}" style="grid-template-columns:repeat(${nCols},minmax(0,1fr))">
+            ${cols.map(c => `<div class="rk-colblock">${rankHeadHTML(teamMode)}<div class="rk-rows">${c.map(r => rankRowHTML(r, nCols > 1, teamMode)).join('')}</div></div>`).join('')}
           </div>
         </div>
       </div>
@@ -392,6 +412,90 @@ async function renderRankScreen() {
   if (pages.length > 1) {
     subTimer = setInterval(() => { page = (page + 1) % pages.length; paint(); }, PAGE_MS);
   }
+  return true;
+}
+
+/* --------------------------------------- ÉCRAN 3 — CHAMPIONNAT ÉCURIES
+   N'apparaît QUE si la dernière session publiée est une session Écurie (voir
+   hasTeams) : afficher un classement constructeur après une course
+   individuelle donnerait un écran vide. Les points et le classement viennent
+   de my_kiosk_ranking (v32), qui reproduit exactement computeTeamStandings()
+   de teams.js — total de points, puis position moyenne à égalité. */
+
+function teamCardHTML(t, i) {
+  const cls = i === 0 ? ' t1' : i === 1 ? ' t2' : i === 2 ? ' t3' : '';
+  const col = t.color || 'currentColor';
+  const pilots = (t.pilots || []).map(pp => `
+    <div class="tm-pilot">
+      <span class="tm-pos">${pp.pos}</span>
+      <span class="tm-av">${avatarHTML(pp.photo, pp.kart, pp.scheme)}</span>
+      <span class="tm-name">${escapeHTML(pilotName({ pilot: pp.pilot, unknown: pp.unknown, kart: pp.kart }))}</span>
+      <span class="tm-lap">${fmtTime(pp.best_lap)}</span>
+      <span class="tm-pts">${pp.points ?? 0}</span>
+    </div>`).join('');
+  return `<div class="tm-card${cls}" style="--tm:${escapeHTML(col)}">
+    <div class="tm-head">
+      <div class="tm-rank">${t.rank}</div>
+      <div class="tm-id">
+        <div class="tm-team">${escapeHTML(t.name || t.team_id || 'Écurie')}</div>
+        <div class="tm-meta">${t.members} pilote${t.members > 1 ? 's' : ''} · pos. moyenne ${t.avg_pos}${t.tiebroken ? ' · départagé aux positions' : ''}</div>
+      </div>
+      <div class="tm-score"><b>${t.points}</b><span>pts</span></div>
+    </div>
+    <div class="tm-pilots">${pilots}</div>
+  </div>`;
+}
+
+async function renderTeamsScreen() {
+  clearSubTimer();
+  // Cet écran interroge la base lui-même plutôt que de réutiliser ce qu'a
+  // chargé l'écran classement : sinon, figé sur ?screen=teams (une TV dédiée
+  // au championnat), il n'aurait jamais aucune donnée — renderRankScreen()
+  // n'y est jamais appelé.
+  const [{ data, error }, header] = await Promise.all([
+    db.rpc('my_kiosk_ranking'),
+    getTenantHeader(),
+  ]);
+  applyTheme(header.theme);
+
+  const teams = (data && Array.isArray(data.teams)) ? data.teams : [];
+  const session = (data && data.session) || null;
+  hasTeams = teams.length > 0;
+
+  if (error || !hasTeams) {
+    root.innerHTML = headHTML(header, 'Écuries', '') +
+      emptyHTML('Pas de course par écuries', 'Ce classement apparaît après une session jouée en mode Écurie.');
+    return false;
+  }
+
+  const sess = { title: session && session.title, date: fmtSessionDate(session && session.session_date) };
+  const nCols = teams.length > 3 ? 2 : 1;
+
+  root.innerHTML = `<div id="screen-rank">
+    <div class="rk-band">
+      <div class="rk-band-left">
+        <div class="rk-circuit">${escapeHTML(header.circuitName || 'Championnat')}</div>
+        <div class="rk-session">Championnat par écuries${sess.title ? ' — ' + escapeHTML(sess.title) : ''}</div>
+        <div class="rk-badge-team">Course par écuries</div>
+      </div>
+      ${header.logoUrl ? `<img class="rk-band-logo" src="${escapeHTML(header.logoUrl)}" alt="" onerror="this.remove()">` : ''}
+      <div class="rk-band-right">
+        <div class="rk-band-date">${escapeHTML(sess.date || '')}</div>
+        <div class="rk-band-count">${teams.length} écurie${teams.length > 1 ? 's' : ''}</div>
+      </div>
+    </div>
+    <div class="tm-body">
+      <div class="rk-sect">Classement des écuries</div>
+      <div class="tm-grid" style="grid-template-columns:repeat(${nCols},minmax(0,1fr))">
+        ${teams.map(teamCardHTML).join('')}
+      </div>
+    </div>
+    <div class="rk-foot">
+      <span class="rk-brand">Trinisette</span>
+      <span></span>
+      <span>Actualisé à <b>${escapeHTML(fmtClock())}</b></span>
+    </div>
+  </div>`;
   return true;
 }
 
@@ -611,18 +715,31 @@ let current = 'hof'; // pour que le premier tick affiche le classement
 let nextDelay = RANK_MS;
 
 async function tick() {
-  const screen = fixedScreen || (current === 'rank' ? 'hof' : 'rank');
+  // Rotation : classement -> Hall of Fame -> (championnat écuries) -> ...
+  // Le 3e écran n'entre dans la ronde que si la dernière session publiée est
+  // une session Écurie.
+  let screen = fixedScreen;
+  if (!screen) {
+    if (current === 'rank') screen = 'hof';
+    else if (current === 'hof') screen = hasTeams ? 'teams' : 'rank';
+    else screen = 'rank';
+  }
   current = screen;
   window.__kioskCurrentScreen = screen;
 
-  const ok = screen === 'rank' ? await renderRankScreen() : await renderHofScreen();
+  const ok = screen === 'rank' ? await renderRankScreen()
+           : screen === 'teams' ? await renderTeamsScreen()
+           : await renderHofScreen();
 
   // Repli utile : un écran vide ne doit pas monopoliser la TV. Si le
   // classement n'a rien à montrer (aucune session publiée) et qu'on est en
   // rotation, on enchaîne tout de suite sur le Hall of Fame au lieu
   // d'attendre 40 secondes devant un message.
   if (!ok && !fixedScreen) { nextDelay = 4000; return; }
-  nextDelay = fixedScreen ? REFRESH_MS : (screen === 'rank' ? RANK_MS : hofScreenMs);
+  nextDelay = fixedScreen ? REFRESH_MS
+    : screen === 'rank' ? RANK_MS
+    : screen === 'teams' ? TEAMS_MS
+    : hofScreenMs;
 }
 
 // Boucle à délai variable (les deux écrans n'ont pas la même durée) : un
