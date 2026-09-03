@@ -1396,6 +1396,7 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <div class="field" style="width:100%"><label>Email</label><input type="email" id="login-email" autocomplete="username"/></div>
 <div class="field" style="width:100%"><label>Mot de passe</label><input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"/></div>
 <button class="btn btn-primary" style="width:100%" onclick="doLogin()">Se connecter</button>
+<button type="button" style="width:100%;margin-top:6px;background:none;border:0;padding:4px;color:var(--mut);font-size:12px;text-decoration:underline;cursor:pointer" onclick="doForgotPassword()">Mot de passe oublie ?</button>
 <div class="msg" id="login-msg"></div>
 </div>
 </div>
@@ -1464,6 +1465,6 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260826k30"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260903k31"></script>
 </body>
 </html>
