@@ -9,3 +9,7 @@
   X-Frame-Options: DENY
   Referrer-Policy: strict-origin-when-cross-origin
   Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
+
+# Les videos et leurs images d'accroche ne changent qu'a la main : cache long.
+/videos/*
+  Cache-Control: public, max-age=2592000, immutable

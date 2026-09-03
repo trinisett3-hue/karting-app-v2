@@ -146,6 +146,17 @@ section{padding:64px 0}
 .hero{padding:64px 0 56px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto}}
+
+.film{padding:8px 0 4px}
+.film .wrap{max-width:var(--wrap)}
+.film-v{width:100%;height:auto;display:block;border-radius:var(--rad);
+  border:1px solid var(--bord);background:#000;box-shadow:0 28px 70px rgba(0,0,0,.55)}
+.film-note{margin-top:12px;font-size:14px;color:var(--mut)}
+@media(max-width:640px){.film{padding:4px 0 0}}
+
+.plan-price{font-family:var(--display);font-size:46px;line-height:1;letter-spacing:.01em;margin:6px 0 10px}
+.plan-price span{font-family:var(--body);font-size:15px;font-weight:600;color:var(--mut);letter-spacing:0;margin-left:6px}
+.plan.hi .plan-price{color:var(--acc)}
 </style>
 </head>
 <body>
@@ -177,9 +188,18 @@ pas d'attente au comptoir.
 </p>
 <div class="hero-cta">
 <a class="btn btn-acc btn-lg" href="#contact">Demander une démo</a>
-<a class="btn btn-ghost btn-lg" href="/demo">Voir la démo (90 sec)</a>
+<a class="btn btn-ghost btn-lg" href="/demo">Voir la démo (45 sec)</a>
 </div>
 <p class="hero-note">Aucun matériel à installer. Fonctionne sur la tablette du comptoir et sur le téléphone des pilotes.</p>
+</div>
+</section>
+<section class="film">
+<div class="wrap">
+<video class="film-v" src="/videos/5-presentation-trinisette.mp4"
+       poster="/videos/posters/5-presentation-trinisette.jpg"
+       autoplay muted loop playsinline controls preload="metadata"
+       aria-label="TRINISETTE en quarante secondes : inscription du pilote, résultats en ligne, écran d'accueil"></video>
+<p class="film-note">Quarante-cinq secondes, sans son — tout est écrit à l'écran.</p>
 </div>
 </section>
 <div class="strip">
@@ -240,11 +260,12 @@ pas d'attente au comptoir.
 <div class="sec-head">
 <div class="eyebrow">Formules</div>
 <h2>Deux formules,<br>faites pour votre circuit</h2>
-<p>Un abonnement par circuit, mensuel, résiliable. Le nombre de pilotes et de sessions n'est jamais facturé. Tarifs communiqués sur devis, selon la taille de votre circuit.</p>
+<p>Un abonnement par circuit, mensuel, résiliable dès le premier mois. Le nombre de pilotes, de sessions et d'e-mails envoyés n'est jamais facturé.</p>
 </div>
 <div class="plans">
 <div class="plan">
 <div class="plan-name">Basique</div>
+<div class="plan-price">59&nbsp;€<span>/ mois</span></div>
 <p class="plan-tag">Pour faire tourner les sessions et publier les classements.</p>
 <ul>
 <li>Inscriptions par QR code, illimitées</li>
@@ -258,6 +279,7 @@ pas d'attente au comptoir.
 </div>
 <div class="plan hi">
 <div class="plan-name">Premium</div>
+<div class="plan-price">99&nbsp;€<span>/ mois</span></div>
 <p class="plan-tag">Pour que tout ce qui sort du logiciel porte vos couleurs.</p>
 <ul>
 <li>Tout le contenu de la formule Basique</li>
@@ -271,7 +293,7 @@ pas d'attente au comptoir.
 <a class="btn btn-acc" href="#contact">Nous contacter</a>
 </div>
 </div>
-<p class="plans-note">Tarifs communiqués sur devis, adaptés à la taille de votre circuit. Une offre multi-sites existe pour les groupes : dites-nous combien de pistes vous exploitez.</p>
+<p class="plans-note">Prix par circuit. TVA non applicable, art.&nbsp;293&nbsp;B du CGI. Paiement par carte ou par virement sur devis. La mise en route est faite avec vous et comprise. Une offre multi-sites existe pour les groupes : dites-nous combien de pistes vous exploitez.</p>
 </div>
 </section>
 <section id="contact">
