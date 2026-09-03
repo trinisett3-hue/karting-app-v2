@@ -8,7 +8,7 @@ Application de gestion de karting : inscriptions pilotes, résultats publics, ad
   `app.trinisette.fr` (SSL actif). `karting-app-v2.pages.dev` reste joignable en repli.
 - **Authentification admin** : branchée et active depuis le 24/07.
 - **RLS** : activée sur toutes les tables métier. Les fonctions publiques (résultats, inscription) passent par des RPC `SECURITY DEFINER` conditionnées à un jeton de session, pas par des policies anonymes ouvertes.
-- **Deux offres actives** : Basique (49€/mois, code `starter`) et Premium (129€/mois, code `pro`). Business (`business`, 299€) existe en base mais est désactivée.
+- **Deux offres actives** : Basique (59,99 €/mois, code `starter`) et Premium (99,99 €/mois, code `pro`). Business (`business`, 299 €) existe en base mais est désactivée. Source de vérité : `public.plans` (`price_cents` 5999 / 9999), alignée sur les prix Stripe et sur l'article 6 des CGV.
 - **Gating Premium** : appliqué côté serveur (thèmes, plan du circuit, avatars Signature) — pas seulement dans l'interface. Voir les migrations `enforce_premium_settings_server_side` et suivantes.
 - **Paiement Stripe → provisioning** : chemin webhook → `pending_provisionings` → `provision-organization` réconcilié et transactionnel.
 

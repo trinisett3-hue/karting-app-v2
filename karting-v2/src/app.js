@@ -281,6 +281,30 @@ if (msgEl) { msgEl.textContent = err?.message || 'Identifiants invalides.'; msgE
 }
 }
 
+// --- Mot de passe oublie : demande depuis l'ecran de connexion -----------------------------
+// Seul point d'entree du parcours accessible SANS etre connecte. settings.requestPasswordReset()
+// lit #login-user-email, qui n'est rempli qu'apres une connexion reussie : elle ne pouvait donc
+// servir qu'a un client deja dans son espace. Un client dont le lien de bienvenue a expire
+// n'avait aucun recours en libre-service.
+async function doForgotPassword() {
+const email = (document.getElementById('login-email')?.value || '').trim();
+const msgEl = document.getElementById('login-msg');
+if (!email) {
+if (msgEl) { msgEl.textContent = 'Saisis ton e-mail ci-dessus, puis reclique.'; msgEl.className = 'msg err'; }
+return;
+}
+if (msgEl) { msgEl.textContent = 'Envoi en cours...'; msgEl.className = 'msg ok'; }
+try {
+await auth.requestPasswordReset(email);
+if (msgEl) {
+msgEl.textContent = 'Si un compte existe pour ' + email + ', un lien vient de partir. Pense a verifier les indesirables.';
+msgEl.className = 'msg ok';
+}
+} catch (err) {
+if (msgEl) { msgEl.textContent = err?.message || 'Envoi impossible. Reessaie dans une minute.'; msgEl.className = 'msg err'; }
+}
+}
+
 async function doLogout() {
 await auth.signOut();
 appInitialized = false;
@@ -389,6 +413,7 @@ clearSessionTypeRow: sessionTypes.clearSessionTypeRow,
 onSessionTypeInput: sessionTypes.onSessionTypeInput,
 // Authentification
 doLogin,
+doForgotPassword,
 doLogout,
 submitNewPassword,
 // Navigation
