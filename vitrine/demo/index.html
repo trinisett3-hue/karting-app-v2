@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Démo en 90 secondes — TRINISETTE</title>
-<meta name="description" content="Découvrez TRINISETTE en 90 secondes : inscription des pilotes par QR code, import des chronos, publication des résultats et envoi automatique par e-mail.">
+<title>Démo en 45 secondes — TRINISETTE</title>
+<meta name="description" content="Découvrez TRINISETTE en 45 secondes : inscription des pilotes par QR code, import des chronos, publication des résultats et envoi automatique par e-mail.">
 <link rel="canonical" href="https://trinisette.fr/demo">
-<meta property="og:title" content="TRINISETTE — la démo en 90 secondes">
+<meta property="og:title" content="TRINISETTE — la démo en 45 secondes">
 <meta property="og:description" content="De l'inscription du pilote jusqu'à l'e-mail qu'il reçoit après la session.">
 <meta property="og:type" content="video.other">
 <meta property="og:url" content="https://trinisette.fr/demo">
@@ -51,6 +51,18 @@ video{width:100%;margin-top:34px;border-radius:14px;border:1px solid var(--line)
 footer{border-top:1px solid var(--line);padding:26px 0;color:var(--mut);font-size:13px;text-align:center}
 footer a{color:var(--mut);text-decoration:none}
 @media(max-width:640px){main{padding:36px 0 52px}.cta{padding:24px}.mail{margin-left:0;display:block}}
+
+.cases{margin-top:52px}
+.cases-h{font-size:clamp(21px,3vw,28px);font-weight:800;letter-spacing:-.02em}
+.cases-p{margin-top:10px;color:var(--mut);font-size:15.5px;max-width:62ch}
+.cases-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:26px;margin-top:26px}
+.cases-grid figure{margin:0}
+.cases-grid video{width:100%;margin-top:0;border-radius:12px;border:1px solid var(--line);
+  background:#000;display:block;box-shadow:0 16px 40px rgba(0,0,0,.4)}
+.cases-grid figcaption{padding:12px 2px 0;display:flex;flex-direction:column;gap:3px}
+.cases-grid figcaption strong{font-size:15.5px;font-weight:750}
+.cases-grid figcaption span{color:var(--mut);font-size:13.5px}
+@media(max-width:700px){.cases-grid{grid-template-columns:1fr;gap:22px}}
 </style>
 </head>
 <body>
@@ -62,16 +74,16 @@ footer a{color:var(--mut);text-decoration:none}
 
 <main><div class="wrap">
   <div class="kick">La démo</div>
-  <h1>TRINISETTE en <em>90 secondes</em>.</h1>
+  <h1>TRINISETTE en <em>45 secondes</em>.</h1>
   <p class="lede">De l'inscription du pilote jusqu'à l'e-mail qu'il reçoit après la session.
      Sans commentaire : vous voyez exactement ce que voient vos clients, et ce que vous voyez, vous.</p>
 
-  <video controls preload="metadata" playsinline>
-    <source src="demo-v2.mp4" type="video/mp4">
+  <video controls preload="metadata" playsinline poster="/videos/posters/5-presentation-trinisette.jpg">
+    <source src="/videos/5-presentation-trinisette.mp4" type="video/mp4">
     Votre navigateur ne peut pas lire cette vidéo.
-    <a href="demo-v2.mp4">Télécharger la vidéo</a>.
+    <a href="/videos/5-presentation-trinisette.mp4">Télécharger la vidéo</a>.
   </video>
-  <p class="note">1 min 26 — sans son, tout est expliqué à l'écran.</p>
+  <p class="note">45 secondes — sans son, tout est expliqué à l'écran.</p>
 
   <div class="steps">
     <div class="step"><div class="n">Étape 1</div><h3>Le pilote s'inscrit</h3>
@@ -82,11 +94,47 @@ footer a{color:var(--mut);text-decoration:none}
       <p>Le classement part en ligne et chaque pilote reçoit ses résultats par e-mail dans la foulée.</p></div>
   </div>
 
+
+  <div class="cases">
+    <h2 class="cases-h">Le détail, cas par cas</h2>
+    <p class="cases-p">Sept séquences filmées sur l'application réelle, chacune sur un moment précis de votre journée.</p>
+
+    <div class="cases-grid">
+      <figure><video controls playsinline preload="none" poster="/videos/posters/1-inscription-pilote.jpg"
+          src="/videos/1-inscription-pilote.mp4"></video>
+        <figcaption><strong>Le pilote s'inscrit seul</strong><span>QR code, formulaire, consentement RGPD — 53 s</span></figcaption></figure>
+
+      <figure><video controls playsinline preload="none" poster="/videos/posters/7-admin.jpg"
+          src="/videos/7-admin.mp4"></video>
+        <figcaption><strong>Côté gérant</strong><span>Créer une session, voir les inscrits arriver — 17 s</span></figcaption></figure>
+
+      <figure><video controls playsinline preload="none" poster="/videos/posters/2-resultats-publics.jpg"
+          src="/videos/2-resultats-publics.mp4"></video>
+        <figcaption><strong>Les résultats publiés</strong><span>Podium, classement, tour par tour — 36 s</span></figcaption></figure>
+
+      <figure><video controls playsinline preload="none" poster="/videos/posters/6-ecran-tv.jpg"
+          src="/videos/6-ecran-tv.mp4"></video>
+        <figcaption><strong>L'écran d'accueil</strong><span>Classement et records sur la TV du hall — 16 s</span></figcaption></figure>
+
+      <figure><video controls playsinline preload="none" poster="/videos/posters/4-resultats-mobile.jpg"
+          src="/videos/4-resultats-mobile.mp4"></video>
+        <figcaption><strong>Sur le téléphone du pilote</strong><span>Ce que vos clients partagent — 35 s</span></figcaption></figure>
+
+      <figure><video controls playsinline preload="none" poster="/videos/posters/3-pilote-reconnu.jpg"
+          src="/videos/3-pilote-reconnu.mp4"></video>
+        <figcaption><strong>Le pilote qui revient</strong><span>Reconnu, réinscrit en deux clics — 40 s</span></figcaption></figure>
+
+      <figure><video controls playsinline preload="none" poster="/videos/posters/8-themes.jpg"
+          src="/videos/8-themes.mp4"></video>
+        <figcaption><strong>Huit thèmes</strong><span>La page publique aux couleurs du circuit — 41 s</span></figcaption></figure>
+    </div>
+  </div>
+
   <div class="cta">
-    <h2>Quinze jours, gratuits, sans engagement.</h2>
-    <p>Nous cherchons deux ou trois circuits partenaires pour utiliser TRINISETTE en conditions réelles.
-       En échange, nous vous demandons simplement un avis franc sur ce qui va et ce qui ne va pas —
-       et ce que vous demanderez sera développé en priorité.</p>
+    <h2>59 € par mois, résiliable dès le premier mois.</h2>
+    <p>Un abonnement par circuit. Le nombre de pilotes, de sessions et d'e-mails envoyés n'est jamais
+       facturé. La mise en route se fait avec vous, en visio, et elle est comprise. Si ça ne vous
+       convient pas, vous arrêtez à la fin du mois — il n'y a pas de durée d'engagement.</p>
     <a class="btn" href="/#contact">Nous contacter</a>
     <a class="mail" href="mailto:contact@trinisette.fr">contact@trinisette.fr</a>
   </div>
