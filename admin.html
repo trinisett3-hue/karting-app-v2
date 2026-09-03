@@ -873,10 +873,11 @@ updateThemeToggleUI();
 <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
 <div id="venue-qr" style="width:150px;height:150px;background:#fff;border-radius:10px;padding:8px;display:flex;align-items:center;justify-content:center"></div>
 <div style="flex:1 1 240px;min-width:0">
-<div style="font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:8px">Ce QR ne change jamais. Imprime-le une seule fois : les pilotes y retrouvent les sessions ouvertes du jour et les resultats publies, sans que tu aies rien a refaire a chaque session.</div>
+<div style="font-size:11px;color:var(--mut);line-height:1.6;margin-bottom:8px">Ce QR ne change jamais. Telecharge l'affiche A4, imprime-la une fois et pose-la a l'accueil : les pilotes y retrouvent les sessions ouvertes du jour et les resultats publies, sans que tu aies rien a refaire a chaque session. Le QR seul (PNG) reste disponible si tu preferes ta propre mise en page.</div>
 <input type="text" id="venue-link" readonly style="width:100%;font-size:11px" value=""/>
 <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
 <button class="btn btn-ghost btn-sm" onclick="copyVenueLink()">Copier le lien</button>
+<button class="btn btn-primary btn-sm" onclick="downloadVenuePoster()">Telecharger l'affiche A4 (PDF)</button>
 <button class="btn btn-ghost btn-sm" onclick="downloadVenueQR()">Telecharger le QR (PNG)</button>
 <button class="btn btn-ghost btn-sm" onclick="enlargeVenueQR()">Agrandir</button>
 </div>
@@ -1465,6 +1466,6 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260903k31"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260903k32"></script>
 </body>
 </html>

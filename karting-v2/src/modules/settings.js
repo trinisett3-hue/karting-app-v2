@@ -21,6 +21,7 @@ import { pilotAvatarSVG } from './pilot-avatar.js';
 import { hasFeature, getCurrentPlanCode } from './plan.js';
 import { requestPasswordReset as authRequestPasswordReset } from './auth.js';
 import { qrSVG, qrCanvas } from './qr.js';
+import { saveVenuePoster } from './venue-poster.js';
 import { renderSessionTypesEditor, refreshSessionTypeSelects, readSessionTypesFromEditor } from '../state.js';
 import {
 configureSignatureAvatars,
@@ -1208,6 +1209,20 @@ export async function downloadVenueQR() {
     a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
   }, 'image/png');
+}
+
+// Affiche A4 prete a imprimer (03/09). Meme QR, mais pose dans un modele unique,
+// identique pour tous les circuits : ni logo, ni nom de circuit, ni couleur de
+// theme — seul le lien encode change. Choix volontaire : rien a personnaliser
+// donc rien qui puisse casser la mise en page (nom trop long, logo bancal), et
+// aucune dependance a app_settings ni a une image distante. Le PNG brut
+// ci-dessus reste la pour les usages libres (ecran, reseaux, mise en page maison).
+export async function downloadVenuePoster() {
+  const url = document.getElementById('venue-link')?.value || await loadVenueLink();
+  if (!url) return;
+  try {
+    saveVenuePoster(url, { fileName: 'affiche-qr-circuit.pdf' });
+  } catch (e) { /* jsPDF absent ou URL trop longue : le bouton PNG reste utilisable */ }
 }
 
 // Affichage plein ecran : sert a faire scanner le QR directement sur l'ecran, sans
