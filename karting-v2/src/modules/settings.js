@@ -1293,9 +1293,6 @@ if (note) note.textContent = 'URL trop longue pour un QR lisible (179 caracteres
 export async function renderAccountTab() {
 const badge = document.getElementById('account-plan-badge');
 const upgradeRow = document.getElementById('account-upgrade-row');
-// Le retour en Basique passe par nous, jamais en libre-service : une demande de
-// downgrade est une conversation a avoir, pas un clic a subir (decision du 04/09).
-const downgradeRow = document.getElementById('account-downgrade-row');
 const createdAt = document.getElementById('account-created-at');
 if (badge) {
 const plan = await getCurrentPlanCode();
@@ -1303,7 +1300,6 @@ const isPremium = plan === 'pro' || plan === 'business';
 badge.textContent = isPremium ? 'Premium' : 'Free';
 badge.className = 'plan-badge ' + (isPremium ? 'pro' : 'free');
 if (upgradeRow) upgradeRow.style.display = isPremium ? 'none' : 'flex';
-if (downgradeRow) downgradeRow.style.display = isPremium ? 'flex' : 'none';
 }
 if (createdAt) {
 try {

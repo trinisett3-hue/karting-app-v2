@@ -179,32 +179,58 @@ function renderInvoices(invoices) {
     ${rows}`;
 }
 
-async function openPortal(btn) {
+// `intent` distingue les deux usages de l'Edge Function billing-portal : sans intent,
+// le portail complet (factures, moyen de paiement, resiliation) ; avec 'upgrade', la
+// page unique de confirmation du passage au Premium. Renvoie true si le portail s'est
+// ouvert. En mode silencieux, aucun message d'erreur n'est affiche : l'appelant a un
+// repli a proposer (le bouton "Passer au Premium" retombe sur un e-mail pre-rempli).
+async function openPortal(btn, { intent = null, silent = false } = {}) {
   const original = btn.textContent;
   btn.disabled = true;
   btn.textContent = 'Ouverture…';
   try {
-    const { data, error } = await db.functions.invoke('billing-portal', {
-      body: { returnUrl: window.location.href },
-    });
+    const body = { returnUrl: window.location.href };
+    if (intent) body.intent = intent;
+    const { data, error } = await db.functions.invoke('billing-portal', { body });
     if (error) throw error;
     if (!data?.url) throw new Error('URL de portail absente');
     window.open(data.url, '_blank', 'noopener');
+    return true;
   } catch (e) {
     console.error('[billing] portail indisponible', e);
-    const actions = document.getElementById('billing-actions');
-    if (actions) {
-      const msg = document.createElement('div');
-      msg.className = 'msg';
-      msg.style.cssText = 'display:block;margin-top:10px;color:var(--red)';
-      msg.textContent =
-        "Le portail de facturation n'a pas pu s'ouvrir. Réessayez, ou écrivez-nous et nous réglons ça.";
-      actions.appendChild(msg);
+    if (!silent) {
+      const actions = document.getElementById('billing-actions');
+      if (actions) {
+        const msg = document.createElement('div');
+        msg.className = 'msg';
+        msg.style.cssText = 'display:block;margin-top:10px;color:var(--red)';
+        msg.textContent =
+          "Le portail de facturation n'a pas pu s'ouvrir. Réessayez, ou écrivez-nous et nous réglons ça.";
+        actions.appendChild(msg);
+      }
     }
+    return false;
   } finally {
     btn.disabled = false;
     btn.textContent = original;
   }
+}
+
+// Bouton "Passer au Premium" du panneau Compte (04/09/2026).
+// Le changement de formule est fait PAR LE CLIENT : Stripe horodate son accord et gere
+// l'authentification bancaire du nouveau montant. Le flux est a sens unique — il ne
+// propose que le Premium, jamais un retour en arriere : redescendre en Basique se
+// demande par e-mail. Le lien mailto reste dans le HTML et sert de repli quand
+// l'abonnement n'a pas de client Stripe (paiement par virement) ou si l'appel echoue.
+function wireUpgradeButton() {
+  const up = document.getElementById('account-upgrade-btn');
+  if (!up || up.dataset.wired) return;
+  up.dataset.wired = '1';
+  up.addEventListener('click', async (ev) => {
+    ev.preventDefault();
+    const ok = await openPortal(up, { intent: 'upgrade', silent: true });
+    if (!ok) window.location.href = up.href;
+  });
 }
 
 async function load() {
@@ -245,6 +271,8 @@ async function load() {
 }
 
 function install() {
+  wireUpgradeButton();
+
   if (document.getElementById('billing-card')) return;
 
   const panel = findPanel();
