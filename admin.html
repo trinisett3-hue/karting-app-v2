@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Admin - Karting</title>
+<title>TRINISETTE KARTING — Administration</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -350,7 +350,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 
 <div class="sidebar">
 <div class="sb-logo" style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-<div>Karting <span>Admin</span></div>
+<div>Trinisette <span>Karting</span></div>
 <img id="sb-circuit-logo" src="" alt="Logo du circuit" style="display:none;max-height:28px;max-width:64px;object-fit:contain;border-radius:4px"/>
 </div>
 <div class="sb-status"><div class="dot" id="status-dot"></div><span id="status-txt">Aucune session</span></div>
@@ -1392,7 +1392,7 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <!-- OVERLAY LOGIN : visible par defaut (fail-closed) tant qu'aucune session Auth n'est confirmee -->
 <div class="overlay show" id="login-overlay" style="z-index:200">
 <div class="qr-zoom-box" style="max-width:360px">
-<div style="font-size:18px;font-weight:900">Karting <span style="color:var(--yel)">Admin</span></div>
+<div style="font-size:18px;font-weight:900;text-transform:uppercase;letter-spacing:.6px">Trinisette <span style="color:var(--yel)">Karting</span></div>
 <div style="font-size:12px;color:var(--mut);text-align:center">Connecte-toi pour acceder a ton espace de gestion.</div>
 <div class="field" style="width:100%"><label>Email</label><input type="email" id="login-email" autocomplete="username"/></div>
 <div class="field" style="width:100%"><label>Mot de passe</label><input type="password" id="login-password" autocomplete="current-password" onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"/></div>
