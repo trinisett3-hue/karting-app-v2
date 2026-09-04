@@ -139,7 +139,7 @@ if (!ok) return;
 state.prefsDirty = false;
 settings.loadPrefs();
 }
-const names = ['creer', 'actives', 'archives', 'stats', 'registre', 'parametres'];
+const names = ['creer', 'actives', 'archives', 'stats', 'registre', 'parametres', 'aide'];
 document.querySelectorAll('.sb-tab').forEach((t, i) => t.classList.toggle('active', names[i] === tab));
 document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
 document.getElementById('panel-' + tab).classList.add('active');
