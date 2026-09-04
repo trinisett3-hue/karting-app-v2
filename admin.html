@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-  <script type="module" src="karting-v2/src/modules/billing.js"></script>
+  <script type="module" src="karting-v2/src/modules/billing.js?v=20260904a03"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Teko:wght@500;600;700&family=Barlow+Condensed:ital,wght@0,400;0,500;0,600;0,700;1,500&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -1410,10 +1410,6 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <span class="account-label">Passer au Premium</span>
 <a href="mailto:contact@trinisette.fr?subject=Passage%20a%20la%20formule%20Premium%20%2899%2C99%20EUR%20par%20mois%29&body=Bonjour%2C%0A%0AJe%20demande%20le%20passage%20de%20mon%20abonnement%20TRINISETTE%20de%20la%20formule%20Basique%20%2859%2C99%20EUR%20par%20mois%29%20a%20la%20formule%20Premium%20%2899%2C99%20EUR%20par%20mois%29%2C%20a%20compter%20de%20ma%20prochaine%20echeance%20de%20facturation.%0A%0ANom%20du%20circuit%20%3A%20%0AAdresse%20e-mail%20du%20compte%20%3A%20%0A%0AMerci." class="btn btn-primary btn-sm" id="account-upgrade-btn">Passer au Premium</a>
 </div>
-<div class="account-row" id="account-downgrade-row" style="display:none">
-<span class="account-label">Repasser en Basique</span>
-<a href="mailto:contact@trinisette.fr?subject=Retour%20a%20la%20formule%20Basique%20%2859%2C99%20EUR%20par%20mois%29&body=Bonjour%2C%0A%0AJe%20demande%20le%20passage%20de%20mon%20abonnement%20TRINISETTE%20de%20la%20formule%20Premium%20%2899%2C99%20EUR%20par%20mois%29%20a%20la%20formule%20Basique%20%2859%2C99%20EUR%20par%20mois%29%2C%20a%20compter%20de%20ma%20prochaine%20echeance%20de%20facturation.%0A%0ANom%20du%20circuit%20%3A%20%0AAdresse%20e-mail%20du%20compte%20%3A%20%0A%0AMerci." class="btn btn-ghost btn-sm" id="account-downgrade-btn">Nous ecrire</a>
-</div>
 <div class="account-row">
 <span class="account-label">Compte cree le</span>
 <span class="account-value" id="account-created-at">—</span>
@@ -1765,7 +1761,7 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <p class="lede">Tout ce qui touche à votre accès et à votre abonnement tient sur un seul écran.</p>
 <p><span class="aide-k">Paramètres &gt; Compte</span> réunit votre e-mail de connexion, votre formule en cours, la date de création du compte, et trois boutons : <b>Changer le mot de passe</b> (un e-mail de réinitialisation part vers votre adresse), <b>Contacter le support</b> et <b>Déconnexion</b>.</p>
 <p>C'est également ici que vous retrouvez votre <b>facturation</b> : formule, statut, date de renouvellement, factures téléchargeables en PDF, et accès au portail de paiement pour changer de carte ou résilier — sans passer par nous.</p>
-<p><b>Changer de formule</b> — dans un sens comme dans l'autre — se demande par e-mail, depuis les boutons <b>Passer au Premium</b> ou <b>Repasser en Basique</b> de ce même écran. Le message est pré-rempli avec la formule et son prix : vous n'avez qu'à l'envoyer. Le changement prend effet à votre prochaine échéance. Changer de carte ou résilier, en revanche, se fait seul depuis le portail de paiement, sans nous écrire.</p>
+<p><b>Passer au Premium</b> se fait depuis ce même écran, en une confirmation sur la page sécurisée de Stripe : effet immédiat, différence calculée au prorata. <b>Revenir en Basique</b> se demande par e-mail à contact@trinisette.fr, et prend effet à votre prochaine échéance. Changer de carte ou résilier, en revanche, se fait seul depuis le portail de paiement, sans nous écrire.</p>
 </div>
 </section>
 
@@ -1800,8 +1796,8 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 </div>
 <div class="aide-note">
 <div class="t">Passer en Premium</div>
-<p><span class="aide-k">Paramètres &gt; Compte &gt; Passer au Premium</span> : le bouton ouvre un e-mail pré-rempli vers contact@trinisette.fr, indiquant la formule demandée et son prix. Vous l'envoyez, nous faisons le changement de notre côté et vous confirmons par retour. Le nouveau tarif s'applique à votre prochaine échéance de facturation ; vous ne payez jamais deux fois le même mois.</p>
-<p><b>Le retour en Basique se demande de la même façon</b>, par e-mail, depuis <span class="aide-k">Paramètres &gt; Compte &gt; Repasser en Basique</span>. Là encore, effet à l'échéance suivante : vous gardez les fonctions Premium jusqu'au bout du mois déjà payé.</p>
+<p><span class="aide-k">Paramètres &gt; Compte &gt; Passer au Premium</span> : le bouton vous emmène sur une page de confirmation de Stripe, notre prestataire de paiement, qui récapitule la formule et son prix. Vous validez, et c'est fait — les fonctions Premium s'ouvrent immédiatement. La différence de prix est calculée au prorata des jours restants de votre mois en cours : vous ne payez jamais deux fois la même période. Si votre abonnement est réglé par virement plutôt que par carte, le bouton ouvre à la place un e-mail pré-rempli et nous faisons le changement de notre côté.</p>
+<p><b>Pour revenir en Basique, écrivez-nous</b> à contact@trinisette.fr depuis l'adresse e-mail de votre compte. Nous appliquons le changement à votre prochaine échéance : vous gardez les fonctions Premium jusqu'au bout du mois déjà payé. Ce n'est pas un parcours en libre-service, et c'est volontaire — dites-nous ce qui n'a pas fonctionné, c'est souvent réglable.</p>
 <p>Dans les deux sens : aucune coupure de service, aucune reconfiguration, rien de perdu — vos réglages, vos sessions et votre historique restent en place. Les fonctions s'ajoutent, ou se retirent.</p>
 </div>
 </div>
@@ -2031,6 +2027,6 @@ if(!cur.length)show(found[0].btn.dataset.go);
 })();
 </script>
 
-<script type="module" src="karting-v2/src/app.js?v=20260904a02"></script>
+<script type="module" src="karting-v2/src/app.js?v=20260904a03"></script>
 </body>
 </html>
