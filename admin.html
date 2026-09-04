@@ -344,6 +344,73 @@ input[readonly]{opacity:.6;cursor:not-allowed}
   background:var(--tc); color:#fff; font-weight:800; }
 .team-cell { display:flex; align-items:center; gap:6px; }
 .team-cell .team-select { border-left:2px solid var(--tc); min-width:120px; }
+
+/* ---- Onglet Aide (04/09/2026) ---------------------------------------------------------
+   Le manuel client, repris dans l'application. Autonome : aucune dependance a un module,
+   tout le comportement tient dans le petit script inline en bas de page. Les videos sont
+   servies depuis trinisette.fr et ne se chargent qu'au clic (preload="none"). */
+.aide-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.aide-search{flex:1 1 260px;min-width:0}
+.aide-wrap{display:grid;grid-template-columns:250px minmax(0,1fr);gap:20px;align-items:start}
+.aide-nav{position:sticky;top:14px;display:flex;flex-direction:column;gap:2px;
+  background:var(--surf);border:1px solid var(--bord-soft);border-radius:var(--rad);
+  padding:8px;box-shadow:var(--shadow);max-height:calc(100vh - 40px);overflow-y:auto}
+.aide-navi{display:block;width:100%;text-align:left;border:0;background:transparent;color:var(--mut);
+  font-family:var(--font-body);font-size:12.5px;font-weight:600;line-height:1.35;
+  padding:9px 10px;border-radius:9px;cursor:pointer;transition:background .15s,color .15s}
+.aide-navi:hover{background:var(--surf2);color:var(--txt)}
+.aide-navi.on{background:color-mix(in srgb,var(--acc) 14%,transparent);color:var(--txt);
+  box-shadow:inset 2px 0 0 var(--acc)}
+.aide-navi .n{display:inline-block;min-width:20px;color:var(--acc);font-weight:800}
+.aide-navi[hidden]{display:none}
+.aide-sec{display:none}
+.aide-sec.on{display:block;animation:panelIn .25s cubic-bezier(.16,1,.3,1)}
+.aide-sec h2{font-family:var(--font-display);font-size:26px;font-weight:600;letter-spacing:.3px;
+  text-transform:uppercase;margin:0 0 6px}
+.aide-sec .lede{color:var(--mut);font-size:13px;line-height:1.6;margin:0 0 18px}
+.aide-sec h3{font-size:12px;font-weight:800;color:var(--mut);text-transform:uppercase;
+  letter-spacing:.7px;margin:22px 0 10px}
+.aide-sec p{font-size:13.5px;line-height:1.68;margin:0 0 12px}
+.aide-sec ul{margin:0 0 12px;padding-left:18px}
+.aide-sec li{font-size:13.5px;line-height:1.62;margin-bottom:7px}
+.aide-sec b,.aide-sec strong{color:var(--txt);font-weight:700}
+.aide-k{display:inline-block;background:var(--surf2);border:1px solid var(--bord-soft);
+  border-radius:6px;padding:1px 6px;font-size:12px;font-weight:700;color:var(--txt);white-space:nowrap}
+.aide-steps{counter-reset:aide;list-style:none;padding:0;margin:0 0 12px}
+.aide-steps li{position:relative;padding-left:38px;margin-bottom:14px}
+.aide-steps li::before{counter-increment:aide;content:counter(aide);position:absolute;left:0;top:0;
+  width:26px;height:26px;border-radius:50%;background:var(--acc);color:#fff;
+  font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.aide-note{border-left:3px solid var(--acc);background:color-mix(in srgb,var(--acc) 7%,transparent);
+  border-radius:0 10px 10px 0;padding:12px 16px;margin:16px 0}
+.aide-note .t{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;
+  color:var(--acc);margin-bottom:5px}
+.aide-note p:last-child{margin-bottom:0}
+.aide-note.warn{border-left-color:var(--yel);background:color-mix(in srgb,var(--yel) 8%,transparent)}
+.aide-note.warn .t{color:var(--yel)}
+.aide-video{margin:16px 0;max-width:660px;border:1px solid var(--bord-soft);border-radius:12px;
+  overflow:hidden;background:#000;box-shadow:var(--shadow)}
+.aide-video video{display:block;width:100%;height:auto;background:#000}
+.aide-video figcaption{background:var(--surf);color:var(--mut);font-size:11.5px;padding:9px 14px;
+  border-top:1px solid var(--bord-soft)}
+.aide-tbl{width:100%;border-collapse:collapse;margin:0 0 14px;font-size:13px}
+.aide-tbl th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;
+  color:var(--mut);font-weight:800;padding:0 12px 8px 0;border-bottom:1px solid var(--bord-soft)}
+.aide-tbl td{padding:10px 12px 10px 0;border-bottom:1px solid var(--bord-soft);
+  vertical-align:top;line-height:1.55}
+.aide-tbl td:first-child{font-weight:700;color:var(--txt);white-space:nowrap}
+.aide-prem{display:inline-block;background:var(--yel);color:#241d00;font-size:9.5px;font-weight:800;
+  letter-spacing:.5px;border-radius:5px;padding:2px 5px;vertical-align:middle;margin-left:5px}
+.aide-hits{font-size:12px;color:var(--mut);margin-bottom:12px}
+.aide-hits b{color:var(--acc)}
+/* Filet de securite sur petit ecran (tablette du comptoir) : la grille retombe sur une
+   colonne. L'onglet est concu pour un ordinateur, ce n'est pas une mise en page mobile. */
+@media(max-width:900px){
+  .aide-wrap{grid-template-columns:1fr}
+  .aide-nav{position:static;max-height:none}
+  .aide-tbl td:first-child{white-space:normal}
+}
+
 </style>
 </head>
 <body>
@@ -360,6 +427,7 @@ input[readonly]{opacity:.6;cursor:not-allowed}
 <div class="sb-tab" onclick="switchTab('stats')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span class="lbl">Statistiques</span></div>
 <div class="sb-tab" onclick="switchTab('registre')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span class="lbl">Registre</span></div>
 <div class="sb-tab" onclick="switchTab('parametres')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg><span class="lbl">Parametres</span></div>
+<div class="sb-tab" onclick="switchTab('aide')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><line x1="12" y1="17.5" x2="12" y2="17.5"/></svg><span class="lbl">Aide</span></div>
 <div style="margin-top:auto;padding:14px 20px 0;border-top:1px solid var(--bord)">
 <div style="font-size:11px;color:var(--mut);margin-bottom:8px;word-break:break-all" id="login-user-email"></div>
 <button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:8px" onclick="toggleTheme()" id="theme-toggle-btn">
@@ -1370,6 +1438,437 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 
 </div>
 
+
+<!-- PANEL: AIDE — le manuel client repris dans l'application (04/09/2026).
+     Autonome : le comportement (navigation + recherche) tient dans le script inline
+     en bas de page. Les videos viennent de trinisette.fr, en preload="none". -->
+<div class="panel" id="panel-aide">
+<div class="pg-title">Aide &amp; astuces</div>
+
+<div class="aide-top">
+<input type="search" class="aide-search" id="aide-q" placeholder="Rechercher : kart, e-mail, QR, publier, mot de passe…" autocomplete="off"/>
+<a class="btn btn-ghost btn-sm" href="/manuel-trinisette.pdf" target="_blank" rel="noopener">Manuel complet (PDF)</a>
+<a class="btn btn-ghost btn-sm" href="mailto:support@trinisette.fr">Écrire au support</a>
+</div>
+
+<div class="aide-wrap">
+<nav class="aide-nav" id="aide-nav">
+<button type="button" class="aide-navi on" data-go="a1"><span class="n">1</span> Comment ça marche</button>
+<button type="button" class="aide-navi" data-go="a2"><span class="n">2</span> Première connexion</button>
+<button type="button" class="aide-navi" data-go="a3"><span class="n">3</span> Configuration initiale</button>
+<button type="button" class="aide-navi" data-go="a4"><span class="n">4</span> Votre QR permanent</button>
+<button type="button" class="aide-navi" data-go="a5"><span class="n">5</span> Une session, pas à pas</button>
+<button type="button" class="aide-navi" data-go="a6"><span class="n">6</span> Ce que reçoit le pilote</button>
+<button type="button" class="aide-navi" data-go="a7"><span class="n">7</span> Les archives</button>
+<button type="button" class="aide-navi" data-go="a8"><span class="n">8</span> Les statistiques</button>
+<button type="button" class="aide-navi" data-go="a9"><span class="n">9</span> Le registre clients</button>
+<button type="button" class="aide-navi" data-go="a10"><span class="n">10</span> L'écran TV</button>
+<button type="button" class="aide-navi" data-go="a11"><span class="n">11</span> Votre compte</button>
+<button type="button" class="aide-navi" data-go="a12"><span class="n">12</span> Ce que débloque le Premium</button>
+<button type="button" class="aide-navi" data-go="a13"><span class="n">13</span> Mémo comptoir</button>
+<button type="button" class="aide-navi" data-go="a14"><span class="n">14</span> Que faire si…</button>
+</nav>
+
+<div class="aide-body" id="aide-body">
+
+<div class="aide-hits" id="aide-hits" hidden></div>
+
+<!-- 1 -->
+<section class="aide-sec on" id="aide-a1">
+<div class="card">
+<h2>Comment ça marche</h2>
+<p class="lede">Le trajet complet d'un pilote, de son arrivée à son e-mail de résultats. Tout le reste de cette aide ne fait que détailler ces sept moments.</p>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/5-presentation-trinisette.jpg?v=2" src="https://trinisette.fr/videos/5-presentation-trinisette.mp4?v=2"></video>
+<figcaption>La présentation complète en 45 secondes, sans son.</figcaption>
+</figure>
+<ol class="aide-steps">
+<li><b>Le pilote scanne votre QR code.</b> Un seul QR pour tout le circuit, affiché à l'accueil. Il ne change jamais.</li>
+<li><b>Il s'inscrit lui-même, sur son téléphone.</b> Pseudo, prénom, nom, e-mail, date de naissance, pays. La première fois seulement : ensuite il se retrouve par son e-mail ou son pseudo en deux secondes.</li>
+<li><b>Vous lui attribuez un kart.</b> Depuis <span class="aide-k">Sessions actives</span>, en un clic, ou automatiquement pour toute la grille.</li>
+<li><b>La course a lieu.</b> L'application ne chronomètre pas : votre système de chronométrage actuel ne change pas.</li>
+<li><b>Vous importez les chronos.</b> Vous collez le texte de votre chronométrage, ou vous déposez le fichier tel quel. Le format est reconnu automatiquement.</li>
+<li><b>Vous publiez.</b> Un bouton. Le classement apparaît sur votre page publique, et chaque pilote reçoit son e-mail avec ses temps.</li>
+<li><b>Vous terminez la session.</b> Elle bascule dans les archives, et alimente vos statistiques et vos records.</li>
+</ol>
+<h3>Les trois adresses à connaître</h3>
+<table class="aide-tbl">
+<tr><th>Adresse</th><th>Pour qui</th><th>À quoi ça sert</th></tr>
+<tr><td>app.trinisette.fr/admin</td><td>Vous et votre équipe</td><td>Votre espace de gestion. Protégé par mot de passe.</td></tr>
+<tr><td>Le lien de votre QR permanent</td><td>Vos pilotes</td><td>Inscription aux sessions ouvertes et consultation des résultats publiés.</td></tr>
+<tr><td>L'écran kiosque</td><td>La TV de votre salle</td><td>Classement et records en plein écran, sans intervention.</td></tr>
+</table>
+<div class="aide-note">
+<div class="t">Le point le plus important</div>
+<p>Votre page publique porte le nom et le logo de votre circuit, pas les nôtres. Vos pilotes ne voient pas qu'ils utilisent un outil externe. C'est vous qu'ils retiennent.</p>
+</div>
+</div>
+</section>
+
+<!-- 2 -->
+<section class="aide-sec" id="aide-a2">
+<div class="card">
+<h2>Votre première connexion</h2>
+<p class="lede">Trois minutes. À faire une fois, de préférence sur l'ordinateur que vous utiliserez au quotidien pour gérer vos sessions.</p>
+<ol class="aide-steps">
+<li><b>Ouvrez l'e-mail de bienvenue.</b> Il arrive dans la minute qui suit votre paiement, expédié par contact@trinisette.fr. S'il n'est pas là, regardez dans les indésirables avant de nous écrire.</li>
+<li><b>Cliquez sur « Définir mon mot de passe ».</b> Ce lien est valable 24 heures et ne fonctionne qu'une seule fois. Choisissez un mot de passe d'au moins 8 caractères, saisissez-le deux fois, puis validez.</li>
+<li><b>Vous arrivez dans votre espace.</b> Les fois suivantes, l'écran de connexion vous demandera simplement votre e-mail et votre mot de passe.</li>
+</ol>
+<div class="aide-note">
+<div class="t">Mettez cette adresse en favori — maintenant</div>
+<p>C'est le seul geste de cette aide qu'il ne faut pas remettre à plus tard. Enregistrez <b>app.trinisette.fr/admin</b> dans les favoris de votre navigateur : <span class="aide-k">Ctrl + D</span> sur Windows, <span class="aide-k">Cmd + D</span> sur Mac. Nommez-le « Espace karting » et rangez-le dans la barre de favoris, bien en vue.</p>
+<p>Pourquoi tant d'insistance : ce lien n'est écrit nulle part ailleurs. Il n'apparaît pas dans les résultats de recherche, et l'e-mail de bienvenue finit toujours par se perdre au fond d'une boîte de réception. Sur la tablette du comptoir, faites de même avec « Ajouter à l'écran d'accueil » : l'espace s'ouvre alors comme une application.</p>
+</div>
+<h3>Plusieurs personnes au comptoir ?</h3>
+<p>Un seul compte est créé à la souscription, et il peut être utilisé sur plusieurs ordinateurs et tablettes en même temps. Choisissez un mot de passe que vous acceptez de partager avec votre équipe, et changez-le quand quelqu'un quitte le circuit : <span class="aide-k">Paramètres &gt; Compte &gt; Changer le mot de passe</span>.</p>
+<h3>Mot de passe perdu</h3>
+<p>Le lien <b>« Mot de passe oublié ? »</b> de l'écran de connexion vous envoie un lien de réinitialisation sur l'adresse de votre compte. Tant que vous êtes connecté, vous pouvez aussi le changer vous-même depuis <span class="aide-k">Paramètres &gt; Compte</span>.</p>
+</div>
+</section>
+
+<!-- 3 -->
+<section class="aide-sec" id="aide-a3">
+<div class="card">
+<h2>La configuration initiale</h2>
+<p class="lede">Comptez trente minutes, une seule fois. Tout se passe dans <span class="aide-k">Paramètres</span>. Faites les onglets dans l'ordre : Général, Sessions, Apparence. Les trois derniers (PDF, Kiosque, Compte) n'ont rien à régler au démarrage.</p>
+<div class="aide-note warn">
+<div class="t">Un seul bouton d'enregistrement</div>
+<p>Le bouton <b>Enregistrer les paramètres</b>, en bas de l'écran, vaut pour les six onglets à la fois. Vous pouvez donc tout régler puis enregistrer une seule fois à la fin. Si vous quittez les Paramètres sans avoir enregistré, l'application vous prévient avant de vous laisser partir — ne passez pas outre.</p>
+</div>
+
+<h3>Onglet Général : l'identité de votre circuit</h3>
+<p>C'est ce que vos pilotes verront. Prenez-y soin.</p>
+<table class="aide-tbl">
+<tr><th>Champ</th><th>Ce qu'il faut y mettre</th></tr>
+<tr><td>Nom du circuit</td><td>Le nom commercial, tel que vos clients le disent. 40 caractères maximum. Il s'affiche sur la page publique de résultats, sur les cartes partageables et dans les aperçus.</td></tr>
+<tr><td>Lien de réservation</td><td>Facultatif mais recommandé : l'adresse de votre page de réservation en ligne. Un bouton « Réserver une prochaine séance » apparaît alors dans l'e-mail de résultats de chaque pilote, au moment exact où il est content de son chrono.</td></tr>
+<tr><td>Nom sur l'en-tête (PDF)</td><td>Version courte, 28 caractères : la zone est étroite sur la fiche pilote. Laissez vide pour reprendre le nom du circuit.</td></tr>
+<tr><td>Nom en bas de page (PDF)</td><td>60 caractères, pied de page des deux exports PDF. Vous pouvez y mettre nom + ville.</td></tr>
+<tr><td>Logo du circuit</td><td>Un PNG à fond transparent donne le meilleur rendu.</td></tr>
+<tr><td>Format des dates</td><td>JJ/MM/AAAA pour la France.</td></tr>
+<tr><td>Unité de temps</td><td>Secondes, minutes:secondes, ou minutes:secondes:millième. En karting loisir sur un tour court, les secondes suffisent et se lisent mieux.</td></tr>
+</table>
+
+<h3>Onglet Sessions : vos valeurs par défaut</h3>
+<p>Tout ce que vous réglez ici est pré-rempli à chaque nouvelle session. Bien fait, créer une session ne prend plus que quelques secondes.</p>
+<table class="aide-tbl">
+<tr><th>Réglage</th><th>Comment le choisir</th></tr>
+<tr><td>Nombre de karts par défaut</td><td>Le nombre de karts que vous mettez en piste dans une séance normale.</td></tr>
+<tr><td>Verrouiller ce nombre</td><td>Activez-le si toutes vos séances ont le même nombre de karts : le champ disparaît de l'écran de création.</td></tr>
+<tr><td>Suivi du nombre de tours</td><td>À activer si vos séances sont annoncées en nombre de tours plutôt qu'en durée.</td></tr>
+<tr><td>Seuils Expert / Intermédiaire</td><td>Deux temps au tour, en secondes (45 et 55 par défaut). Ils classent vos pilotes par niveau dans les statistiques. <b>Remplacez-les par les temps réels de votre piste</b>, sinon vos statistiques de niveau ne voudront rien dire.</td></tr>
+<tr><td>Types de session</td><td>Les catégories proposées à la création : Loisir, Anniversaire, Entreprise… Trois par défaut, cinq au maximum. Une session déjà enregistrée garde son type même si vous retirez celui-ci de la liste.</td></tr>
+<tr><td>Numéros de karts existants</td><td>La liste réelle des numéros que vous possédez. Sans elle, l'attribution propose bêtement 1, 2, 3… alors que votre flotte est peut-être numérotée 3, 7, 8, 12.</td></tr>
+<tr><td>Secteurs</td><td>À activer uniquement si votre chronométrage produit des temps intermédiaires (2 ou 3 secteurs). Dans le doute, laissez désactivé.</td></tr>
+</table>
+<div class="aide-note warn">
+<div class="t">Format d'import des chronos : n'y touchez pas</div>
+<p>La section « Personnaliser le format d'import » impressionne, mais elle ne sert presque jamais. Quand vous importez un fichier qui n'est pas au format habituel, l'application détecte le format toute seule et le mémorise. Vous n'ouvrez cette section que si le résultat est visiblement faux, pour corriger un numéro de colonne à la main.</p>
+</div>
+
+<h3>Onglet Apparence : le rendu vu par vos pilotes</h3>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/8-themes.jpg" src="https://trinisette.fr/videos/8-themes.mp4"></video>
+<figcaption>Les huit thèmes de la page publique, changés depuis un menu déroulant — 41 s.</figcaption>
+</figure>
+<p><b>Le thème</b> colore la page publique de résultats et les PDF. Trois thèmes sont inclus : Classic Racing, Neon Night, Carbone. Cinq autres<span class="aide-prem">PREMIUM</span> — Damier Rallye, Endurance Le Mans, Pit Lane F1, Champagne Gold, Arctic White — s'affichent verrouillés.</p>
+<p><b>Les avatars.</b> Chaque pilote reçoit automatiquement l'avatar de son kart : le numéro affiché est celui du kart, et la couleur est propre à chaque numéro, identique d'une session à l'autre. Vous choisissez le pack graphique (Classic, inclus, ou Signature<span class="aide-prem">PREMIUM</span>), le style — avatar kart, pilote + kart, ou pilote seul — puis la forme de la pastille et le motif de fond.</p>
+<p><b>Les cartes partageables</b> sont les images que le pilote reçoit et poste sur ses réseaux. Renseignez l'accroche (46 caractères maximum), éventuellement votre adresse (60 caractères), et l'adresse encodée dans le QR de la carte — mettez-y votre page de réservation ou votre site. Cochez ensuite jusqu'à cinq cartes de position : chaque pilote en reçoit une, tirée au hasard parmi celles cochées. Les cartes record partent automatiquement dès qu'un record tombe.</p>
+<p>Un aperçu en direct, en bas d'écran, montre exactement ce que verront vos pilotes — généré avec les mêmes données que la vraie page publique.</p>
+</div>
+</section>
+
+<!-- 4 -->
+<section class="aide-sec" id="aide-a4">
+<div class="card">
+<h2>Votre QR code permanent</h2>
+<p class="lede">Un seul QR pour tout votre circuit, pour toujours. C'est la pièce la plus importante de votre installation physique, et celle qui demande le plus de soin.</p>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/1-inscription-pilote.jpg" src="https://trinisette.fr/videos/1-inscription-pilote.mp4"></video>
+<figcaption>Ce que vit le pilote après avoir scanné : inscription complète, sur son téléphone.</figcaption>
+</figure>
+<h3>Le récupérer</h3>
+<p><span class="aide-k">Paramètres &gt; Général</span>, section <b>QR unique du circuit (permanent)</b>. Trois boutons :</p>
+<ul>
+<li><b>Télécharger le QR (PNG)</b> — le fichier à envoyer à votre imprimeur.</li>
+<li><b>Copier le lien</b> — l'adresse derrière le QR, à mettre sur votre site, dans votre bio Instagram ou dans une story.</li>
+<li><b>Agrandir</b> — pour le montrer à l'écran ou le tester tout de suite avec votre propre téléphone.</li>
+</ul>
+<div class="aide-note">
+<div class="t">Ce QR ne change jamais</div>
+<p>Imprimez-le une fois, affichez-le, et n'y revenez plus : il reste valable session après session, année après année. Vous n'avez rien à réimprimer quand vous créez une nouvelle séance.</p>
+<p>Corollaire : scannez-le vous-même avant de lancer une impression en série. Une plaque mal imprimée, c'est une plaque à refaire.</p>
+</div>
+<h3>Où l'afficher</h3>
+<ul>
+<li><b>À l'accueil, au niveau des yeux</b> — c'est là que le pilote attend, et l'attente est exactement le moment où il sortira son téléphone.</li>
+<li><b>Sur le comptoir</b>, en chevalet, pour que votre équipe puisse le montrer du doigt.</li>
+<li><b>Dans la zone d'attente et près des casiers</b>, où les groupes patientent avant le briefing.</li>
+<li><b>En grand format près de la grille</b>, si votre configuration s'y prête.</li>
+</ul>
+<p>Accompagnez-le d'une phrase courte, du genre « Scannez pour vous inscrire et recevoir vos temps ». Un QR sans consigne se fait scanner deux fois moins.</p>
+<h3>Ce que le pilote y trouve</h3>
+<p>Une page à deux onglets, à votre nom et à vos couleurs : <b>Inscription</b>, qui liste les sessions ouvertes du moment, et <b>Résultats</b>, qui liste les sessions publiées récemment.</p>
+<div class="aide-note warn">
+<div class="t">Une précision utile au comptoir</div>
+<p>La liste des résultats affichée sur cette page ne montre que les sessions publiées dans les trois dernières heures — c'est volontaire, pour qu'un pilote du jour ne fasse pas défiler six mois de courses. En revanche, le lien personnel qu'un pilote reçoit par e-mail reste valable indéfiniment : ses résultats ne disparaissent jamais.</p>
+</div>
+</div>
+</section>
+
+<!-- 5 -->
+<section class="aide-sec" id="aide-a5">
+<div class="card">
+<h2>Une session, pas à pas</h2>
+<p class="lede">Faites-la à blanc, avant vos vrais clients : créez une session, inscrivez-vous vous-même avec votre téléphone, importez trois lignes de chronos inventées, publiez. Vingt minutes qui vous éviteront d'apprendre devant un groupe de douze personnes.</p>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/7-admin.jpg?v=2" src="https://trinisette.fr/videos/7-admin.mp4?v=2"></video>
+<figcaption>De la création de la session à la grille de karts attribuée.</figcaption>
+</figure>
+<ol class="aide-steps">
+<li><b>Créez la session</b> — <span class="aide-k">Nouvelle session</span>. Quatre champs seulement : titre, heure, type et nombre de karts, déjà pré-remplis avec vos valeurs par défaut. Puis <b>Démarrer la session</b>.</li>
+<li><b>Ouvrez les inscriptions</b> — <span class="aide-k">Sessions actives</span>. Le bouton <b>Copier le lien d'inscription</b> vous donne un lien direct, pratique à envoyer par SMS ou WhatsApp à un groupe déjà constitué : un anniversaire, un séminaire. Pour tous les autres, le QR de l'accueil suffit, il mène aux mêmes sessions. Le champ <b>Notes internes</b> n'est jamais visible côté pilote : utilisez-le pour vos consignes d'équipe.</li>
+<li><b>Les pilotes s'inscrivent.</b> Suivez le compteur <b>Occupation</b> et la liste <b>Pilotes inscrits</b> ; <b>Actualiser</b> rafraîchit la liste. Un pilote sans téléphone ou pressé ? Le bouton <b>+ Ajouter</b> vous permet de l'inscrire vous-même depuis le comptoir.</li>
+<li><b>Attribuez les karts.</b> Chaque numéro apparaît Libre ou Pris. Sélectionnez un pilote, cliquez sur un kart. Pour aller vite : <b>Attribuer les manquants</b> complète la grille, et <b>Karts aléatoires</b> tire tout au sort — pratique pour couper court aux discussions sur « le kart qui va plus vite ».</li>
+<li><b>La course a lieu.</b> Rien à faire dans l'application pendant ce temps.</li>
+<li><b>Importez les chronos</b> — section <b>Import des chronos</b>. Deux méthodes au choix : vous collez le texte de votre chronométrage dans le cadre, une ligne par tour, au format <span class="aide-k">Nom;Kart;NumTour;Temps</span>, puis <b>Importer le texte</b> ; ou vous cliquez sur <b>Importer CSV / Excel</b> et vous déposez le fichier de votre système de chronométrage tel quel, sans le retoucher. Si le résultat est bancal, <b>Corriger le format</b> vous laisse ajuster.</li>
+<li><b>Vérifiez le classement.</b> Il s'affiche immédiatement, avec les statistiques de la session. C'est le moment de repérer une erreur : un pilote absent, un kart mal attribué. Corrigez avant de publier.</li>
+<li><b>Publiez</b> — bouton <b>Publier</b>. C'est l'acte qui rend tout visible : le classement part sur votre page publique, et chaque pilote ayant laissé un e-mail reçoit le sien. Les boutons voisins <b>Copier lien</b>, <b>Exporter CSV</b> et <b>Exporter PDF</b> servent à récupérer le classement pour un affichage ou pour un client entreprise qui veut son fichier. La section <b>Vérification de la publication</b> vous dit, en relisant réellement la base, ce qui a été généré, ce qui est parti, et ce qui reste à rattraper.</li>
+<li><b>Terminez</b> — bouton <b>Terminer la session</b>. Elle quitte les sessions actives et rejoint les Archives. Elle alimente alors vos statistiques et vos records.</li>
+</ol>
+<div class="aide-note">
+<div class="t">L'erreur de débutant à connaître</div>
+<p>Ne cliquez pas sur <b>Publier</b> avant d'avoir regardé le classement à l'écran. Une fois publié, l'e-mail est parti chez vos pilotes — et un classement faux envoyé à douze personnes coûte plus cher en explications que les dix secondes de vérification que vous venez d'économiser.</p>
+</div>
+</div>
+</section>
+
+<!-- 6 -->
+<section class="aide-sec" id="aide-a6">
+<div class="card">
+<h2>Ce que reçoit le pilote</h2>
+<p class="lede">Vous vendez cette expérience autant que votre piste. Autant savoir précisément à quoi elle ressemble de l'autre côté.</p>
+<h3>À l'inscription</h3>
+<p>Le pilote scanne, choisit sa session, puis indique s'il vient pour la première fois ou s'il est déjà venu. Un nouveau venu crée son profil : pseudo (unique, sans accent ni espace, c'est lui qui s'affichera partout), prénom, nom, e-mail, date de naissance, et le pays qu'il veut représenter — ce dernier choix est définitif. Il choisit ensuite son écurie et son avatar, accepte les conditions, et c'est fini.</p>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/3-pilote-reconnu.jpg" src="https://trinisette.fr/videos/3-pilote-reconnu.mp4"></video>
+<figcaption>Un habitué se retrouve en tapant son e-mail ou son pseudo. Aucune ressaisie.</figcaption>
+</figure>
+<div class="aide-note warn">
+<div class="t">Sur la page publique, le nom civil n'apparaît jamais</div>
+<p>Seul le pseudo est affiché dans les classements. Les noms et prénoms restent dans votre registre, côté gestion.</p>
+</div>
+<h3>Après la publication</h3>
+<p>Chaque pilote qui a laissé une adresse valide reçoit un e-mail contenant :</p>
+<ul>
+<li>le classement complet de la session, en PDF ;</li>
+<li>sa fiche pilote personnelle, en PDF : ses tours, son meilleur temps, son écart ;</li>
+<li>une carte de position à partager, aux couleurs de votre circuit ;</li>
+<li>la carte record correspondante s'il a battu un record — et toutes s'il en a battu plusieurs ;</li>
+<li>un lien vers son classement en ligne, valable indéfiniment ;</li>
+<li>et, si vous l'avez renseigné, le bouton « Réserver une prochaine séance ».</li>
+</ul>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/4-resultats-mobile.jpg" src="https://trinisette.fr/videos/4-resultats-mobile.mp4"></video>
+<figcaption>La page de résultats sur le téléphone du pilote, juste après la publication.</figcaption>
+</figure>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/2-resultats-publics.jpg" src="https://trinisette.fr/videos/2-resultats-publics.mp4"></video>
+<figcaption>La page publique de résultats : podium, classement complet, détail par pilote.</figcaption>
+</figure>
+<div class="aide-note">
+<div class="t">Ce détail vaut de l'argent</div>
+<p>Le lien de réservation arrive dans la boîte du pilote quelques minutes après sa course, au moment précis où il regarde son chrono et où il a envie de recommencer. C'est le réglage le plus rentable de tout l'onglet Général — et il est vide par défaut. <span class="aide-k">Paramètres &gt; Général &gt; Lien de réservation</span>.</p>
+</div>
+<div class="aide-note warn">
+<div class="t">Un pilote n'a rien reçu ?</div>
+<p>Dans neuf cas sur dix, il n'a pas laissé d'e-mail, ou l'a mal orthographié. Vérifiez son inscription dans la session, puis regardez la section <b>Vérification de la publication</b>, qui indique ce qui est réellement parti.</p>
+</div>
+</div>
+</section>
+
+<!-- 7 -->
+<section class="aide-sec" id="aide-a7">
+<div class="card">
+<h2>Les archives</h2>
+<p class="lede">Toutes vos sessions terminées, consultables et rééditables. C'est ici que vous revenez quand un client rappelle trois jours plus tard.</p>
+<p>Menu <span class="aide-k">Archives</span>. Filtrez par <b>Type</b> et par <b>Jour</b>, ou <b>Réinitialiser</b> pour tout revoir. <b>Export CSV</b> et <b>Export XLSX</b> sortent la liste complète — utile pour votre comptabilité ou un bilan de fin de mois.</p>
+<p>Ouvrez une session archivée et vous retrouvez tout :</p>
+<ul>
+<li>son classement, ses inscrits, ses imports de chronos ;</li>
+<li>ses <b>Notes internes</b> et son type, modifiables après coup ;</li>
+<li><b>Relancer la publication</b>, si un envoi d'e-mails a échoué ;</li>
+<li><b>Exporter CSV / Exporter PDF</b>, pour renvoyer son classement à un client entreprise qui le redemande.</li>
+</ul>
+</div>
+</section>
+
+<!-- 8 -->
+<section class="aide-sec" id="aide-a8">
+<div class="card">
+<h2>Les statistiques</h2>
+<p class="lede">Ce que vous ne pouviez pas savoir en tenant vos inscriptions sur papier. À regarder une fois par mois, pas tous les jours.</p>
+<p>En haut, la plage de dates. Elle s'applique à tous les sous-onglets, pas seulement à celui affiché, et le bouton <b>Exporter en Excel (XLSX)</b> sort le tout. En formule Basique, les plages courtes sont ouvertes (Jour, Semaine, 30 derniers jours) ; Mois, Année, Personnalisé et Depuis le début s'ouvrent avec le Premium.</p>
+<table class="aide-tbl">
+<tr><th>Sous-onglet</th><th>Ce qu'on y regarde</th></tr>
+<tr><td>Vue d'ensemble</td><td>Vos indicateurs globaux, dans les deux formules. Les deux blocs <b>Exploitation de la piste</b> et <b>Fréquentation</b> (huit dernières semaines) sont réservés au Premium.</td></tr>
+<tr><td>Hall of Fame</td><td>Les records actuels du circuit (all-time, mois, semaine), le top 10 des meilleurs temps absolus et le meilleur temps par kart. Utile aussi pour repérer un kart anormalement lent.</td></tr>
+<tr><td>Fidélisation</td><td>Segmentation nouveaux / réguliers / fans, et le top 10 des pilotes les plus engagés. C'est la liste de vos meilleurs clients — et elle est incluse dans les deux formules.</td></tr>
+<tr><td>Performance sportive<span class="aide-prem">PREMIUM</span></td><td>Répartition par niveau et Hall of Fame enrichi. Dépend des seuils Expert / Intermédiaire réglés dans Paramètres &gt; Sessions.</td></tr>
+<tr><td>Usage avancé<span class="aide-prem">PREMIUM</span></td><td>Saisonnalité et fréquentation sur douze mois glissants. C'est là que se lisent vos creux, donc vos opérations commerciales à monter.</td></tr>
+</table>
+</div>
+</section>
+
+<!-- 9 -->
+<section class="aide-sec" id="aide-a9">
+<div class="card">
+<h2>Le registre clients</h2>
+<p class="lede">La liste de tous les pilotes venus chez vous. Votre bien le plus durable — et celui qui demande le plus de rigueur.</p>
+<p>Menu <span class="aide-k">Registre</span>. Cherchez un pseudo, un nom ou un e-mail dans la barre de recherche. La colonne <b>Opt-in promo</b> indique qui a coché, lors de son inscription, la case « Je veux recevoir les offres et nouveautés du circuit par e-mail ». <b>Exporter en CSV</b> et <b>Exporter en XLSX</b> sortent la liste.</p>
+<div class="aide-note">
+<div class="t">Ne vous mettez pas en faute</div>
+<p>Pour une opération commerciale, vous ne pouvez écrire qu'aux pilotes ayant coché l'opt-in promo. Filtrez sur cette colonne avant d'exporter. Écrire à toute la liste, c'est utiliser des données collectées pour un autre usage — c'est interdit, et c'est le genre de plainte qui coûte cher pour un gain nul.</p>
+</div>
+<p>C'est aussi depuis cet onglet que vous traitez une demande de suppression : un pilote qui vous écrit pour que ses données soient effacées se traite ici, en quelques secondes.</p>
+</div>
+</section>
+
+<!-- 10 -->
+<section class="aide-sec" id="aide-a10">
+<div class="card">
+<h2>L'écran TV</h2>
+<p class="lede">Le classement en plein écran dans votre salle, sans personne pour s'en occuper.</p>
+<figure class="aide-video">
+<video controls playsinline preload="none" poster="https://trinisette.fr/videos/posters/6-ecran-tv.jpg" src="https://trinisette.fr/videos/6-ecran-tv.mp4"></video>
+<figcaption>Les trois écrans du mode kiosque, en rotation automatique.</figcaption>
+</figure>
+<p><span class="aide-k">Paramètres &gt; Kiosque</span>, depuis l'ordinateur relié à la TV et déjà connecté à votre compte. Trois écrans au choix, chacun avec son bouton <b>Ouvrir en plein écran</b> :</p>
+<ul>
+<li><b>Rotation automatique</b> — alterne classement (40 s) et Hall of Fame (25 s). Le bon choix si vous n'avez qu'une seule TV.</li>
+<li><b>Classement</b> — fige l'écran sur la dernière session publiée : podium, classement complet et QR pour que les pilotes récupèrent leurs chronos.</li>
+<li><b>Hall of Fame</b> — le top 20 par catégorie, en rotation.</li>
+</ul>
+<p>Avec plusieurs TV, ouvrez un onglet par écran et posez chacun sur son moniteur. L'écran ne se met plus en veille tant que la page est affichée. Pour une TV allumée toute la journée, la section <b>mode kiosque du navigateur</b> vous donne une commande à copier (Mac ou Windows) : plus de barre d'adresse, plus d'onglets, et l'affichage repart tout seul après un redémarrage de l'ordinateur.</p>
+</div>
+</section>
+
+<!-- 11 -->
+<section class="aide-sec" id="aide-a11">
+<div class="card">
+<h2>Votre compte</h2>
+<p class="lede">Tout ce qui touche à votre accès et à votre abonnement tient sur un seul écran.</p>
+<p><span class="aide-k">Paramètres &gt; Compte</span> réunit votre e-mail de connexion, votre formule en cours, la date de création du compte, et trois boutons : <b>Changer le mot de passe</b> (un e-mail de réinitialisation part vers votre adresse), <b>Contacter le support</b> et <b>Déconnexion</b>.</p>
+<p>C'est également ici que vous retrouvez votre <b>facturation</b> : formule, statut, date de renouvellement, factures téléchargeables en PDF, et accès au portail de paiement pour changer de carte ou résilier — sans passer par nous.</p>
+</div>
+</section>
+
+<!-- 12 -->
+<section class="aide-sec" id="aide-a12">
+<div class="card">
+<h2>Ce que débloque le Premium</h2>
+<p class="lede">La liste exacte, sans flou. Si vous êtes en Basique, c'est ce que vous verrez apparaître. Si vous êtes déjà en Premium, c'est la liste de ce à quoi vous avez droit — et que vous n'utilisez peut-être pas encore.</p>
+<h3>Ce que voient vos pilotes</h3>
+<table class="aide-tbl">
+<tr><th>Fonction</th><th>Ce que ça change concrètement</th></tr>
+<tr><td>5 thèmes supplémentaires</td><td>Damier Rallye, Endurance Le Mans, Pit Lane F1, Champagne Gold et Arctic White, en plus des trois thèmes inclus. Arctic White est le seul thème clair : c'est celui à prendre si votre identité visuelle n'est pas sombre.</td></tr>
+<tr><td>Avatars Signature</td><td>16 illustrations exclusives, déclinées en buste, casque, kart et kart + pilote, à la place des avatars vectoriels d'origine. C'est ce qui se voit le plus sur les cartes que vos pilotes partagent.</td></tr>
+<tr><td>Plan du circuit</td><td>Le tracé de votre piste s'affiche sur la page de résultats.</td></tr>
+<tr><td>Records du mois et de la semaine</td><td>Sur le Hall of Fame public, vos pilotes voient les records all-time en Basique. Le Premium y ajoute les records du mois et de la semaine en cours — donc des records atteignables, donc une raison de revenir avant la fin du mois.</td></tr>
+</table>
+<h3>Ce que vous gagnez, vous</h3>
+<table class="aide-tbl">
+<tr><th>Fonction</th><th>Ce que ça change concrètement</th></tr>
+<tr><td>Mode Écurie</td><td>Le championnat constructeur : vos pilotes courent sous les couleurs d'une écurie, avec classement par équipe. Se coche à la création d'une session. C'est l'argument des séminaires d'entreprise et des anniversaires.</td></tr>
+<tr><td>Exploitation et fréquentation</td><td>Dans Statistiques &gt; Vue d'ensemble, le taux d'utilisation de la piste et la courbe de fréquentation des huit dernières semaines.</td></tr>
+<tr><td>Performance sportive</td><td>Répartition de vos pilotes par niveau et Hall of Fame enrichi, à partir des seuils Expert / Intermédiaire que vous avez réglés.</td></tr>
+<tr><td>Usage avancé</td><td>Saisonnalité et fréquentation sur douze mois glissants : c'est là que se lisent vos creux, donc les semaines où monter une opération.</td></tr>
+<tr><td>Historique complet</td><td>Les plages Mois, Année, Personnalisé et Depuis le début. En Basique, l'analyse est bornée aux périodes courtes — comparer deux étés demande le Premium.</td></tr>
+<tr><td>Détail des archives</td><td>Le classement, les inscrits et les imports chrono d'une session passée, plus ses exports CSV et PDF individuels. Utile quand un client entreprise redemande son classement trois semaines après.</td></tr>
+<tr><td>Export du registre</td><td>Sortir votre fichier pilotes en CSV.</td></tr>
+<tr><td>Support prioritaire</td><td>Vos demandes passent devant.</td></tr>
+</table>
+<div class="aide-note warn">
+<div class="t">Ce qui ne change pas entre les deux formules</div>
+<p>L'essentiel du service est identique : inscriptions par QR code, résultats publics en temps réel, e-mails de résultats aux pilotes avec leurs PDF et leurs cartes partageables, écran TV, registre clients et sa recherche, export global des archives, les trois thèmes inclus et les avatars Classic. Le Basique n'est pas une version amputée — c'est une version sans les options de mise en scène et sans l'analyse de fond.</p>
+</div>
+<div class="aide-note">
+<div class="t">Passer en Premium</div>
+<p><span class="aide-k">Paramètres &gt; Compte &gt; Passer au Premium</span> : le bouton ouvre un e-mail pré-rempli vers contact@trinisette.fr. Nous faisons le changement de notre côté, sans coupure de service, sans reconfiguration et sans rien perdre — vos réglages, vos sessions et votre historique restent en place, les fonctions s'ajoutent.</p>
+</div>
+</div>
+</section>
+
+<!-- 13 -->
+<section class="aide-sec" id="aide-a13">
+<div class="card">
+<h2>Mémo comptoir</h2>
+<p class="lede">Imprimez cette page et laissez-la près de l'ordinateur du comptoir. Elle suffit à faire tourner une session à quelqu'un qui n'a jamais lu le reste de cette aide.</p>
+<h3>Faire tourner une session — 9 gestes</h3>
+<ol class="aide-steps">
+<li>Nouvelle session &rarr; titre, heure, type &rarr; <b>Démarrer la session</b></li>
+<li>Les pilotes scannent le QR de l'accueil et s'inscrivent seuls</li>
+<li>Quelqu'un n'a pas de téléphone &rarr; <b>+ Ajouter</b> dans la liste des inscrits</li>
+<li>Attribuer les karts &rarr; <b>Attribuer les manquants</b> ou <b>Karts aléatoires</b></li>
+<li>La course</li>
+<li>Coller ou déposer le fichier de chronos &rarr; <b>Importer</b></li>
+<li>Regarder le classement à l'écran — corriger si besoin</li>
+<li><b>Publier</b> &rarr; la page publique s'actualise, les e-mails partent</li>
+<li><b>Terminer la session</b></li>
+</ol>
+<div class="aide-note">
+<div class="t">Les trois règles</div>
+<p><b>1.</b> On ne publie jamais sans avoir regardé le classement.<br/>
+<b>2.</b> On n'invente pas l'e-mail d'un pilote : sans e-mail valide, il ne reçoit rien, et une adresse inventée part chez un inconnu.<br/>
+<b>3.</b> En cas de doute sur un chrono, on termine la session quand même : elle est rééditable dans les Archives, avec <b>Relancer la publication</b>.</p>
+</div>
+<div class="aide-note warn">
+<div class="t">En cas de panne — la solution de repli</div>
+<p>Notez les inscriptions sur papier (pseudo, prénom, e-mail, numéro de kart) et faites rouler normalement : le service au client n'est pas interrompu. La saisie se rattrape ensuite dans l'application, la session se publie plus tard, et les pilotes reçoivent leurs résultats avec quelques heures de retard. Prévenez-les à l'oral : une attente annoncée n'est pas un incident.</p>
+</div>
+<p><a class="btn btn-ghost btn-sm" href="/manuel-trinisette.pdf" target="_blank" rel="noopener">Ouvrir le manuel PDF pour imprimer ce mémo</a></p>
+</div>
+</section>
+
+<!-- 14 -->
+<section class="aide-sec" id="aide-a14">
+<div class="card">
+<h2>Que faire si…</h2>
+<p class="lede">Les situations que vous rencontrerez réellement, dans l'ordre de fréquence.</p>
+
+<h3>…un pilote dit que le QR ne marche pas</h3>
+<p>Vérifiez qu'une session est bien ouverte : sans session active, la page d'inscription n'a rien à proposer. Testez le QR vous-même depuis <span class="aide-k">Paramètres &gt; Général &gt; Agrandir</span>. Si le QR imprimé ne se scanne pas alors que celui de l'écran fonctionne, c'est l'impression qui est en cause — retéléchargez le PNG et refaites la plaque.</p>
+
+<h3>…un pilote n'apparaît pas dans la liste des inscrits</h3>
+<p>Cliquez sur <b>Actualiser</b>. S'il n'y est toujours pas, il s'est probablement inscrit sur une autre session — vérifiez laquelle. Le plus rapide reste de l'ajouter vous-même avec <b>+ Ajouter</b> et de faire rouler.</p>
+
+<h3>…l'import des chronos donne un résultat aberrant</h3>
+<p>Regardez d'abord si les numéros de kart du fichier correspondent à ceux que vous avez attribués : c'est le numéro de kart, et non le nom, qui relie un chrono à un pilote. Si les colonnes sont mal interprétées, utilisez <b>Corriger le format</b> et ajustez les numéros de colonne. Le format corrigé est mémorisé pour les fois suivantes.</p>
+
+<h3>…un pilote n'a pas reçu son e-mail</h3>
+<p>Faites-lui regarder ses indésirables. Vérifiez ensuite l'adresse saisie à l'inscription, puis la section <b>Vérification de la publication</b>, qui indique ce qui est réellement parti. Au besoin, <b>Relancer la publication</b> depuis les Archives.</p>
+
+<h3>…vous avez publié un classement faux</h3>
+<p>Corrigez les chronos, puis relancez la publication depuis les Archives : la page publique est mise à jour. Les e-mails déjà partis, eux, ne se rattrapent pas — d'où la règle de vérifier avant de publier.</p>
+
+<h3>…vous avez perdu votre mot de passe</h3>
+<p>Utilisez le lien <b>« Mot de passe oublié ? »</b> de l'écran de connexion : un lien de réinitialisation part vers l'adresse de votre compte, valable 24 heures. Si vous n'y arrivez pas, écrivez à support@trinisette.fr depuis cette même adresse.</p>
+
+<h3>…vous voulez arrêter</h3>
+<p>La résiliation se fait seule, depuis <span class="aide-k">Paramètres &gt; Compte &gt; Facturation</span>, sans préavis et sans passer par nous. Vos données restent exportables : pensez à sortir vos exports CSV/XLSX avant la fin de votre accès.</p>
+
+<div class="aide-note">
+<div class="t">Une question qui n'est pas ici ?</div>
+<p>Écrivez à <b>support@trinisette.fr</b> — réponse sous 24 heures ouvrées, du lundi au vendredi. Décrivez ce que vous faisiez, ce que vous attendiez, et ce qui s'est passé à la place : c'est ce qui nous permet de répondre en une fois plutôt qu'en cinq.</p>
+</div>
+</div>
+</section>
+
+</div>
+</div>
+</div>
+
 <div class="overlay" id="hist-overlay" onclick="if(event.target===this)closeHistory()">
 <div class="qr-zoom-box" style="max-width:480px">
 <div style="font-size:16px;font-weight:800" id="hist-title"></div>
@@ -1466,6 +1965,65 @@ copie la commande, colle-la dans le Terminal (Mac) ou dans un raccourci sur le B
 <div id="pdf-render-root" aria-hidden="true" style="position:fixed;top:0;left:-99999px;pointer-events:none"></div>
 
 <!-- ?v= : cache-buster (voir results-app.js pour le contexte du 19-20/08) -->
-<script type="module" src="karting-v2/src/app.js?v=20260903k32"></script>
+
+<!-- Onglet Aide : navigation entre rubriques + recherche. Autonome, sans dependance a un
+     module — le panneau doit rester consultable meme si un module metier tombe. -->
+<script>
+(function(){
+var nav=document.getElementById('aide-nav');
+var hits=document.getElementById('aide-hits');
+var q=document.getElementById('aide-q');
+if(!nav||!q)return;
+var items=[].slice.call(nav.querySelectorAll('.aide-navi'));
+var main=document.querySelector('.main');
+// Texte de chaque rubrique, normalise une seule fois : la recherche doit trouver
+// "resilier" quand l'utilisateur tape "résilier", et l'inverse.
+function norm(s){
+try{return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');}
+catch(e){return s.toLowerCase();}
+}
+var index=items.map(function(b){
+var sec=document.getElementById('aide-'+b.dataset.go);
+return{btn:b,sec:sec,txt:sec?norm(sec.textContent||''):''};
+});
+function show(id){
+index.forEach(function(e){
+var on=e.btn.dataset.go===id;
+e.btn.classList.toggle('on',on);
+if(e.sec)e.sec.classList.toggle('on',on);
+});
+if(main)main.scrollTop=0;
+}
+nav.addEventListener('click',function(ev){
+var b=ev.target.closest('.aide-navi');
+if(b)show(b.dataset.go);
+});
+q.addEventListener('input',function(){
+var v=norm(q.value.trim());
+if(v.length<2){
+index.forEach(function(e){e.btn.hidden=false;});
+hits.hidden=true;
+return;
+}
+var found=[];
+index.forEach(function(e){
+var ok=e.txt.indexOf(v)>-1;
+e.btn.hidden=!ok;
+if(ok)found.push(e);
+});
+hits.hidden=false;
+if(!found.length){
+hits.innerHTML='Aucune rubrique ne parle de <b>'+q.value.trim().replace(/[<>&]/g,'')+'</b>. Écrivez à support@trinisette.fr, on répond sous 24 h ouvrées.';
+return;
+}
+hits.innerHTML='<b>'+found.length+'</b> rubrique'+(found.length>1?'s':'')+' sur '+index.length+'.';
+// Si la rubrique affichee ne fait pas partie des resultats, on ouvre la premiere qui matche.
+var cur=found.filter(function(e){return e.btn.classList.contains('on');});
+if(!cur.length)show(found[0].btn.dataset.go);
+});
+})();
+</script>
+
+<script type="module" src="karting-v2/src/app.js?v=20260904a01"></script>
 </body>
 </html>
