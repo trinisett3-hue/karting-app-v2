@@ -28,6 +28,7 @@ let chartInstance = null;
 let lastKpis = { sessions: 0, pilotsUniques: 0, chronos: 0 };
 let lastTypeRows = [];
 let lastRecordsByType = [];
+let lastTopByType = [];
 let lastHofKarts = [];
 // 19/08 (K-16) : records actuels du circuit (piste/semaine/mois), memes
 // donnees que la page publique Hall of Fame (my_hall_of_fame(), migration-v28).
@@ -542,6 +543,50 @@ async function loadRecordsByType() {
     '</tbody></table>';
 }
 
+// --- Top 10 par type de session (Hall of Fame) --------------------------------------------
+//
+// 04/09 (client) : "le top 10 pour l'onglet, et 20 par type de session sur l'ecran".
+// L'ecran du kiosque le faisait DEJA depuis le 26/08 (my_hall_of_fame_top20, v30) : rien a
+// construire de ce cote. Cote onglet, la v36 generalise ce meme corps avec une limite, et
+// top20() n'est plus qu'un appel -- une seule implementation derriere les deux affichages,
+// donc jamais deux classements qui divergent.
+//
+// Un pilote par ligne, pas un tour par ligne : le classement retient le MEILLEUR tour de
+// chaque inscription. Sans cette deduplication, un pilote rapide occuperait les dix places
+// et le tableau ne dirait plus rien.
+//
+// Sessions publiees uniquement, comme partout ailleurs pour un record. C'est aussi ce qui
+// garantit que le 1er de chaque top 10 est exactement le record affiche au-dessus : depuis
+// la v36, les deux blocs lisent le meme perimetre. Deux chiffres voisins qui se contredisent
+// font douter des deux.
+async function loadTopByType() {
+  const el = document.getElementById('stats-top-by-type');
+  if (!el) return;
+  const { data, error } = await db.rpc('my_hall_of_fame_by_type', { _limit: 10, _include_untyped: true });
+  const types = (data && Array.isArray(data.types)) ? data.types : [];
+  lastTopByType = types;
+  if (error || !types.length) {
+    el.innerHTML = '<div class="empty">Aucun classement : aucune session publiee avec des chronos.</div>';
+    return;
+  }
+  el.innerHTML = types.map((t) => {
+    const v = String(t.session_type || '');
+    const label = v ? (sessionTypeLabel(v) || v) : 'Non renseigne';
+    const rows = Array.isArray(t.rows) ? t.rows : [];
+    return '<div style="margin-bottom:18px">' +
+      '<div class="ctitle" style="font-size:13px;margin-bottom:6px">' + escapeStatsHTML(label) +
+      ' <span class="mut" style="font-weight:400;font-size:11px">(' + rows.length + ' pilote' + (rows.length > 1 ? 's' : '') + ')</span></div>' +
+      '<table class="rank-tbl"><thead><tr><th>#</th><th>Pilote</th><th>Kart</th><th>Meilleur tour</th><th>Le</th></tr></thead><tbody>' +
+      rows.map((r) =>
+        '<tr><td>' + r.pos + '</td>' +
+        '<td>' + escapeStatsHTML(r.pilot || '--') + '</td>' +
+        '<td>' + (r.kart == null ? '--' : r.kart) + '</td>' +
+        '<td>' + formatTime(Number(r.lap_time_s)) + '</td>' +
+        '<td>' + (r.achieved_at ? formatDate(r.achieved_at) : '--') + '</td></tr>').join('') +
+      '</tbody></table></div>';
+  }).join('');
+}
+
 // --- Plafond d'historique du plan Basique (decision du 19/08) -----------------------------
 // Le Basique n'a acces qu'aux plages courtes (Jour / Semaine / 30 derniers jours). Mois /
 // Annee / Personnalise / Depuis le debut restent reserves au Pro (flag 'full_history', voir
@@ -721,6 +766,7 @@ export async function loadStatsTab(range) {
   await loadHofCurrent();
 
   await loadRecordsByType();
+  await loadTopByType();
   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
   // Fait partie du meme verrou 'session_occupancy' que l'exploitation piste ci-dessus.
   if (occupancyAllowed) renderFrequencyChart(allSessions, currentRange);
@@ -1371,6 +1417,23 @@ export function exportStatsXLSX() {
     }),
   ]);
   XLSX.utils.book_append_sheet(wb, recTypesSheet, 'Records par type');
+
+  const topByTypeRows = [];
+  lastTopByType.forEach((t) => {
+    const v = String(t.session_type || '');
+    const label = v ? (sessionTypeLabel(v) || v) : 'Non renseigne';
+    (Array.isArray(t.rows) ? t.rows : []).forEach((r) => {
+      topByTypeRows.push([label, r.pos, r.pilot || '', r.kart == null ? '' : r.kart,
+                          formatTime(Number(r.lap_time_s)), r.achieved_at || '']);
+    });
+  });
+  const topByTypeSheet = XLSX.utils.aoa_to_sheet([
+    ['Top 10 par type de session (sessions publiees)'],
+    [],
+    ['Type de session', 'Position', 'Pilote', 'Kart', 'Meilleur tour', 'Date'],
+    ...topByTypeRows,
+  ]);
+  XLSX.utils.book_append_sheet(wb, topByTypeSheet, 'Top par type');
 
   const topTimesSheet = XLSX.utils.aoa_to_sheet([
     ['Top temps — ' + periodeTxt],
