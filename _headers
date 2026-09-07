@@ -62,3 +62,23 @@
 # nouveau fichier des qu'un deploiement a eu lieu.
 /karting-v2/src/*
   Cache-Control: public, max-age=0, must-revalidate
+
+# Images fixes — ajoute le 04/09/2026, en meme temps que le passage du reglage Cloudflare
+# "Browser Cache TTL" sur "Respect Existing Headers".
+#
+# Tant que Cloudflare imposait 4 heures a tout le monde, ces fichiers etaient caches
+# correctement par accident. En rendant la main a ce fichier, il faut le dire explicitement,
+# sinon les avatars et les logos d'ecurie seraient revalides a chaque chargement de page —
+# des centaines de requetes inutiles sur la page publique de resultats.
+#
+# Ces fichiers sont versionnes par leur chemin (assets/logos/v4/...) : quand un visuel
+# change, c'est un nouveau nom, donc une nouvelle adresse. Un cache long est sans risque.
+/assets/*
+  Cache-Control: public, max-age=2592000, immutable
+
+/avatars/*
+  Cache-Control: public, max-age=2592000, immutable
+
+# Le manuel client, lui, est remplace en place a chaque revision : une journee, pas plus.
+/manuel-trinisette.pdf
+  Cache-Control: public, max-age=86400, must-revalidate
