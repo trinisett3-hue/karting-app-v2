@@ -63,8 +63,18 @@ export function qrSrc(url, size) {
 // Meme mecanisme que les autres prefs (app_settings.value.date_format, 'dmy' | 'mdy').
 // Utilise par formatDate() ci-dessous des que la date n'est plus "Aujourd'hui"/"Hier",
 // et directement partout ou un format exact est necessaire (PDF, exports CSV).
+// 04/09 : formatDateNumeric()/formatDate() concatenaient 'T12:00:00' en supposant recevoir
+// une date nue (YYYY-MM-DD). Un appelant passant un horodatage complet produisait
+// '...T10:05:44+00:00T12:00:00' -> Invalid Date -> "NaN/NaN/NaN" affiche a l'ecran. Le piege
+// etait latent pour tout futur appelant : on le ferme ici plutot qu'au cas par cas. La forme
+// nue traverse inchangee, donc aucun appel existant ne change de comportement.
+function dayPart(d) {
+  const s = String(d == null ? '' : d);
+  return /^\d{4}-\d{2}-\d{2}/.test(s) ? s.slice(0, 10) : s;
+}
+
 export function formatDateNumeric(d) {
-  const date = new Date(d + 'T12:00:00');
+  const date = new Date(dayPart(d) + 'T12:00:00');
   const dd = String(date.getDate()).padStart(2, '0');
   const mm = String(date.getMonth() + 1).padStart(2, '0');
   const yyyy = date.getFullYear();
@@ -77,7 +87,7 @@ export function formatDateNumeric(d) {
 // statistiques, PDF via buildSessionPDF()) beneficie automatiquement du reglage
 // pref-date-format sans modification a chaque site d'appel.
 export function formatDate(d) {
-  const date = new Date(d + 'T12:00:00');
+  const date = new Date(dayPart(d) + 'T12:00:00');
   const today = new Date();
   today.setHours(12, 0, 0, 0);
   const diff = Math.round((today - date) / (1000 * 60 * 60 * 24));

@@ -425,6 +425,14 @@ function escapeStatsHTML(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Libelle d'un type pour les tableaux ou la colonne est secondaire : jamais de case vide,
+// jamais le slug brut si un libelle existe.
+function typeLabelOrDash(v) {
+  const t = String(v || '').trim();
+  if (!t) return '--';
+  return sessionTypeLabel(t) || t;
+}
+
 function computeTypeBreakdown(sessions, regs) {
   const regsBySession = new Map();
   (regs || []).forEach((r) => {
@@ -569,13 +577,22 @@ async function loadTopByType() {
     el.innerHTML = '<div class="empty">Aucun classement : aucune session publiee avec des chronos.</div>';
     return;
   }
-  el.innerHTML = types.map((t) => {
+  // 04/09 (client) : les categories se replient. Avec cinq types x dix lignes, tout derouler
+  // d'un coup noie l'information -- alors que la ligne fermee porte deja l'essentiel (le type,
+  // son record, combien de pilotes). <details>/<summary> natifs plutot qu'un accordeon en JS :
+  // rien a cabler, rien a re-synchroniser au rechargement des donnees, et ca reste utilisable
+  // au clavier. La premiere categorie est ouverte pour que le bloc ne paraisse jamais vide.
+  el.innerHTML = types.map((t, i) => {
     const v = String(t.session_type || '');
     const label = v ? (sessionTypeLabel(v) || v) : 'Non renseigne';
     const rows = Array.isArray(t.rows) ? t.rows : [];
-    return '<div style="margin-bottom:18px">' +
-      '<div class="ctitle" style="font-size:13px;margin-bottom:6px">' + escapeStatsHTML(label) +
-      ' <span class="mut" style="font-weight:400;font-size:11px">(' + rows.length + ' pilote' + (rows.length > 1 ? 's' : '') + ')</span></div>' +
+    const best = rows.length ? formatTime(Number(rows[0].lap_time_s)) : '--';
+    return '<details' + (i === 0 ? ' open' : '') + ' style="margin-bottom:8px;border:1px solid var(--bd,rgba(255,255,255,.12));border-radius:8px">' +
+      '<summary style="cursor:pointer;padding:9px 12px;font-weight:700;font-size:13px;list-style:revert">' +
+      escapeStatsHTML(label) +
+      ' <span class="mut" style="font-weight:400;font-size:11px">— record ' + best +
+      ' · ' + rows.length + ' pilote' + (rows.length > 1 ? 's' : '') + '</span></summary>' +
+      '<div style="padding:0 12px 12px">' +
       '<table class="rank-tbl"><thead><tr><th>#</th><th>Pilote</th><th>Kart</th><th>Meilleur tour</th><th>Le</th></tr></thead><tbody>' +
       rows.map((r) =>
         '<tr><td>' + r.pos + '</td>' +
@@ -583,7 +600,7 @@ async function loadTopByType() {
         '<td>' + (r.kart == null ? '--' : r.kart) + '</td>' +
         '<td>' + formatTime(Number(r.lap_time_s)) + '</td>' +
         '<td>' + (r.achieved_at ? formatDate(r.achieved_at) : '--') + '</td></tr>').join('') +
-      '</tbody></table></div>';
+      '</tbody></table></div></details>';
   }).join('');
 }
 
@@ -725,15 +742,15 @@ export async function loadStatsTab(range) {
     const reg = regsById.get(regId);
     if (!reg) return;
     const sess = sessionsById.get(reg.session_id);
-    timeRows.push({ name: reg.display_name || '--', kart: reg.kart_number, total, date: sess ? sess.session_date : null });
+    timeRows.push({ name: reg.display_name || '--', kart: reg.kart_number, total, date: sess ? sess.session_date : null, type: sess ? sess.session_type : null });
   });
   timeRows.sort((a, b) => a.total - b.total);
   lastTimeRows = timeRows;
   if (topTimesEl) {
     const top = timeRows.slice(0, 10);
     topTimesEl.innerHTML = top.length
-      ? '<table class="rank-tbl"><thead><tr><th>#</th><th>Nom</th><th>Kart</th><th>Temps</th><th>Date</th></tr></thead><tbody>' +
-        top.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + r.name + '</td><td>' + (r.kart || '--') + '</td><td>' + formatTime(r.total) + '</td><td>' + (r.date ? formatDate(r.date) : '--') + '</td></tr>').join('') +
+      ? '<table class="rank-tbl"><thead><tr><th>#</th><th>Nom</th><th>Kart</th><th>Type</th><th>Temps</th><th>Date</th></tr></thead><tbody>' +
+        top.map((r, i) => '<tr><td>' + (i + 1) + '</td><td>' + r.name + '</td><td>' + (r.kart || '--') + '</td><td>' + escapeStatsHTML(typeLabelOrDash(r.type)) + '</td><td>' + formatTime(r.total) + '</td><td>' + (r.date ? formatDate(r.date) : '--') + '</td></tr>').join('') +
         '</tbody></table>'
       : '<div class="empty">Aucun chrono enregistre.</div>';
   }
@@ -747,14 +764,14 @@ export async function loadStatsTab(range) {
     const kart = Number(reg.kart_number);
     const t = Number(l.lap_time_seconds);
     const cur = bestLapByKart.get(kart);
-    if (!cur || t < cur.time) bestLapByKart.set(kart, { time: t, name: reg.display_name, sessionId: reg.session_id });
+    if (!cur || t < cur.time) bestLapByKart.set(kart, { time: t, name: reg.display_name, sessionId: reg.session_id, type: (sessionsById.get(reg.session_id) || {}).session_type || null });
   });
   lastHofKarts = Array.from(bestLapByKart.entries()).map(([kart, v]) => ({ kart, ...v })).sort((a, b) => a.kart - b.kart);
   if (hofKartsEl) {
     const kartRows = lastHofKarts;
     hofKartsEl.innerHTML = kartRows.length
-      ? '<table class="rank-tbl"><thead><tr><th>Kart</th><th>Meilleur tour</th><th>Pilote</th></tr></thead><tbody>' +
-        kartRows.map((r) => '<tr><td>' + r.kart + '</td><td>' + formatTime(r.time) + '</td><td>' + (r.name || '--') + '</td></tr>').join('') +
+      ? '<table class="rank-tbl"><thead><tr><th>Kart</th><th>Meilleur tour</th><th>Pilote</th><th>Type</th></tr></thead><tbody>' +
+        kartRows.map((r) => '<tr><td>' + r.kart + '</td><td>' + formatTime(r.time) + '</td><td>' + (r.name || '--') + '</td><td>' + escapeStatsHTML(typeLabelOrDash(r.type)) + '</td></tr>').join('') +
         '</tbody></table>'
       : '<div class="empty">Aucun tour enregistre.</div>';
   }
@@ -1438,16 +1455,16 @@ export function exportStatsXLSX() {
   const topTimesSheet = XLSX.utils.aoa_to_sheet([
     ['Top temps — ' + periodeTxt],
     [],
-    ['Position', 'Nom', 'Kart', 'Temps', 'Date'],
-    ...lastTimeRows.map((r, i) => [i + 1, r.name, r.kart || '', formatTime(r.total), r.date ? fmtRangeDate(r.date) : '']),
+    ['Position', 'Nom', 'Kart', 'Type de session', 'Temps', 'Date'],
+    ...lastTimeRows.map((r, i) => [i + 1, r.name, r.kart || '', typeLabelOrDash(r.type), formatTime(r.total), r.date ? fmtRangeDate(r.date) : '']),
   ]);
   XLSX.utils.book_append_sheet(wb, topTimesSheet, 'Top temps');
 
   const hofKartsSheet = XLSX.utils.aoa_to_sheet([
     ['Hall of Fame — meilleur temps par kart — ' + periodeTxt],
     [],
-    ['Kart', 'Meilleur tour', 'Pilote'],
-    ...lastHofKarts.map((r) => [r.kart, formatTime(r.time), r.name || '']),
+    ['Kart', 'Meilleur tour', 'Pilote', 'Type de session'],
+    ...lastHofKarts.map((r) => [r.kart, formatTime(r.time), r.name || '', typeLabelOrDash(r.type)]),
   ]);
   XLSX.utils.book_append_sheet(wb, hofKartsSheet, 'HOF karts');
 
