@@ -11,6 +11,7 @@ import { db, fetchAll, fetchAllIn } from '../lib/supabase.js';
 import { formatTime, formatDate } from './ui.js';
 import { PREMIUM_THEMES } from './settings.js';
 import { hasFeature, renderPremiumLock } from './plan.js';
+import { sessionTypeLabel, getSessionTypes } from '../state.js';
 
 let chartInstance = null;
 // 🆕 v20 : Basique — l'onglet Statistiques reste un pack leger (KPIs globaux,
@@ -25,6 +26,8 @@ let chartInstance = null;
 // exportStatsXLSX()) reprenne exactement ce qui est affiche a l'ecran, pour
 // le filtre en cours, sans requete DB supplementaire.
 let lastKpis = { sessions: 0, pilotsUniques: 0, chronos: 0 };
+let lastTypeRows = [];
+let lastRecordsByType = [];
 let lastHofKarts = [];
 // 19/08 (K-16) : records actuels du circuit (piste/semaine/mois), memes
 // donnees que la page publique Hall of Fame (my_hall_of_fame(), migration-v28).
@@ -400,6 +403,82 @@ document.querySelectorAll('.info-ico.open').forEach((el) => el.classList.remove(
 }
 
 // --- Records actuels (piste/semaine/mois) — K-16, 19/08 ----------------------------------
+// --- Repartition par type de session (Vue d'ensemble) -------------------------------------
+//
+// 03/09 (client) : "le nombre de sessions par type de session (nom determine par le client)
+// et les frequentations". Les types sont configures par l'organisation dans Parametres >
+// Sessions et stockes dans app_settings.value.session_types ; sessions.session_type garde la
+// VALEUR (v), jamais le libelle. sessionTypeLabel() (state.js) fait deja le travail delicat :
+// un type renomme reste lisible, un type supprime retombe sur un libelle derive de v. On ne
+// duplique donc aucune table de correspondance ici.
+//
+// Deux choix qui ne se voient qu'a l'usage :
+//   - les sessions SANS type ne sont jamais ecartees en silence, elles ont leur propre ligne
+//     "Non renseigne". Un total qui ne tombe pas juste discredite l'onglet entier, y compris
+//     les chiffres qui sont bons ;
+//   - les types configures mais jamais utilises sur la periode apparaissent a 0. C'est
+//     precisement l'information de gestion utile ("je n'ai fait aucune competition ce
+//     mois-ci"), et elle disparaitrait si on ne listait que ce qui existe en base.
+function escapeStatsHTML(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function computeTypeBreakdown(sessions, regs) {
+  const regsBySession = new Map();
+  (regs || []).forEach((r) => {
+    regsBySession.set(r.session_id, (regsBySession.get(r.session_id) || 0) + 1);
+  });
+
+  const acc = new Map();
+  const touch = (key, label, unset) => {
+    if (!acc.has(key)) acc.set(key, { key, label, unset: !!unset, sessions: 0, participants: 0 });
+    return acc.get(key);
+  };
+
+  // Les types configures d'abord, pour que ceux a zero existent dans le tableau.
+  getSessionTypes().forEach((t) => touch(t.v, t.l, false));
+
+  (sessions || []).forEach((s) => {
+    const v = String(s.session_type || '').trim();
+    const row = v
+      ? touch(v, sessionTypeLabel(v) || v, false)
+      : touch('__sans_type__', 'Non renseigne', true);
+    row.sessions += 1;
+    row.participants += regsBySession.get(s.id) || 0;
+  });
+
+  const total = (sessions || []).length;
+  const rows = Array.from(acc.values());
+  rows.forEach((r) => { r.share = total ? (r.sessions / total) * 100 : 0; });
+  // "Non renseigne" toujours en dernier ; sinon du plus utilise au moins utilise.
+  rows.sort((a, b) =>
+    (a.unset === b.unset ? 0 : a.unset ? 1 : -1) ||
+    (b.sessions - a.sessions) ||
+    a.label.localeCompare(b.label));
+  return rows;
+}
+
+function renderTypeBreakdown(rows, totalSessions) {
+  const el = document.getElementById('stats-types');
+  if (!el) return;
+  const shown = rows.filter((r) => r.sessions > 0 || !r.unset);
+  if (!totalSessions) {
+    el.innerHTML = '<div class="empty">Aucune session sur la periode selectionnee.</div>';
+    return;
+  }
+  const totalParticipants = rows.reduce((n, r) => n + r.participants, 0);
+  el.innerHTML =
+    '<table class="rank-tbl"><thead><tr><th>Type de session</th><th>Sessions</th><th>Part</th><th>Participants</th></tr></thead><tbody>' +
+    shown.map((r) =>
+      '<tr><td>' + escapeStatsHTML(r.label) + (r.unset ? ' <span class="mut" style="font-size:11px">(type non saisi)</span>' : '') + '</td>' +
+      '<td>' + r.sessions + '</td>' +
+      '<td>' + (r.sessions ? r.share.toFixed(0) + ' %' : '--') + '</td>' +
+      '<td>' + r.participants + '</td></tr>').join('') +
+    '</tbody><tfoot><tr><td><strong>Total</strong></td><td><strong>' + totalSessions + '</strong></td>' +
+    '<td><strong>100 %</strong></td><td><strong>' + totalParticipants + '</strong></td></tr></tfoot></table>';
+}
+
 function hofRecordRow(label, rec) {
   if (!rec) return '<tr><td>' + label + '</td><td colspan="2" class="mut">--</td></tr>';
   const when = rec.achieved_at ? formatDate(rec.achieved_at) : '--';
@@ -421,6 +500,45 @@ async function loadHofCurrent() {
     hofRecordRow('All-time (piste)', lastHofCurrent.piste) +
     hofRecordRow('Ce mois-ci', lastHofCurrent.mois) +
     hofRecordRow('Cette semaine', lastHofCurrent.semaine) +
+    '</tbody></table>';
+}
+
+// --- Records par type de session (Hall of Fame) -------------------------------------------
+//
+// 03/09 (client). Gating tranche ici : ce bloc reste BASIQUE, comme le reste du Hall of Fame.
+// L'axe payant du produit est la PROFONDEUR D'HISTORIQUE (decision du 19/08 : le Basique est
+// plafonne a 30 jours, l'historique complet est l'argument Premium), pas le decoupage des
+// donnees. Rendre le record par type payant alors que le record du circuit est gratuit
+// creerait une frontiere que le client ne saurait pas expliquer -- "pourquoi je vois le
+// record de la piste mais pas celui de mes sessions Endurance ?". Une seule regle a retenir
+// en demo : vous voyez tout, decoupe comme vous voulez ; ce que le Premium ouvre, c'est
+// jusqu'ou vous remontez.
+//
+// Comme les records actuels du circuit, ce bloc est INDEPENDANT du filtre de plage en haut
+// de page : un record est all-time par nature, le recalculer sur 30 jours en ferait autre
+// chose (le meilleur temps du mois), qui existe deja au-dessus.
+async function loadRecordsByType() {
+  const el = document.getElementById('stats-records-types');
+  if (!el) return;
+  const { data, error } = await db.rpc('my_records_by_session_type');
+  const rows = Array.isArray(data) ? data : [];
+  lastRecordsByType = rows;
+  if (error || !rows.length) {
+    el.innerHTML = '<div class="empty">Aucun chrono enregistre pour l\'instant.</div>';
+    return;
+  }
+  el.innerHTML =
+    '<table class="rank-tbl"><thead><tr><th>Type de session</th><th>Record</th><th>Pilote</th><th>Le</th><th>Sessions</th></tr></thead><tbody>' +
+    rows.map((r) => {
+      const v = String(r.type_value || '');
+      const label = v ? (sessionTypeLabel(v) || v) : 'Non renseigne';
+      return '<tr><td>' + escapeStatsHTML(label) +
+        (v ? '' : ' <span class="mut" style="font-size:11px">(type non saisi)</span>') + '</td>' +
+        '<td>' + formatTime(Number(r.lap_time_s)) + '</td>' +
+        '<td>' + escapeStatsHTML(r.pilot || '--') + '</td>' +
+        '<td>' + (r.achieved_at ? formatDate(r.achieved_at) : '--') + '</td>' +
+        '<td>' + (r.sessions || 0) + ' <span class="mut" style="font-size:11px">(' + (r.laps || 0) + ' tours)</span></td></tr>';
+    }).join('') +
     '</tbody></table>';
 }
 
@@ -465,7 +583,7 @@ export async function loadStatsTab(range) {
   // au-delà d'une cinquantaine de sessions, les statistiques devenaient fausses en
   // silence (chronos manquants, pilotes uniques sous-comptés).
   const sessRes = await fetchAll(() => {
-    let q = db.from('sessions').select('id,session_date,created_at,max_karts,starts_at,incident_count,interruption_minutes');
+    let q = db.from('sessions').select('id,session_date,created_at,max_karts,starts_at,incident_count,interruption_minutes,session_type');
     if (currentRange.from) q = q.gte('session_date', currentRange.from);
     if (currentRange.to) q = q.lte('session_date', currentRange.to);
     return q;
@@ -498,6 +616,12 @@ export async function loadStatsTab(range) {
       kpiBox('Pilotes uniques', uniquePilots.size, null, '👤', 'Nombre de pseudos differents (normalises) ayant participe au moins une fois sur la periode. Deux orthographes differentes du meme pilote comptent comme 2 pilotes.') +
       kpiBox('Chronos enregistres', allLaps.length, null, '⏱️', 'Nombre total de tours chronometres enregistres sur la periode.');
   }
+
+  // --- Repartition par type de session (Basique) -------------------------------------------
+  // Reste en Basique volontairement : c'est le decoupage, pas la profondeur d'historique, et
+  // le plafond de 30 jours du Basique (decision du 19/08) suffit deja a porter l'upsell.
+  lastTypeRows = computeTypeBreakdown(allSessions, allRegs);
+  renderTypeBreakdown(lastTypeRows, allSessions.length);
 
   // --- Exploitation piste + Frequentation (Premium — flag 'session_occupancy') -----------
   // 30/07 : ces deux blocs de la Vue d'ensemble passent en Premium (KPIs globaux et
@@ -596,6 +720,7 @@ export async function loadStatsTab(range) {
   // periode selectionnee. Staff = toujours les 3, quel que soit le plan.
   await loadHofCurrent();
 
+  await loadRecordsByType();
   // --- Fréquentation : adaptée à la période filtrée (voir renderFrequencyChart) -----------
   // Fait partie du meme verrou 'session_occupancy' que l'exploitation piste ci-dessus.
   if (occupancyAllowed) renderFrequencyChart(allSessions, currentRange);
@@ -1218,6 +1343,34 @@ export function exportStatsXLSX() {
     ['Chronos enregistres', lastKpis.chronos],
   ]);
   XLSX.utils.book_append_sheet(wb, kpiSheet, 'Resume');
+
+  const typesSheet = XLSX.utils.aoa_to_sheet([
+    ['Repartition par type de session — ' + periodeTxt],
+    [],
+    ['Type de session', 'Sessions', 'Part (%)', 'Participants'],
+    ...lastTypeRows
+      .filter((r) => r.sessions > 0 || !r.unset)
+      .map((r) => [r.label, r.sessions, Number(r.share.toFixed(1)), r.participants]),
+  ]);
+  XLSX.utils.book_append_sheet(wb, typesSheet, 'Types de session');
+
+  const recTypesSheet = XLSX.utils.aoa_to_sheet([
+    ['Records par type de session (all-time)'],
+    [],
+    ['Type de session', 'Record', 'Pilote', 'Date', 'Sessions chronometrees', 'Tours'],
+    ...lastRecordsByType.map((r) => {
+      const v = String(r.type_value || '');
+      return [
+        v ? (sessionTypeLabel(v) || v) : 'Non renseigne',
+        formatTime(Number(r.lap_time_s)),
+        r.pilot || '',
+        r.achieved_at || '',
+        r.sessions || 0,
+        r.laps || 0,
+      ];
+    }),
+  ]);
+  XLSX.utils.book_append_sheet(wb, recTypesSheet, 'Records par type');
 
   const topTimesSheet = XLSX.utils.aoa_to_sheet([
     ['Top temps — ' + periodeTxt],
